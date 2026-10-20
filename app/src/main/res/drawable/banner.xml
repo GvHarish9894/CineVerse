@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder 320x180 TV banner (16:9): gradient + play mark. Replace with localized artwork. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endColor="#FF6650A4"
+                android:endX="320"
+                android:endY="180"
+                android:startColor="#FF1B1033"
+                android:startX="0"
+                android:startY="0"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FFD0BCFF"
+        android:pathData="M136,58L136,122L188,90Z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M160,90m-46,0a46,46 0,1 1,92 0a46,46 0,1 1,-92 0"
+        android:strokeWidth="6"
+        android:strokeColor="#FFD0BCFF" />
+</vector>
