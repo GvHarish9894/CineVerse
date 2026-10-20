@@ -27,9 +27,9 @@ class TmdbErrorTest {
         Row(AccessTokenExchange, 429, 25, TmdbError.RateLimited(5_000), retryAfter = 5),
         Row(AccessTokenExchange, 429, null, TmdbError.RateLimited(3_000), retryAfter = 1), // min 3 s
         Row(AccessTokenExchange, 429, null, TmdbError.RateLimited(3_000)),
-        Row(AccessTokenExchange, 401, 17, TmdbError.ExchangeRejected),
-        Row(AccessTokenExchange, 401, 35, TmdbError.ExchangeRejected),
-        Row(AccessTokenExchange, 400, null, TmdbError.ExchangeRejected), // unparsable body
+        Row(AccessTokenExchange, 401, 17, TmdbError.ExchangeRejected(401, 17)),
+        Row(AccessTokenExchange, 401, 35, TmdbError.ExchangeRejected(401, 35)),
+        Row(AccessTokenExchange, 400, null, TmdbError.ExchangeRejected(400, null)), // unparsable body
         Row(AccessTokenExchange, 503, null, TmdbError.Server(503)),
         // any call: app key, never a sign-out
         Row(Session, 401, 7, TmdbError.AppCredential),

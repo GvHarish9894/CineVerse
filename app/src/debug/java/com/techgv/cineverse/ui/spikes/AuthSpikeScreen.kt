@@ -47,12 +47,13 @@ fun AuthSpikeScreen(auth: AuthRepository) {
         LaunchedEffect(pollingCode) {
             status = "Waiting for TMDB to confirm…"
             val outcome = auth.awaitApproval(pollingCode)
-            Log.i(TAG, "outcome=${outcome::class.simpleName}")
+            // Credentials are not printed: SignedIn logs only its class name; failures log TMDB codes.
+            Log.i(TAG, "outcome=" + if (outcome is SignInOutcome.SignedIn) "SignedIn" else outcome.toString())
             polling = false
             status = when (outcome) {
                 is SignInOutcome.SignedIn -> "Signed in as ${outcome.credentials.displayName}".also { code = null }
                 SignInOutcome.CodeExpired -> "Code expired — press OK for a new one".also { code = null }
-                SignInOutcome.Rejected -> "TMDB didn't approve this sign-in".also { code = null }
+                is SignInOutcome.Rejected -> "TMDB didn't approve this sign-in".also { code = null }
                 SignInOutcome.AppCredentialError -> "App credential problem (TMDB key)"
                 SignInOutcome.TimedOut -> "Still waiting — press OK to check again"
                 SignInOutcome.AlreadyPolling -> "Already checking…"

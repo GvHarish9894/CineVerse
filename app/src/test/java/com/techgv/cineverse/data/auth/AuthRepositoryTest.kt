@@ -126,10 +126,10 @@ class AuthRepositoryTest {
     @Test
     fun `other 4xx is terminal`() = authTest {
         exchange += tmdbError(401, 17)
-        assertEquals(SignInOutcome.Rejected, repo.awaitApproval(code))
+        assertEquals(SignInOutcome.Rejected(TmdbError.ExchangeRejected(401, 17)), repo.awaitApproval(code))
         exchange.clear()
         exchange += tmdbError(400, null) // unparsable body
-        assertEquals(SignInOutcome.Rejected, repo.awaitApproval(code))
+        assertEquals(SignInOutcome.Rejected(TmdbError.ExchangeRejected(400, null)), repo.awaitApproval(code))
         assertEquals(2, exchangeCalls)
         assertEquals(0, accountChanges)
     }

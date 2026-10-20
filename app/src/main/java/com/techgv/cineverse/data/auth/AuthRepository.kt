@@ -40,7 +40,7 @@ sealed interface SignInOutcome {
     /** 7 / 10: app-credential banner. */
     data object AppCredentialError : SignInOutcome
     /** Other 4xx: "TMDB didn't approve this sign-in" → "Get a new code". */
-    data object Rejected : SignInOutcome
+    data class Rejected(val error: TmdbError) : SignInOutcome
     /** 2-min deadline: "Still waiting — press OK to check again" (same code). */
     data object TimedOut : SignInOutcome
     /** A poll for this repository is already running (single-flight); ignore the press. */
@@ -124,7 +124,7 @@ class AuthRepository(
                         null.also { delay(pollIntervalMillis) }
                     TmdbError.RequestTokenExpired -> Poll.Stopped(SignInOutcome.CodeExpired)
                     TmdbError.AppCredential -> Poll.Stopped(SignInOutcome.AppCredentialError)
-                    else -> Poll.Stopped(SignInOutcome.Rejected)
+                    else -> Poll.Stopped(SignInOutcome.Rejected(error))
                 }
             }
         }

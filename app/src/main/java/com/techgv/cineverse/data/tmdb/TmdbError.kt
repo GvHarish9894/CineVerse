@@ -23,8 +23,11 @@ sealed interface TmdbError {
     data object ApprovalPending : TmdbError
     /** 33 during the exchange: "Code expired — press OK for a new one". */
     data object RequestTokenExpired : TmdbError
-    /** Any other 4xx during the exchange: terminal, "TMDB didn't approve this sign-in". */
-    data object ExchangeRejected : TmdbError
+    /**
+     * Any other 4xx during the exchange: terminal, "TMDB didn't approve this sign-in". Codes are kept so the
+     * auth spike can record TMDB's real denial payload (§3.3).
+     */
+    data class ExchangeRejected(val httpCode: Int, val statusCode: Int?) : TmdbError
     /** 7 / 10 (any call), or a bare 401 outside the exchange: misconfiguration banner, never signs out. */
     data object AppCredential : TmdbError
     /** Session / user token no longer valid: local sign-out, "Sign-in expired". */
@@ -61,7 +64,7 @@ fun classifyTmdbError(
         return when {
             statusCode == 41 -> TmdbError.ApprovalPending
             statusCode == 33 -> TmdbError.RequestTokenExpired
-            httpCode in 400..499 -> TmdbError.ExchangeRejected
+            httpCode in 400..499 -> TmdbError.ExchangeRejected(httpCode, statusCode)
             httpCode >= 500 -> TmdbError.Server(httpCode)
             else -> TmdbError.Http(httpCode, statusCode)
         }
