@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local-only files
+cineverse-tv-prototype.html
+secrets.properties
