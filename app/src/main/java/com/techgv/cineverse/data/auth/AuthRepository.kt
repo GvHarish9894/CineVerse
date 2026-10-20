@@ -24,7 +24,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -74,16 +76,21 @@ class AuthRepository(
     /** Serializes credential transitions: sign-in commit, sign-out, session expiry. */
     private val transitionLock = Mutex()
 
-    /** Bumped by sign-out / expiry: a sign-in attempt started under an older epoch never commits. */
+    /**
+     * Bumped by every auth transition (sign-in commit, sign-out, expiry): a sign-in attempt started under an
+     * older epoch never commits, and a buffered expiry event from an older epoch is dropped.
+     */
     private val attemptEpoch = AtomicLong()
 
-    private val expiryEvents = Channel<Unit>(Channel.CONFLATED)
+    /** Carries the epoch the expiry produced. */
+    private val expiryEvents = Channel<Long>(Channel.CONFLATED)
 
     /**
      * One event per expired sign-in (§3.3 "Sign-in expired"), emitted after the local sign-out. Buffered
-     * until collected (AppNav resets to Login with the message).
+     * until collected (AppNav resets to Login with the message); dropped at collection when a newer
+     * transition (e.g. a new sign-in) superseded the expiry, so it never bounces a fresh session to Login.
      */
-    val sessionExpired: Flow<Unit> = expiryEvents.receiveAsFlow()
+    val sessionExpired: Flow<Unit> = expiryEvents.receiveAsFlow().filter { it == attemptEpoch.get() }.map { }
 
     /** §4.1 step 1. Throws [TmdbException]. */
     suspend fun createRequestCode(): RequestCode = tmdbCall(TmdbOperation.Catalog) {
@@ -125,6 +132,7 @@ class AuthRepository(
                 // Last check before the commit: BACK / dispose cancelled the caller, or sign-out ran meanwhile.
                 currentCoroutineContext().ensureActive()
                 if (attemptEpoch.get() != epoch) return SignInOutcome.Superseded
+                attemptEpoch.incrementAndGet()
                 onAccountChanged()
                 withContext(NonCancellable) { store.save(credentials) } // one atomic edit; never torn
             }
@@ -206,15 +214,13 @@ class AuthRepository(
      * a failure from an earlier sign-in (or a repeat for an already cleared one) changes nothing.
      */
     suspend fun expireSession(failed: Credentials): Unit = withContext(NonCancellable) {
-        val expired = transitionLock.withLock {
-            (store.credentials.first() == failed).also { current ->
-                if (current) {
-                    attemptEpoch.incrementAndGet()
-                    clearLocally()
-                }
+        transitionLock.withLock {
+            if (store.credentials.first() == failed) {
+                val epoch = attemptEpoch.incrementAndGet()
+                clearLocally()
+                expiryEvents.trySend(epoch)
             }
         }
-        if (expired) expiryEvents.trySend(Unit)
     }
 
     /** Local half of §4.2; caller holds [transitionLock]. */

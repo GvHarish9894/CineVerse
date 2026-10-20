@@ -175,7 +175,6 @@ data class MovieDetailDto(
     val recommendations: PageDto<MediaItemDto>? = null,
     val reviews: PageDto<ReviewDto>? = null,
     val releaseDates: ReleaseDatesDto? = null,
-    val accountStates: AccountStatesDto? = null,
 )
 
 @Serializable
@@ -272,7 +271,6 @@ data class TvDetailDto(
     val recommendations: PageDto<MediaItemDto>? = null,
     val reviews: PageDto<ReviewDto>? = null,
     val contentRatings: ContentRatingsDto? = null,
-    val accountStates: AccountStatesDto? = null,
 )
 
 @Serializable

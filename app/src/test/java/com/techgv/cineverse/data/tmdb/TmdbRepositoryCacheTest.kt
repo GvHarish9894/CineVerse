@@ -12,12 +12,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 
 class TmdbRepositoryCacheTest {
     private val calls = mutableListOf<String>()
     private var onFetch: () -> Unit = {}
     private var detailGate: CompletableDeferred<Unit>? = null
     private var watchlisted = false
+    private var statesError: Exception? = null
 
     private val api = object : TmdbApi by unusedTmdbApi {
         override suspend fun configuration() = ConfigurationDto().also { calls += "configuration" }
@@ -32,8 +34,11 @@ class TmdbRepositoryCacheTest {
         }
         override suspend fun person(id: Int, language: String, append: String) =
             PersonDetailDto(id).also { calls += "person/$id/$language" }
-        override suspend fun accountStates(media: MediaType, id: Int, sessionId: String) =
-            AccountStatesDto(id, watchlist = watchlisted).also { calls += "states/$id" }
+        override suspend fun accountStates(media: MediaType, id: Int, sessionId: String): AccountStatesDto {
+            calls += "states/$id"
+            statesError?.let { throw it }
+            return AccountStatesDto(id, watchlist = watchlisted)
+        }
         override suspend fun setWatchlist(accountId: Int, sessionId: String, body: WatchlistBody) =
             StatusDto(success = true).also { watchlisted = body.watchlist; calls += "watchlist/${body.mediaId}" }
         override suspend fun videos(media: MediaType, id: Int, language: String) = VideosDto().also { calls += "videos/$id" }
@@ -121,32 +126,42 @@ class TmdbRepositoryCacheTest {
     @Test
     fun `account change clears account data only and bumps the generation`() = runTest {
         repo.accountList(account, MediaType.Movie, AccountList.Watchlist)
-        repo.movieDetail(550, account)
+        repo.movieDetail(550)
+        repo.accountStates(MediaType.Movie, 550, account)
         repo.movieList(MovieList.Popular)
         val before = generation.current
         repo.onAccountChanged()
         assertNotEquals(before, generation.current)
         calls.clear()
         repo.accountList(account, MediaType.Movie, AccountList.Watchlist)
-        repo.movieDetail(550, account)
+        repo.movieDetail(550)
+        repo.accountStates(MediaType.Movie, 550, account)
         repo.movieList(MovieList.Popular)
         // Catalog detail stays cached; account_states are always fetched fresh.
         assertEquals(listOf("account/aoid/watchlist", "states/550"), calls)
     }
 
     @Test
-    fun `signed-in detail merges fresh account_states over the cached catalog detail`() = runTest {
-        assertEquals(false, repo.movieDetail(550, account).accountStates!!.watchlist)
+    fun `account_states are never cached while the catalog detail is`() = runTest {
+        repo.movieDetail(550)
+        assertEquals(false, repo.accountStates(MediaType.Movie, 550, account).watchlist)
         repo.setWatchlist(account, MediaType.Movie, 550, onWatchlist = true)
         repo.movieDetail(551) // unrelated entry stays
         calls.clear()
-        repo.movieDetail(550) // guest view: no account_states
-        val detail = repo.movieDetail(550, account)
-        assertEquals(true, detail.accountStates!!.watchlist)
-        assertEquals("title@en-US", detail.title)
-        // The write invalidated the title once; the second signed-in read reuses the catalog entry.
-        repo.movieDetail(550, account)
+        assertEquals("title@en-US", repo.movieDetail(550).title)
+        assertEquals(true, repo.accountStates(MediaType.Movie, 550, account).watchlist)
+        // The write invalidated the title once; later reads reuse the catalog entry, states are re-read.
+        repo.movieDetail(550)
+        repo.accountStates(MediaType.Movie, 550, account)
         assertEquals(listOf("movie/550/en-US/$MOVIE_APPEND", "states/550", "states/550"), calls)
+    }
+
+    @Test
+    fun `detail succeeds while account_states fail - title kept, states failure surfaced separately`() = runTest {
+        statesError = IOException("offline")
+        assertEquals("title@en-US", repo.movieDetail(550).title)
+        val failure = runCatching { repo.accountStates(MediaType.Movie, 550, account) }.exceptionOrNull()
+        assertEquals(TmdbError.Network, (failure as TmdbException).error)
     }
 
     @Test
@@ -168,8 +183,12 @@ class TmdbRepositoryCacheTest {
         assertEquals("title@hi-IN", repo.movieDetail(550).title)
     }
 
+    /**
+     * Proves only that the repository never caches / re-serves a response that overlapped a write. Callers
+     * that already received the overlapping (pre-write) value must still apply their own generation checks.
+     */
     @Test
-    fun `a GET in flight across a write is neither cached nor served afterwards`() = runTest {
+    fun `a GET in flight across a write is not cached - no stale cache reuse afterwards`() = runTest {
         detailGate = CompletableDeferred()
         val stale = async { repo.movieDetail(550) } // started before the write
         runCurrent()

@@ -4,8 +4,6 @@ import com.techgv.cineverse.data.auth.Credentials
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.util.GenerationCounter
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import java.util.TimeZone
 
 const val DEFAULT_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/"
@@ -98,26 +96,23 @@ class TmdbRepository(
     }
 
     /**
-     * The catalog detail is cached; with [account], fresh `account_states` are fetched alongside and merged
-     * (never cached). [language] overrides Settings for this request only (D7 `en-US` fallback).
+     * Catalog detail only (cached, identical for guest and account); button states come from a separate
+     * [accountStates] call so their failure never hides the title. [language] overrides Settings for this
+     * request only (D7 `en-US` fallback).
      */
-    suspend fun movieDetail(id: Int, account: Credentials? = null, language: String? = null): MovieDetailDto = coroutineScope {
-        val states = account?.let { async { accountStates(MediaType.Movie, id, it) } }
+    suspend fun movieDetail(id: Int, language: String? = null): MovieDetailDto {
         val lang = language ?: settings().language
-        val detail = cached(titleKey("detail", MediaType.Movie, id, lang), TmdbCache.DETAIL_TTL) {
+        return cached(titleKey("detail", MediaType.Movie, id, lang), TmdbCache.DETAIL_TTL) {
             api.movieDetail(id, lang, MOVIE_APPEND, null)
         }
-        if (states == null) detail else detail.copy(accountStates = states.await())
     }
 
     /** See [movieDetail]. */
-    suspend fun tvDetail(id: Int, account: Credentials? = null, language: String? = null): TvDetailDto = coroutineScope {
-        val states = account?.let { async { accountStates(MediaType.Tv, id, it) } }
+    suspend fun tvDetail(id: Int, language: String? = null): TvDetailDto {
         val lang = language ?: settings().language
-        val detail = cached(titleKey("detail", MediaType.Tv, id, lang), TmdbCache.DETAIL_TTL) {
+        return cached(titleKey("detail", MediaType.Tv, id, lang), TmdbCache.DETAIL_TTL) {
             api.tvDetail(id, lang, TV_APPEND, null)
         }
-        if (states == null) detail else detail.copy(accountStates = states.await())
     }
 
     suspend fun videos(media: MediaType, id: Int, language: String? = null): VideosDto {

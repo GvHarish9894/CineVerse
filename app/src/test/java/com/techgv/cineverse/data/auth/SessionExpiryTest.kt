@@ -1,6 +1,11 @@
 package com.techgv.cineverse.data.auth
 
 import com.techgv.cineverse.data.settings.Settings
+import com.techgv.cineverse.data.tmdb.AccessTokenBody
+import com.techgv.cineverse.data.tmdb.AccessTokenDto
+import com.techgv.cineverse.data.tmdb.AccountDto
+import com.techgv.cineverse.data.tmdb.ConvertSessionBody
+import com.techgv.cineverse.data.tmdb.SessionDto
 import com.techgv.cineverse.data.tmdb.AccountId
 import com.techgv.cineverse.data.tmdb.AccountObjectId
 import com.techgv.cineverse.data.tmdb.AccountStatesDto
@@ -41,6 +46,9 @@ class SessionExpiryTest {
                 .protocol(Protocol.HTTP_1_1).code(401).message("error").build()
             throw HttpException(Response.error<Any>(body, raw))
         }
+        override suspend fun createAccessToken(body: AccessTokenBody) = AccessTokenDto(accessToken = "u-s2", accountId = "aoid")
+        override suspend fun convertToSession(body: ConvertSessionBody) = SessionDto("s2")
+        override suspend fun account(sessionId: String) = AccountDto(id = 1, username = "user")
     }
     private var accountChanges = 0
     private val store = CredentialStore(InMemoryPreferencesStore(), CredentialCipher(SoftwareKeys()))
@@ -77,6 +85,25 @@ class SessionExpiryTest {
         assertNull(store.credentials.first())
         assertEquals(1, accountChanges)
         assertEquals(1, events.size)
+    }
+
+    @Test
+    fun `buffered expiry consumed after a newer sign-in is dropped - no navigation to Login`() = runTest {
+        val expired = credentials("s1")
+        store.save(expired)
+        failingAccountCall(expired) // nobody collects yet: the event stays buffered
+        assertTrue(auth.awaitApproval(RequestCode("request-token")) is SignInOutcome.SignedIn)
+        val events = collectExpiries() // AppNav's collector starts only now
+        assertTrue(events.isEmpty())
+        assertEquals("s2", store.credentials.first()!!.sessionId.value)
+    }
+
+    @Test
+    fun `buffered expiry with no newer transition is still delivered`() = runTest {
+        val expired = credentials("s1")
+        store.save(expired)
+        failingAccountCall(expired)
+        assertEquals(1, collectExpiries().size)
     }
 
     @Test

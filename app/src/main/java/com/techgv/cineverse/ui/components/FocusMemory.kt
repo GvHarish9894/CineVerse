@@ -13,7 +13,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.math.min
@@ -104,24 +108,65 @@ class FocusRow(
 class FocusRestorer(private val memory: FocusMemory) {
     private val requesters = HashMap<String, FocusRequester>()
 
+    /** Attached [rememberFocus] nodes per item key: only their requesters can take focus right now. */
+    private val attached = HashMap<String, Int>()
+
+    /** Rows (panel, row) whose container currently holds focus. */
+    private val focusedRows = HashSet<String>()
+
     /** Requesters are namespaced by panel: equal row / item keys in two panels never collide. */
     internal fun requester(panelKey: String, rowKey: String, itemKey: String) =
         requesters.getOrPut(scopedKey(panelKey, rowKey, itemKey)) { FocusRequester() }
 
+    internal fun onAttached(key: String) {
+        attached.merge(key, 1, Int::plus)
+    }
+
+    internal fun onDetached(key: String) {
+        attached.computeIfPresent(key) { _, count -> (count - 1).takeIf { it > 0 } }
+    }
+
+    /** The item's requester while its node is attached (composed, not a disposed / reusable lazy item), else null. */
+    internal fun attachedRequester(panelKey: String, rowKey: String, itemKey: String): FocusRequester? {
+        val key = scopedKey(panelKey, rowKey, itemKey)
+        return requesters[key]?.takeIf { key in attached }
+    }
+
+    /** Registers the item as attached while its modifier node is attached; lazy items leaving composition detach. */
     fun Modifier.rememberFocus(panelKey: String, rowKey: String, itemKey: String, index: Int): Modifier =
-        focusRequester(requester(panelKey, rowKey, itemKey)).onFocusChanged {
-            if (it.isFocused) memory.save(SavedFocus(panelKey, rowKey, itemKey, index))
-        }
+        focusRequester(requester(panelKey, rowKey, itemKey))
+            .then(AttachTrackerElement(this@FocusRestorer, scopedKey(panelKey, rowKey, itemKey)))
+            .onFocusChanged { if (it.isFocused) memory.save(SavedFocus(panelKey, rowKey, itemKey, index)) }
 
     /**
      * Put on the row's container (e.g. the `LazyRow`): focus entering the row from elsewhere (D-pad from
-     * another row) lands on that row's remembered item while it is composed, else the default target.
+     * another row) lands on that row's remembered item while it is attached, else the default target.
      */
-    fun Modifier.restoreRowFocus(panelKey: String, rowKey: String): Modifier = focusProperties {
-        onEnter = {
-            memory.savedIn(panelKey, rowKey)?.let { requesters[scopedKey(panelKey, rowKey, it.itemKey)]?.requestFocus() }
-        }
-    }.focusGroup()
+    fun Modifier.restoreRowFocus(panelKey: String, rowKey: String): Modifier =
+        restoreRowFocus(FocusRow(panelKey, rowKey, emptyList()), scope = null)
+
+    /**
+     * [restoreRowFocus] that also handles a remembered item that is not attached (scrolled off, or removed:
+     * `min(savedIndex, lastIndex)`): the default target takes focus first, then [scope] scrolls [row]'s
+     * list / grid state to the entry item, awaits its composition and focuses it while the row still has
+     * focus. [scope] must be a composition scope (`rememberCoroutineScope`): it waits for frames.
+     */
+    fun Modifier.restoreRowFocus(row: FocusRow, scope: CoroutineScope?): Modifier {
+        val rowId = scopedKey(row.panelKey, row.rowKey)
+        return onFocusChanged { if (it.hasFocus) focusedRows += rowId else focusedRows -= rowId }
+            .focusProperties {
+                onEnter = {
+                    val saved = memory.savedIn(row.panelKey, row.rowKey)
+                    val target = saved?.let { attachedRequester(row.panelKey, row.rowKey, it.itemKey) }
+                    when {
+                        target != null -> target.tryFocus() // false: the default target keeps focus
+                        saved != null && scope != null && row.itemKeys.isNotEmpty() ->
+                            scope.launch { focusIn(row, entryIndex(row)) { rowId in focusedRows } }
+                    }
+                }
+            }
+            .focusGroup()
+    }
 
     /** Index to focus inside [row]: its remembered item key, else `min(savedIndex, lastIndex)`, else 0. */
     internal fun entryIndex(row: FocusRow): Int {
@@ -144,17 +189,24 @@ class FocusRestorer(private val memory: FocusMemory) {
      */
     suspend fun restore(rows: List<FocusRow>, outerList: LazyListState? = null): Boolean {
         val (rowIndex, itemIndex) = restoreTarget(rows) ?: return false
-        val row = rows[rowIndex]
         outerList?.bringIntoView(rowIndex)
+        return focusIn(rows[rowIndex], itemIndex)
+    }
+
+    /** Item into view → await composition → focus it; gives up when [wanted] turns false. */
+    private suspend fun focusIn(row: FocusRow, itemIndex: Int, wanted: () -> Boolean = { true }): Boolean {
         row.listState?.bringIntoView(itemIndex)
         row.gridState?.let { grid -> if (grid.layoutInfo.visibleItemsInfo.none { it.index == itemIndex }) grid.scrollToItem(itemIndex) }
         val target = requester(row.panelKey, row.rowKey, row.itemKeys[itemIndex])
         repeat(FRAMES_TO_WAIT) {
             withFrameNanos { }
-            if (runCatching { target.requestFocus() }.getOrDefault(false)) return true
+            if (!wanted()) return false
+            if (target.tryFocus()) return true
         }
         return false
     }
+
+    private fun FocusRequester.tryFocus(): Boolean = runCatching { requestFocus() }.getOrDefault(false)
 
     private suspend fun LazyListState.bringIntoView(index: Int) {
         if (layoutInfo.visibleItemsInfo.none { it.index == index }) scrollToItem(index)
@@ -163,5 +215,27 @@ class FocusRestorer(private val memory: FocusMemory) {
     private companion object {
         /** requestFocus() fails until the item is composed and attached; give it a few frames. */
         const val FRAMES_TO_WAIT = 5
+    }
+}
+
+private data class AttachTrackerElement(val restorer: FocusRestorer, val key: String) :
+    ModifierNodeElement<AttachTrackerNode>() {
+    override fun create() = AttachTrackerNode(restorer, key)
+    override fun update(node: AttachTrackerNode) = node.update(restorer, key)
+    override fun InspectorInfo.inspectableProperties() {
+        name = "rememberFocus"
+        properties["key"] = key
+    }
+}
+
+private class AttachTrackerNode(private var restorer: FocusRestorer, private var key: String) : Modifier.Node() {
+    override fun onAttach() = restorer.onAttached(key)
+    override fun onDetach() = restorer.onDetached(key)
+
+    fun update(newRestorer: FocusRestorer, newKey: String) {
+        if (isAttached) restorer.onDetached(key)
+        restorer = newRestorer
+        key = newKey
+        if (isAttached) restorer.onAttached(key)
     }
 }

@@ -3,6 +3,7 @@ package com.techgv.cineverse.ui.player
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.view.View
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +36,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleObserver
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -65,8 +67,39 @@ class PlayerViewModel(private val handle: SavedStateHandle) : ViewModel() {
         }
 }
 
-/** State of one YouTubePlayerView instance; a new View (e.g. after recreation) starts with `loaded = false`. */
-private class PlayerViewSession(val videoKey: String) {
+/**
+ * The player View seam (§7.10): [YouTubePlayerHost] wraps YouTubePlayerView; tests substitute a host
+ * without a WebView and fire its callbacks directly.
+ */
+interface PlayerHost {
+    val view: View
+
+    /** Added to the screen lifecycle for the host's own lifecycle handling (YouTubePlayerView: ON_STOP / ON_DESTROY). */
+    val lifecycleObserver: LifecycleObserver
+
+    /** Called once per host; [listener] receives every player callback. */
+    fun initialize(listener: YouTubePlayerListener)
+
+    fun release()
+}
+
+class YouTubePlayerHost(context: Context) : PlayerHost {
+    private val playerView = YouTubePlayerView(context).apply {
+        enableAutomaticInitialization = false
+        // The control strip owns D-pad focus; the WebView must never take it.
+        isFocusable = false
+        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+    }
+    private val options = IFramePlayerOptions.Builder(context).controls(0).rel(0).ivLoadPolicy(3).build()
+
+    override val view: View get() = playerView
+    override val lifecycleObserver: LifecycleObserver get() = playerView
+    override fun initialize(listener: YouTubePlayerListener) = playerView.initialize(listener, options)
+    override fun release() = playerView.release()
+}
+
+/** State of one player host; a new host (e.g. after recreation) starts with `loaded = false`. */
+private class PlayerViewSession(val videoKey: String, val host: PlayerHost) {
     var player: YouTubePlayer? = null
     var loaded = false
     var lifecycleObserver: LifecycleEventObserver? = null
@@ -112,7 +145,7 @@ private class StripState(initialPosition: Float) {
 }
 
 @Composable
-fun PlayerScreen(route: Route.Player, onBack: () -> Unit) {
+fun PlayerScreen(route: Route.Player, onBack: () -> Unit, hostFactory: (Context) -> PlayerHost = ::YouTubePlayerHost) {
     val vm: PlayerViewModel = viewModel { PlayerViewModel(createSavedStateHandle()) }
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -127,15 +160,9 @@ fun PlayerScreen(route: Route.Player, onBack: () -> Unit) {
                 // Created AND initialized here: runs once per Player route composition, never on recomposition.
                 factory = { ctx ->
                     val generation = vm.generation.bump()
-                    val s = PlayerViewSession(route.videoKey)
-                    val view = YouTubePlayerView(ctx).apply {
-                        enableAutomaticInitialization = false
-                        // The control strip owns D-pad focus; the WebView must never take it.
-                        isFocusable = false
-                        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                    }
-                    val options = IFramePlayerOptions.Builder(ctx).controls(0).rel(0).ivLoadPolicy(3).build()
-                    view.initialize(GenerationGuardedListener(vm.generation, generation, object : AbstractYouTubePlayerListener() {
+                    val host = hostFactory(ctx)
+                    val s = PlayerViewSession(route.videoKey, host)
+                    host.initialize(GenerationGuardedListener(vm.generation, generation, object : AbstractYouTubePlayerListener() {
                         override fun onReady(youTubePlayer: YouTubePlayer) {
                             s.player = youTubePlayer
                             strip.controlsEnabled = true
@@ -159,7 +186,7 @@ fun PlayerScreen(route: Route.Player, onBack: () -> Unit) {
                             // Every PlayerError (not found, not embeddable, invalid param, HTML5, referer, unknown).
                             strip.error = error
                         }
-                    }), options)
+                    }))
                     val observer = LifecycleEventObserver { _, event ->
                         when (event) {
                             Lifecycle.Event.ON_PAUSE -> s.player?.pause() // 13.0.0 itself reacts only at ON_STOP
@@ -168,18 +195,19 @@ fun PlayerScreen(route: Route.Player, onBack: () -> Unit) {
                         }
                     }
                     s.lifecycleObserver = observer
-                    lifecycle.addObserver(view)
+                    lifecycle.addObserver(host.lifecycleObserver)
                     lifecycle.addObserver(observer)
                     session = s
-                    view
+                    host.view
                 },
-                onRelease = { view ->
+                onRelease = {
                     vm.generation.bump()
-                    session?.lifecycleObserver?.let(lifecycle::removeObserver)
+                    val s = session ?: return@AndroidView
+                    s.lifecycleObserver?.let(lifecycle::removeObserver)
                     // A DESTROYED lifecycle already delivered ON_DESTROY, on which the view released itself.
                     val releasedByLifecycle = lifecycle.currentState == Lifecycle.State.DESTROYED
-                    lifecycle.removeObserver(view)
-                    if (!releasedByLifecycle) view.release()
+                    lifecycle.removeObserver(s.host.lifecycleObserver)
+                    if (!releasedByLifecycle) s.host.release()
                 },
             )
         },
