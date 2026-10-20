@@ -21,7 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
@@ -91,7 +93,7 @@ internal fun accountInitials(name: String?): String =
 private fun RailAccount(accountName: String?, expanded: Boolean) {
     Row(Modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(32.dp).background(
+            Modifier.size(40.dp).background(
                 if (accountName != null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.14f),
                 CircleShape,
             ),
@@ -99,13 +101,14 @@ private fun RailAccount(accountName: String?, expanded: Boolean) {
         ) {
             Text(
                 accountInitials(accountName),
-                style = MaterialTheme.typography.labelLarge,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
                 color = if (accountName != null) MaterialTheme.colorScheme.onPrimary else Color.White,
             )
         }
         if (expanded) {
-            Spacer(Modifier.width(12.dp))
-            Text(accountName?.let { "$it · TMDB" } ?: "Guest", style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            Spacer(Modifier.width(14.dp))
+            Text(accountName?.let { "$it · TMDB" } ?: "Guest", fontSize = 14.sp, maxLines = 1)
         }
     }
 }

@@ -77,49 +77,59 @@ fun LoginScreen(
     val primary = remember { FocusRequester() }
     LaunchedEffect(Unit) { primary.requestFocus() }
 
-    Row(Modifier.fillMaxSize().padding(start = 90.dp, top = 48.dp, end = 64.dp, bottom = 32.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("CineVerse", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-            (state.banner ?: message)?.let { Banner(it) }
+    // Prototype geometry in 1280×720 design units (§6; DesignCanvas maps them to the screen).
+    Row(Modifier.fillMaxSize().padding(start = 120.dp, top = 96.dp)) {
+        Column(Modifier.width(560.dp)) {
+            Text("CineVerse", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
+            (state.banner ?: message)?.let { Banner(it, Modifier.padding(top = 14.dp)) }
             Text(
                 "Sign in with your TMDB account",
-                style = MaterialTheme.typography.displaySmall,
+                modifier = Modifier.padding(top = 26.dp),
+                fontSize = 48.sp,
+                lineHeight = 49.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 "Keep your watchlist, favourites and ratings in sync between this TV, your phone and themoviedb.org.",
-                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 14.dp),
+                fontSize = 17.sp,
+                lineHeight = 25.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Step(1, "Scan the code with your phone to open TMDB.")
-            Step(2, "Sign in to TMDB and approve CineVerse.")
-            Step(3, "Come back here and press OK on \u201cI've approved it\u201d — we will finish signing you in.")
-            Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Step(1, "Scan the code with your phone to open TMDB.")
+                Step(2, "Sign in to TMDB and approve CineVerse.")
+                Step(3, "Come back here and press OK on \u201cI've approved it\u201d — we will finish signing you in.")
+            }
+            Row(Modifier.padding(top = 30.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 // Stays enabled (and focused) while waiting; presses are ignored then (LoginAction.None).
-                Button(onClick = vm::onPrimary, modifier = Modifier.focusRequester(primary)) { Text(state.primaryLabel) }
-                OutlinedButton(onClick = { vm.stopPolling(); onContinueAsGuest() }) { Text("Continue as guest") }
+                Button(onClick = vm::onPrimary, modifier = Modifier.height(48.dp).focusRequester(primary)) {
+                    Text(state.primaryLabel, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+                OutlinedButton(onClick = { vm.stopPolling(); onContinueAsGuest() }, modifier = Modifier.height(48.dp)) {
+                    Text("Continue as guest", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
             Row(
-                Modifier.height(24.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                Modifier.padding(top = 18.dp).height(24.dp).semantics { liveRegion = LiveRegionMode.Polite },
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (state.waiting) Spinner()
-                state.message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                state.message?.let { Text(it, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
-        Spacer(Modifier.width(56.dp))
-        QrPanel(state.code, Modifier.padding(top = 40.dp))
+        Spacer(Modifier.width(120.dp))
+        QrPanel(state.code, Modifier.padding(top = 24.dp))
     }
 }
 
 @Composable
-private fun Banner(text: String) {
+private fun Banner(text: String, modifier: Modifier) {
     Text(
         text,
-        modifier = Modifier
+        modifier = modifier
             .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp))
             .padding(horizontal = 14.dp, vertical = 8.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
@@ -130,11 +140,11 @@ private fun Banner(text: String) {
 
 @Composable
 private fun Step(number: Int, text: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.size(24.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
-            Text("$number", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary)
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(28.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
+            Text("$number", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
         }
-        Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        Text(text, fontSize = 15.5.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -158,10 +168,10 @@ private fun Spinner() {
 /** White QR card plus an elided link: the ~400-character URL can't be typed, so the QR is the way in. */
 @Composable
 private fun QrPanel(code: RequestCode?, modifier: Modifier) {
-    Column(modifier.width(260.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Box(Modifier.size(240.dp).background(Color.White, RoundedCornerShape(20.dp)), contentAlignment = Alignment.Center) {
+    Column(modifier.width(340.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Box(Modifier.size(300.dp).background(Color.White, RoundedCornerShape(24.dp)), contentAlignment = Alignment.Center) {
             if (code != null) {
-                QrCode(code.approvalUrl, contentDescription = "QR code to approve CineVerse on TMDB", size = 216.dp)
+                QrCode(code.approvalUrl, contentDescription = "QR code to approve CineVerse on TMDB", size = 250.dp)
             } else {
                 Text("No code yet", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
             }
@@ -171,10 +181,11 @@ private fun QrPanel(code: RequestCode?, modifier: Modifier) {
             Text(
                 "themoviedb.org/auth/access…${token.takeLast(4)}",
                 maxLines = 1,
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Text("The code expires after 15 minutes", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("The code expires after 15 minutes", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

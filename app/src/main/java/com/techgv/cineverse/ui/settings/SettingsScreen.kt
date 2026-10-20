@@ -1,6 +1,8 @@
 package com.techgv.cineverse.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -9,9 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -31,7 +37,9 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.Button
@@ -159,16 +167,28 @@ fun SettingsScreen(
     // First data, and again when the defaults row appears / goes (its buttons vanish while focused).
     LaunchedEffect(keys) { restorer.restore(listOf(FocusRow(PANEL, ROW, keys, listState))) }
 
-    Row(Modifier.fillMaxSize().padding(start = 48.dp, top = 27.dp, end = 48.dp)) {
-        Column(Modifier.width(440.dp)) {
-            Text("Settings", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.onSurface)
+    // Prototype geometry in 1280×720 design units (§6); the content starts after the 72-unit rail.
+    Row(Modifier.fillMaxSize().padding(start = 48.dp, top = 44.dp)) {
+        Column(Modifier.width(580.dp)) {
+            Text(
+                "Settings",
+                fontSize = 44.sp,
+                lineHeight = 44.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             Text(
                 "Playback feel, content and your TMDB account",
-                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp),
+                fontSize = 15.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(16.dp))
-            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 27.dp)) {
+            Spacer(Modifier.height(24.dp))
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 44.dp),
+            ) {
                 if (defaults != null) {
                     item(key = "accountDefaults") {
                         AccountDefaultsRow(
@@ -189,11 +209,12 @@ fun SettingsScreen(
                 }
             }
         }
-        Spacer(Modifier.width(56.dp))
+        Spacer(Modifier.width(60.dp))
         DescriptionPane(
             row = rows.firstOrNull { it.key == focusedKey },
             defaultsText = defaults?.let { defaultsDescription(it.language, it.region, it.includeAdult) },
-            modifier = Modifier.weight(1f).padding(top = 96.dp),
+            // Shrinks while the expanded rail pushes the content aside.
+            modifier = Modifier.weight(1f, fill = false).widthIn(max = 440.dp).padding(top = 96.dp),
         )
     }
 }
@@ -212,7 +233,7 @@ private fun SettingRowItem(row: SettingRow, feedback: Feedback, modifier: Modifi
         onClick = row.onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(56.dp)
             .semantics { contentDescription = "${row.label}, ${row.value.spoken()}" }
             .onKeyEvent { event ->
                 // ←→ change a value row instead of moving focus (so LEFT never opens the rail from here).
@@ -228,7 +249,7 @@ private fun SettingRowItem(row: SettingRow, feedback: Feedback, modifier: Modifi
                 }
                 true
             },
-        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.medium),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = if (feedback.reduceMotion) 1f else 1.02f),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -236,16 +257,16 @@ private fun SettingRowItem(row: SettingRow, feedback: Feedback, modifier: Modifi
         ),
     ) {
         Row(
-            Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            Modifier.fillMaxSize().padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(row.glyph, style = MaterialTheme.typography.titleMedium)
-            Text(row.label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), maxLines = 1)
+            Text(row.glyph, fontSize = 18.sp)
+            Text(row.label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
             when (val value = row.value) {
                 is RowValue.Toggle -> Switch(checked = value.on, onCheckedChange = null)
-                is RowValue.Choice -> Text("‹  ${value.text}  ›", style = MaterialTheme.typography.bodyMedium)
-                is RowValue.Label -> Text(value.text, style = MaterialTheme.typography.bodyMedium)
+                is RowValue.Choice -> Text("‹  ${value.text}  ›", fontSize = 14.sp)
+                is RowValue.Label -> Text(value.text, fontSize = 14.sp)
             }
         }
     }
@@ -266,7 +287,7 @@ private fun AccountDefaultsRow(
     onResolve: (apply: Boolean) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        Text(text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
                 onClick = { onResolve(true) },
@@ -282,19 +303,33 @@ private fun AccountDefaultsRow(
 
 @Composable
 private fun DescriptionPane(row: SettingRow?, defaultsText: String?, modifier: Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier) {
         if (row == null) {
             // The account-defaults buttons are focused.
-            Text("TMDB account defaults", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
-            defaultsText?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            PaneHeading("↺", "TMDB account defaults")
+            defaultsText?.let { PaneText(it) }
             return@Column
         }
-        Text(row.glyph, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-        Text(row.label, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
-        if (row.key == ABOUT) {
-            AboutPane()
-        } else {
-            Text(row.description, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        PaneHeading(row.glyph, row.label)
+        if (row.key == ABOUT) AboutPane(Modifier.padding(top = 12.dp)) else PaneText(row.description)
     }
+}
+
+@Composable
+private fun PaneHeading(glyph: String, label: String) {
+    Box(Modifier.size(72.dp).background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp)), contentAlignment = Alignment.Center) {
+        Text(glyph, fontSize = 32.sp, color = MaterialTheme.colorScheme.primary)
+    }
+    Text(
+        label,
+        modifier = Modifier.padding(top = 22.dp),
+        fontSize = 30.sp,
+        fontWeight = FontWeight.ExtraBold,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+@Composable
+private fun PaneText(text: String) {
+    Text(text, modifier = Modifier.padding(top = 12.dp), fontSize = 16.sp, lineHeight = 25.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
