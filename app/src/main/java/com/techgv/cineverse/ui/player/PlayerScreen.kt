@@ -48,6 +48,7 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstan
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants.PlayerState
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.YouTubePlayerListener
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 import com.techgv.cineverse.ui.nav.Route
@@ -78,6 +79,26 @@ private class PlayerViewSession(val videoKey: String) {
             p.loadVideo(videoKey, startSeconds)
         }
     }
+}
+
+/**
+ * Forwards every callback to [target] only while [token] is the current generation: a View created for an
+ * obsolete route instance is ignored entirely (§7.10), not only in onReady.
+ */
+internal class GenerationGuardedListener(
+    private val generation: GenerationCounter,
+    private val token: Long,
+    private val target: YouTubePlayerListener,
+) : AbstractYouTubePlayerListener() {
+    private inline fun ifCurrent(block: () -> Unit) {
+        if (generation.isCurrent(token)) block()
+    }
+
+    override fun onReady(youTubePlayer: YouTubePlayer) = ifCurrent { target.onReady(youTubePlayer) }
+    override fun onStateChange(youTubePlayer: YouTubePlayer, state: PlayerState) = ifCurrent { target.onStateChange(youTubePlayer, state) }
+    override fun onCurrentSecond(youTubePlayer: YouTubePlayer, second: Float) = ifCurrent { target.onCurrentSecond(youTubePlayer, second) }
+    override fun onVideoDuration(youTubePlayer: YouTubePlayer, duration: Float) = ifCurrent { target.onVideoDuration(youTubePlayer, duration) }
+    override fun onError(youTubePlayer: YouTubePlayer, error: PlayerError) = ifCurrent { target.onError(youTubePlayer, error) }
 }
 
 /** What the control strip renders; written by player callbacks (main thread). */
@@ -114,9 +135,8 @@ fun PlayerScreen(route: Route.Player, onBack: () -> Unit) {
                         descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     }
                     val options = IFramePlayerOptions.Builder(ctx).controls(0).rel(0).ivLoadPolicy(3).build()
-                    view.initialize(object : AbstractYouTubePlayerListener() {
+                    view.initialize(GenerationGuardedListener(vm.generation, generation, object : AbstractYouTubePlayerListener() {
                         override fun onReady(youTubePlayer: YouTubePlayer) {
-                            if (!vm.generation.isCurrent(generation)) return // obsolete route instance
                             s.player = youTubePlayer
                             strip.controlsEnabled = true
                             if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) s.startIfNeeded(vm.positionSeconds)
@@ -139,7 +159,7 @@ fun PlayerScreen(route: Route.Player, onBack: () -> Unit) {
                             // Every PlayerError (not found, not embeddable, invalid param, HTML5, referer, unknown).
                             strip.error = error
                         }
-                    }, options)
+                    }), options)
                     val observer = LifecycleEventObserver { _, event ->
                         when (event) {
                             Lifecycle.Event.ON_PAUSE -> s.player?.pause() // 13.0.0 itself reacts only at ON_STOP

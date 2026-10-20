@@ -28,6 +28,8 @@ enum class SectionErrorKind(val message: String, val retryable: Boolean) {
     Offline("You're offline. Check your connection.", true),
     NotAvailable("Not available", false),
     AppCredential("CineVerse can't reach TMDB right now (app configuration).", false),
+    /** The app is already signing out and returning to Login (AuthRepository.sessionExpired). */
+    SessionExpired("Sign-in expired", false),
     Generic("Something went wrong.", true),
 }
 
@@ -35,6 +37,7 @@ fun Throwable.toSectionErrorKind(): SectionErrorKind = when ((this as? TmdbExcep
     TmdbError.Network -> SectionErrorKind.Offline
     TmdbError.NotFound -> SectionErrorKind.NotAvailable
     TmdbError.AppCredential -> SectionErrorKind.AppCredential
+    TmdbError.SessionExpired -> SectionErrorKind.SessionExpired
     else -> SectionErrorKind.Generic
 }
 

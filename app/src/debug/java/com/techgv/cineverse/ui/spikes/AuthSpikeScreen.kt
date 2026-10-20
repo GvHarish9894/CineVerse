@@ -58,6 +58,7 @@ fun AuthSpikeScreen(auth: AuthRepository) {
                 SignInOutcome.TimedOut -> "Still waiting — press OK to check again"
                 SignInOutcome.AlreadyPolling -> "Already checking…"
                 is SignInOutcome.Failed -> "Sign-in failed (${outcome.error}) — get a new code".also { code = null }
+                SignInOutcome.Superseded -> "Sign-in discarded (signed out meanwhile)".also { code = null }
             }
         }
     }

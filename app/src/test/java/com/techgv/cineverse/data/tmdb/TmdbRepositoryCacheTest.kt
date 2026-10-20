@@ -4,6 +4,9 @@ import com.techgv.cineverse.data.auth.Credentials
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.util.GenerationCounter
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -13,6 +16,8 @@ import org.junit.Test
 class TmdbRepositoryCacheTest {
     private val calls = mutableListOf<String>()
     private var onFetch: () -> Unit = {}
+    private var detailGate: CompletableDeferred<Unit>? = null
+    private var watchlisted = false
 
     private val api = object : TmdbApi by unusedTmdbApi {
         override suspend fun configuration() = ConfigurationDto().also { calls += "configuration" }
@@ -20,8 +25,17 @@ class TmdbRepositoryCacheTest {
             PageDto<MediaItemDto>(page = page).also { calls += "movie/$list/$language/$region/$page"; onFetch() }
         override suspend fun tvList(list: TvList, language: String, timezone: String?, page: Int) =
             PageDto<MediaItemDto>().also { calls += "tv/$list/$timezone" }
-        override suspend fun movieDetail(id: Int, language: String, append: String, sessionId: String?) =
-            MovieDetailDto(id).also { calls += "movie/$id/$append" }
+        override suspend fun movieDetail(id: Int, language: String, append: String, sessionId: String?): MovieDetailDto {
+            calls += "movie/$id/$language/$append" + (sessionId?.let { "/session" } ?: "")
+            detailGate?.await()
+            return MovieDetailDto(id, title = "title@$language")
+        }
+        override suspend fun person(id: Int, language: String, append: String) =
+            PersonDetailDto(id).also { calls += "person/$id/$language" }
+        override suspend fun accountStates(media: MediaType, id: Int, sessionId: String) =
+            AccountStatesDto(id, watchlist = watchlisted).also { calls += "states/$id" }
+        override suspend fun setWatchlist(accountId: Int, sessionId: String, body: WatchlistBody) =
+            StatusDto(success = true).also { watchlisted = body.watchlist; calls += "watchlist/${body.mediaId}" }
         override suspend fun videos(media: MediaType, id: Int, language: String) = VideosDto().also { calls += "videos/$id" }
         override suspend fun accountList(
             bearer: UserBearer, accountObjectId: String, media: MediaType, list: AccountList, language: String, page: Int, sortBy: String,
@@ -90,7 +104,7 @@ class TmdbRepositoryCacheTest {
         calls.clear()
         repo.movieDetail(1)
         repo.movieDetail(2)
-        assertEquals(listOf("movie/2/credits,videos,recommendations,reviews,release_dates"), calls)
+        assertEquals(listOf("movie/2/en-US/$MOVIE_APPEND"), calls)
     }
 
     @Test
@@ -116,7 +130,58 @@ class TmdbRepositoryCacheTest {
         repo.accountList(account, MediaType.Movie, AccountList.Watchlist)
         repo.movieDetail(550, account)
         repo.movieList(MovieList.Popular)
-        assertEquals(listOf("account/aoid/watchlist", "movie/550/credits,videos,recommendations,reviews,release_dates,account_states"), calls)
+        // Catalog detail stays cached; account_states are always fetched fresh.
+        assertEquals(listOf("account/aoid/watchlist", "states/550"), calls)
+    }
+
+    @Test
+    fun `signed-in detail merges fresh account_states over the cached catalog detail`() = runTest {
+        assertEquals(false, repo.movieDetail(550, account).accountStates!!.watchlist)
+        repo.setWatchlist(account, MediaType.Movie, 550, onWatchlist = true)
+        repo.movieDetail(551) // unrelated entry stays
+        calls.clear()
+        repo.movieDetail(550) // guest view: no account_states
+        val detail = repo.movieDetail(550, account)
+        assertEquals(true, detail.accountStates!!.watchlist)
+        assertEquals("title@en-US", detail.title)
+        // The write invalidated the title once; the second signed-in read reuses the catalog entry.
+        repo.movieDetail(550, account)
+        assertEquals(listOf("movie/550/en-US/$MOVIE_APPEND", "states/550", "states/550"), calls)
+    }
+
+    @Test
+    fun `explicit language is cached separately and leaves Settings alone`() = runTest {
+        settings = settings.copy(language = "hi-IN")
+        repo.movieDetail(550)
+        repo.movieDetail(550, language = "en-US")
+        repo.person(31)
+        repo.person(31, language = "en-US")
+        repo.movieDetail(550)
+        repo.movieDetail(550, language = "en-US")
+        repo.person(31)
+        repo.person(31, language = "en-US")
+        assertEquals(
+            listOf("movie/550/hi-IN/$MOVIE_APPEND", "movie/550/en-US/$MOVIE_APPEND", "person/31/hi-IN", "person/31/en-US"),
+            calls,
+        )
+        assertEquals("hi-IN", settings.language)
+        assertEquals("title@hi-IN", repo.movieDetail(550).title)
+    }
+
+    @Test
+    fun `a GET in flight across a write is neither cached nor served afterwards`() = runTest {
+        detailGate = CompletableDeferred()
+        val stale = async { repo.movieDetail(550) } // started before the write
+        runCurrent()
+        repo.setWatchlist(account, MediaType.Movie, 550, onWatchlist = true) // write + invalidateTitle
+        detailGate!!.complete(Unit)
+        stale.await()
+        detailGate = null
+        calls.clear()
+        repo.movieDetail(550)
+        assertEquals(listOf("movie/550/en-US/$MOVIE_APPEND"), calls) // refetched, not the pre-write response
+        repo.movieDetail(550)
+        assertEquals(1, calls.size) // the post-write response is cached
     }
 
     @Test
@@ -151,5 +216,9 @@ class TmdbRepositoryCacheTest {
     @Test
     fun `image base url falls back to the constant`() {
         assertEquals(DEFAULT_IMAGE_BASE_URL, repo.imageBaseUrl())
+    }
+
+    private companion object {
+        const val MOVIE_APPEND = "credits,videos,recommendations,reviews,release_dates"
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,13 +35,33 @@ import com.techgv.cineverse.ui.spikes.spikeDestinations
 import com.techgv.cineverse.ui.splash.SplashScreen
 
 /**
- * BACK steps 6–7: Home (Phase 2, rows) reports whether focus is at row 0 / col 0 and how to get there.
- * The placeholder Home has a single focusable, so it is always at the origin.
+ * BACK steps 6–7 (§1.2): Home registers whether focus is at row 0 / col 0 and how to get there, from a
+ * `DisposableEffect`, calling the returned unregister action in `onDispose`. Unregistered (or before
+ * Home reports), the first BACK counts as "not at origin" and only the next one offers Exit.
  */
-class HomeOrigin {
-    var atOrigin: () -> Boolean = { true }
-    var focusOrigin: () -> Unit = {}
+class HomeBackHandle {
+    private class Registration(val atOrigin: () -> Boolean, val focusOrigin: () -> Unit)
+
+    private var registration: Registration? = null
+    private var originRequested = false
+
+    fun atOrigin(): Boolean = registration?.atOrigin?.invoke() ?: originRequested
+
+    fun focusOrigin() {
+        originRequested = true
+        registration?.focusOrigin?.invoke()
+    }
+
+    /** Returns the unregister action; it only clears this registration, never a newer one. */
+    fun register(atOrigin: () -> Boolean, focusOrigin: () -> Unit): () -> Unit {
+        val mine = Registration(atOrigin, focusOrigin)
+        registration = mine
+        originRequested = false
+        return { if (registration === mine) registration = null }
+    }
 }
+
+const val SIGN_IN_EXPIRED_MESSAGE = "Sign-in expired"
 
 @Composable
 fun AppNav(container: AppContainer) {
@@ -48,12 +69,22 @@ fun AppNav(container: AppContainer) {
     val entry by nav.currentBackStackEntryAsState()
     val destination = entry?.destination
     val contentFocus = remember { FocusRequester() }
-    val homeOrigin = remember { HomeOrigin() }
+    val homeBack = remember { HomeBackHandle() }
     var railFocused by remember { mutableStateOf(false) }
     var exitDialog by rememberSaveable { mutableStateOf(false) }
+    var loginMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val activity = LocalActivity.current
     val leaveLogin: () -> Unit = {
+        loginMessage = null
         if (nav.previousBackStackEntry != null) nav.popBackStack() else nav.reset(Route.Home)
+    }
+
+    // §3.3: AuthRepository already signed out locally (credentials cleared, account generation bumped).
+    LaunchedEffect(container) {
+        container.authRepository.sessionExpired.collect {
+            loginMessage = SIGN_IN_EXPIRED_MESSAGE
+            nav.reset(Route.Login)
+        }
     }
 
     Row(Modifier.fillMaxSize()) {
@@ -71,12 +102,12 @@ fun AppNav(container: AppContainer) {
                 composable<Route.Splash> {
                     SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
                 }
-                composable<Route.Home> { HomeScreen(onOpen = { nav.navigate(it) }) }
+                composable<Route.Home> { HomeScreen(onOpen = { nav.navigate(it) }, backHandle = homeBack) }
                 composable<Route.Browse> { PlaceholderScreen("Browse", it.toRoute<Route.Browse>().kind.name) }
                 composable<Route.Search> { PlaceholderScreen("Search") }
                 composable<Route.Library> { PlaceholderScreen("My Library") }
                 composable<Route.Settings> { PlaceholderScreen("Settings") }
-                composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin) }
+                composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, message = loginMessage) }
                 composable<Route.Detail> {
                     val route = it.toRoute<Route.Detail>()
                     PlaceholderScreen("Detail", "${route.mediaType.path} ${route.id}")
@@ -99,14 +130,14 @@ fun AppNav(container: AppContainer) {
             hasPushedRoute = nav.previousBackStackEntry != null,
             focusInRail = railFocused,
             onHome = destination?.hasRoute<Route.Home>() == true,
-            homeAtOrigin = homeOrigin.atOrigin(),
+            homeAtOrigin = homeBack.atOrigin(),
         )
         when (backAction(context)) {
             BackAction.ShowExitDialog -> exitDialog = true
             BackAction.Pop -> nav.popBackStack()
             BackAction.FocusContent -> contentFocus.requestFocus()
             BackAction.ResetToHome -> nav.reset(Route.Home)
-            BackAction.FocusHomeOrigin -> homeOrigin.focusOrigin()
+            BackAction.FocusHomeOrigin -> homeBack.focusOrigin()
         }
     }
 

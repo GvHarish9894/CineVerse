@@ -14,6 +14,8 @@ import com.techgv.cineverse.data.tmdb.TmdbApi
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.UserBearer
 import com.techgv.cineverse.data.tmdb.unusedTmdbApi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
@@ -41,7 +43,10 @@ class AuthRepositoryTest {
     private var exchangeCalls = 0
     private val exchangeTimes = mutableListOf<Long>()
     private val convert = ArrayDeque<() -> SessionDto>()
+    private val convertTimes = mutableListOf<Long>()
+    private var convertGate: CompletableDeferred<Unit>? = null
     private var accountCalls = 0
+    private var onAccount: () -> Unit = {}
     private var remoteSignOut: suspend () -> StatusDto = { StatusDto(success = true) }
     private val remoteCalls = mutableListOf<String>()
     private var accountChanges = 0
@@ -54,10 +59,14 @@ class AuthRepositoryTest {
             exchangeTimes += clock.currentTime
             return (if (exchange.size > 1) exchange.removeFirst() else exchange.first())()
         }
-        override suspend fun convertToSession(body: ConvertSessionBody): SessionDto =
-            (if (convert.size > 1) convert.removeFirst() else convert.firstOrNull() ?: { SessionDto("session") })()
+        override suspend fun convertToSession(body: ConvertSessionBody): SessionDto {
+            convertTimes += clock.currentTime
+            convertGate?.await()
+            return (if (convert.size > 1) convert.removeFirst() else convert.firstOrNull() ?: { SessionDto("session") })()
+        }
         override suspend fun account(sessionId: String): AccountDto {
             accountCalls++
+            onAccount()
             return AccountDto(id = 548, username = "harish", name = "Harish")
         }
         override suspend fun deleteAccessToken(bearer: UserBearer, body: DeleteAccessTokenBody): StatusDto {
@@ -197,6 +206,43 @@ class AuthRepositoryTest {
         assertEquals(SignInOutcome.Failed(TmdbError.Network), outcome)
         assertEquals(1, exchangeCalls)
         assertEquals(0, accountCalls)
+        assertNull(store.credentials.first())
+        assertEquals(0, accountChanges)
+    }
+
+    @Test
+    fun `second 429 on a post-approval step waits max(poll interval, Retry-After)`() = authTest {
+        exchange += approved
+        // tmdbCall retries once after Retry-After; the step retry must not undercut the second Retry-After.
+        convert += listOf(tmdbError(429, null, retryAfter = 7), tmdbError(429, null, retryAfter = 7), { SessionDto("session") })
+        assertTrue(repo.awaitApproval(code) is SignInOutcome.SignedIn)
+        assertEquals(listOf(0L, 7_000L, 14_000L), convertTimes)
+    }
+
+    @Test
+    fun `cancel at the account-to-save boundary commits nothing`() = authTest {
+        exchange += approved
+        lateinit var job: Job
+        onAccount = { job.cancel() } // BACK lands after /3/account answered, before the commit
+        job = launch { repo.awaitApproval(code) }
+        job.join()
+        assertTrue(job.isCancelled)
+        assertNull(store.credentials.first())
+        assertEquals(0, accountChanges)
+        // The single-flight lock was released.
+        onAccount = {}
+        assertTrue(repo.awaitApproval(code) is SignInOutcome.SignedIn)
+    }
+
+    @Test
+    fun `sign-out during conversion - nothing saved`() = authTest {
+        exchange += approved
+        convertGate = CompletableDeferred()
+        val attempt = async { repo.awaitApproval(code) }
+        runCurrent() // approved; waiting for convert
+        repo.signOut() // store still empty: must still invalidate the attempt
+        convertGate!!.complete(Unit)
+        assertEquals(SignInOutcome.Superseded, attempt.await())
         assertNull(store.credentials.first())
         assertEquals(0, accountChanges)
     }

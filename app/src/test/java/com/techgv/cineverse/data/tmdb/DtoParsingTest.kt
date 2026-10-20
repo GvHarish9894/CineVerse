@@ -29,4 +29,16 @@ class DtoParsingTest {
         assertEquals(9.0, tv.accountRating!!.value, 0.0)
         assertEquals(2, page.totalPages)
     }
+
+    @Test
+    fun `aggregate_credits cast exposes billing order and roles`() {
+        val credits = TmdbJson.decodeFromString<AggregateCreditsDto>(
+            """{"cast":[{"id":17419,"name":"Bryan Cranston","order":0,"total_episode_count":62,
+              "roles":[{"credit_id":"x","character":"Walter White","episode_count":62},{"character":"Heisenberg","episode_count":10}]}]}""",
+        )
+        val cast = credits.cast.single()
+        assertEquals(0, cast.order)
+        assertEquals(listOf("Walter White", "Heisenberg"), cast.roles.map { it.character })
+        assertEquals(62, cast.roles.first().episodeCount)
+    }
 }

@@ -52,6 +52,7 @@ fun FocusSpikeScreen(onOpen: (Route) -> Unit) {
             PinToStart(leadingInset = 48.dp) {
                 LazyRow(
                     state = rowStates[rowIndex],
+                    modifier = with(restorer) { Modifier.restoreRowFocus(PANEL, rowKey) },
                     contentPadding = PaddingValues(horizontal = 48.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {

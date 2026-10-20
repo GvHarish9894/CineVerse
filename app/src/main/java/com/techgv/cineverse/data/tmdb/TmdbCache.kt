@@ -15,9 +15,10 @@ data class CacheKey(
 )
 
 /**
- * In-memory LRU + TTL cache. Commits carry the app generation they started under; a commit from an
- * older generation (auth / settings changed meanwhile) is dropped. Bump + purge happen under the same
- * lock as commits, so no stale commit can land after an invalidation.
+ * In-memory LRU + TTL cache. Commits carry the app generation and the cache [revision] they started
+ * under; a commit from an older generation (auth / settings changed meanwhile) or from before any
+ * invalidation (e.g. a write) is dropped. Bump + purge happen under the same lock as commits, so no
+ * stale commit can land after an invalidation.
  */
 class TmdbCache(
     private val appGeneration: GenerationCounter,
@@ -30,6 +31,14 @@ class TmdbCache(
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<CacheKey, Entry>) = size > maxEntries
     }
 
+    /** Bumped by every [invalidate]. */
+    private var invalidations = 0L
+
+    // shortcut: one revision for all resources, so a write also drops unrelated in-flight commits (a later
+    // cache miss, never stale data); upgrade to per-resource revisions if writes become frequent.
+    @get:Synchronized
+    val revision: Long get() = invalidations
+
     @Synchronized
     @Suppress("UNCHECKED_CAST")
     fun <T : Any> get(key: CacheKey): T? {
@@ -41,10 +50,10 @@ class TmdbCache(
         return entry.value as T
     }
 
-    /** Returns false (and stores nothing) when [generation] is no longer current. */
+    /** Returns false (and stores nothing) when [generation] is no longer current or [revision] changed. */
     @Synchronized
-    fun put(key: CacheKey, value: Any, ttlMillis: Long, generation: Long): Boolean {
-        if (!appGeneration.isCurrent(generation)) return false
+    fun put(key: CacheKey, value: Any, ttlMillis: Long, generation: Long, revision: Long): Boolean {
+        if (!appGeneration.isCurrent(generation) || revision != invalidations) return false
         val expiresAt = if (ttlMillis == Long.MAX_VALUE) Long.MAX_VALUE else now() + ttlMillis
         entries[key] = Entry(value, expiresAt)
         return true
@@ -54,6 +63,7 @@ class TmdbCache(
     @Synchronized
     fun invalidate(bumpGeneration: Boolean, predicate: (CacheKey) -> Boolean) {
         if (bumpGeneration) appGeneration.bump()
+        invalidations++
         entries.keys.removeAll(predicate)
     }
 

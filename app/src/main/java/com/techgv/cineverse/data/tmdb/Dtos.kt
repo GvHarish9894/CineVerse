@@ -219,8 +219,11 @@ data class AggregateCastDto(
     val id: Int,
     val name: String = "",
     val profilePath: String? = null,
+    /** TV role line (§7.4): `roles.joinToString(" / ") { character }`. */
     val roles: List<RoleDto> = emptyList(),
     val totalEpisodeCount: Int = 0,
+    /** Billing order: "Top billed cast" sorts by it. */
+    val order: Int? = null,
 )
 
 @Serializable

@@ -18,14 +18,21 @@ import com.techgv.cineverse.data.tmdb.UserAccessToken
 import com.techgv.cineverse.data.tmdb.UserBearer
 import com.techgv.cineverse.data.tmdb.tmdbCall
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.max
 
 /** Short-lived v4 request token: the only credential ever rendered on screen; never logged. */
 class RequestCode(val requestToken: String) {
@@ -47,6 +54,8 @@ sealed interface SignInOutcome {
     data object AlreadyPolling : SignInOutcome
     /** Approved, but convert / account kept failing: nothing persisted, restart login. */
     data class Failed(val error: TmdbError) : SignInOutcome
+    /** A sign-out or session expiry happened while this attempt ran: nothing persisted. */
+    data object Superseded : SignInOutcome
 }
 
 class AuthRepository(
@@ -62,6 +71,20 @@ class AuthRepository(
     val credentials: Flow<Credentials?> = store.credentials
     private val pollLock = Mutex()
 
+    /** Serializes credential transitions: sign-in commit, sign-out, session expiry. */
+    private val transitionLock = Mutex()
+
+    /** Bumped by sign-out / expiry: a sign-in attempt started under an older epoch never commits. */
+    private val attemptEpoch = AtomicLong()
+
+    private val expiryEvents = Channel<Unit>(Channel.CONFLATED)
+
+    /**
+     * One event per expired sign-in (§3.3 "Sign-in expired"), emitted after the local sign-out. Buffered
+     * until collected (AppNav resets to Login with the message).
+     */
+    val sessionExpired: Flow<Unit> = expiryEvents.receiveAsFlow()
+
     /** §4.1 step 1. Throws [TmdbException]. */
     suspend fun createRequestCode(): RequestCode = tmdbCall(TmdbOperation.Catalog) {
         api.createRequestToken(RequestTokenBody(redirectTo = "https://www.themoviedb.org/"))
@@ -73,6 +96,7 @@ class AuthRepository(
      */
     suspend fun awaitApproval(code: RequestCode): SignInOutcome {
         if (!pollLock.tryLock()) return SignInOutcome.AlreadyPolling
+        val epoch = attemptEpoch.get()
         try {
             val access = when (val poll = pollAccessToken(code)) {
                 is Poll.Approved -> poll.access
@@ -97,9 +121,12 @@ class AuthRepository(
                 username = account.username,
                 name = account.name,
             )
-            withContext(NonCancellable) {
+            transitionLock.withLock {
+                // Last check before the commit: BACK / dispose cancelled the caller, or sign-out ran meanwhile.
+                currentCoroutineContext().ensureActive()
+                if (attemptEpoch.get() != epoch) return SignInOutcome.Superseded
                 onAccountChanged()
-                store.save(credentials)
+                withContext(NonCancellable) { store.save(credentials) } // one atomic edit; never torn
             }
             return SignInOutcome.SignedIn(credentials)
         } finally {
@@ -131,7 +158,10 @@ class AuthRepository(
         result
     } ?: Poll.Stopped(SignInOutcome.TimedOut)
 
-    /** Retries transient failures (network / 5xx / 429) of one post-approval step; throws [TmdbException]. */
+    /**
+     * Retries transient failures (network / 5xx / 429) of one post-approval step; throws [TmdbException].
+     * After a second 429 (tmdbCall already retried once) it waits at least that Retry-After.
+     */
     private suspend fun <T> step(operation: TmdbOperation, block: suspend () -> T): T {
         repeat(stepAttempts - 1) {
             try {
@@ -139,7 +169,7 @@ class AuthRepository(
             } catch (e: TmdbException) {
                 val transient = e.error == TmdbError.Network || e.error is TmdbError.Server || e.error is TmdbError.RateLimited
                 if (!transient) throw e
-                delay(pollIntervalMillis)
+                delay(max(pollIntervalMillis, (e.error as? TmdbError.RateLimited)?.retryAfterMillis ?: 0))
             }
         }
         return tmdbCall(operation, block)
@@ -150,9 +180,10 @@ class AuthRepository(
      * remote revocation. Remote failures are logged without token values and ignored.
      */
     suspend fun signOut(): Unit = withContext(NonCancellable) {
-        val snapshot = store.credentials.first() ?: return@withContext
-        onAccountChanged()
-        store.clear()
+        val snapshot = transitionLock.withLock {
+            attemptEpoch.incrementAndGet() // before the empty-store return: an in-flight sign-in must not commit later
+            store.credentials.first()?.also { clearLocally() }
+        } ?: return@withContext
         withTimeoutOrNull(signOutTimeoutMillis) {
             coroutineScope {
                 launch {
@@ -168,6 +199,28 @@ class AuthRepository(
                 }
             }
         } ?: Log.w(TAG, "Remote sign-out timed out")
+    }
+
+    /**
+     * §3.3 session / user token invalid: local sign-out of [failed] only. Identity-bound and deduplicated:
+     * a failure from an earlier sign-in (or a repeat for an already cleared one) changes nothing.
+     */
+    suspend fun expireSession(failed: Credentials): Unit = withContext(NonCancellable) {
+        val expired = transitionLock.withLock {
+            (store.credentials.first() == failed).also { current ->
+                if (current) {
+                    attemptEpoch.incrementAndGet()
+                    clearLocally()
+                }
+            }
+        }
+        if (expired) expiryEvents.trySend(Unit)
+    }
+
+    /** Local half of §4.2; caller holds [transitionLock]. */
+    private suspend fun clearLocally() {
+        onAccountChanged()
+        store.clear()
     }
 
     private suspend fun remoteSignOutStep(name: String, block: suspend () -> Unit) {

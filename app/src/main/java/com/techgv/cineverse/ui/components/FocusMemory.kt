@@ -1,6 +1,8 @@
 package com.techgv.cineverse.ui.components
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -8,6 +10,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.lifecycle.SavedStateHandle
@@ -19,15 +22,26 @@ import kotlin.math.min
 @Serializable
 data class SavedFocus(val panelKey: String, val rowKey: String, val itemKey: String, val index: Int)
 
+/** Joins keys so that ("a/b", "c") and ("a", "b/c") stay distinct. */
+private fun scopedKey(vararg parts: String) = parts.joinToString("\u001F")
+
 /**
  * Focus memory of one back-stack entry, stored in its ViewModel's [SavedStateHandle] so it survives
- * push/pop and process death. Screen scalars (query, tab, …) go into the same handle directly.
+ * push/pop and process death: the last focused item of the screen plus the last focused item of every
+ * (panel, row). Screen scalars (query, tab, …) go into the same handle directly.
  */
 class FocusMemory(private val handle: SavedStateHandle) {
+    /** The screen's last focused item. */
     val saved: SavedFocus? get() = handle.get<String>(FOCUS)?.let { Json.decodeFromString<SavedFocus>(it) }
 
+    /** The last focused item of one row of one panel. */
+    fun savedIn(panelKey: String, rowKey: String): SavedFocus? =
+        handle.get<String>(ROW + scopedKey(panelKey, rowKey))?.let { Json.decodeFromString<SavedFocus>(it) }
+
     fun save(focus: SavedFocus) {
-        handle[FOCUS] = Json.encodeToString(focus)
+        val encoded = Json.encodeToString(focus)
+        handle[FOCUS] = encoded
+        handle[ROW + scopedKey(focus.panelKey, focus.rowKey)] = encoded
     }
 
     fun scroll(listKey: String): IntArray = handle.get<IntArray>("$SCROLL$listKey") ?: intArrayOf(0, 0)
@@ -38,6 +52,7 @@ class FocusMemory(private val handle: SavedStateHandle) {
 
     private companion object {
         const val FOCUS = "focusMemory.focus"
+        const val ROW = "focusMemory.row."
         const val SCROLL = "focusMemory.scroll."
     }
 }
@@ -56,47 +71,84 @@ fun rememberSavedLazyListState(memory: FocusMemory, listKey: String): LazyListSt
     return state
 }
 
-/** One focusable row as the restorer sees it: [itemKeys] in display order. */
+/** A [LazyGridState] whose scroll position is kept in [memory] under [gridKey]. */
+@Composable
+fun rememberSavedLazyGridState(memory: FocusMemory, gridKey: String): LazyGridState {
+    val state = remember(memory, gridKey) {
+        val (index, offset) = memory.scroll(gridKey)
+        LazyGridState(index, offset)
+    }
+    LaunchedEffect(state) {
+        snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+            .collect { (index, offset) -> memory.saveScroll(gridKey, index, offset) }
+    }
+    return state
+}
+
+/**
+ * One focusable row (or grid) as the restorer sees it: [itemKeys] in display order. A grid is one row
+ * whose [gridState] scrolls it.
+ */
 class FocusRow(
     val panelKey: String,
     val rowKey: String,
     val itemKeys: List<String>,
     val listState: LazyListState? = null,
+    val gridState: LazyGridState? = null,
 )
 
 /**
  * Records focus into [memory] and restores it (§1.3): row into view → await composition → focus the
- * saved item key → else item at `min(savedIndex, lastIndex)` → else first item of the first row.
+ * saved item key → else item at `min(savedIndex, lastIndex)` → else first item of the first non-empty row.
  */
 class FocusRestorer(private val memory: FocusMemory) {
     private val requesters = HashMap<String, FocusRequester>()
 
-    private fun requester(rowKey: String, itemKey: String) = requesters.getOrPut("$rowKey/$itemKey") { FocusRequester() }
+    /** Requesters are namespaced by panel: equal row / item keys in two panels never collide. */
+    internal fun requester(panelKey: String, rowKey: String, itemKey: String) =
+        requesters.getOrPut(scopedKey(panelKey, rowKey, itemKey)) { FocusRequester() }
 
     fun Modifier.rememberFocus(panelKey: String, rowKey: String, itemKey: String, index: Int): Modifier =
-        focusRequester(requester(rowKey, itemKey)).onFocusChanged {
+        focusRequester(requester(panelKey, rowKey, itemKey)).onFocusChanged {
             if (it.isFocused) memory.save(SavedFocus(panelKey, rowKey, itemKey, index))
         }
+
+    /**
+     * Put on the row's container (e.g. the `LazyRow`): focus entering the row from elsewhere (D-pad from
+     * another row) lands on that row's remembered item while it is composed, else the default target.
+     */
+    fun Modifier.restoreRowFocus(panelKey: String, rowKey: String): Modifier = focusProperties {
+        onEnter = {
+            memory.savedIn(panelKey, rowKey)?.let { requesters[scopedKey(panelKey, rowKey, it.itemKey)]?.requestFocus() }
+        }
+    }.focusGroup()
+
+    /** Index to focus inside [row]: its remembered item key, else `min(savedIndex, lastIndex)`, else 0. */
+    internal fun entryIndex(row: FocusRow): Int {
+        val saved = memory.savedIn(row.panelKey, row.rowKey) ?: return 0
+        return row.itemKeys.indexOf(saved.itemKey).takeIf { it >= 0 } ?: min(saved.index, row.itemKeys.lastIndex).coerceAtLeast(0)
+    }
+
+    /** (row index, item index) that [restore] focuses, or null when every row is empty. */
+    internal fun restoreTarget(rows: List<FocusRow>): Pair<Int, Int>? {
+        val saved = memory.saved
+        val savedRow = saved?.let { s -> rows.indexOfFirst { it.panelKey == s.panelKey && it.rowKey == s.rowKey } } ?: -1
+        if (savedRow >= 0 && rows[savedRow].itemKeys.isNotEmpty()) return savedRow to entryIndex(rows[savedRow])
+        val firstRow = rows.indexOfFirst { it.itemKeys.isNotEmpty() }
+        return if (firstRow >= 0) firstRow to 0 else null
+    }
 
     /**
      * Call once the current generation's data is composed. [outerList] is the vertical list whose item
      * `i` is `rows[i]`, if any.
      */
     suspend fun restore(rows: List<FocusRow>, outerList: LazyListState? = null): Boolean {
-        val saved = memory.saved
-        val savedRowIndex = saved?.let { s -> rows.indexOfFirst { it.panelKey == s.panelKey && it.rowKey == s.rowKey } } ?: -1
-        val rowIndex = if (savedRowIndex >= 0) savedRowIndex else rows.indexOfFirst { it.itemKeys.isNotEmpty() }
-        if (rowIndex < 0) return false
+        val (rowIndex, itemIndex) = restoreTarget(rows) ?: return false
         val row = rows[rowIndex]
-        if (row.itemKeys.isEmpty()) return false
-        val itemIndex = if (savedRowIndex >= 0 && saved != null) {
-            row.itemKeys.indexOf(saved.itemKey).takeIf { it >= 0 } ?: min(saved.index, row.itemKeys.lastIndex)
-        } else {
-            0
-        }
         outerList?.bringIntoView(rowIndex)
         row.listState?.bringIntoView(itemIndex)
-        val target = requester(row.rowKey, row.itemKeys[itemIndex])
+        row.gridState?.let { grid -> if (grid.layoutInfo.visibleItemsInfo.none { it.index == itemIndex }) grid.scrollToItem(itemIndex) }
+        val target = requester(row.panelKey, row.rowKey, row.itemKeys[itemIndex])
         repeat(FRAMES_TO_WAIT) {
             withFrameNanos { }
             if (runCatching { target.requestFocus() }.getOrDefault(false)) return true

@@ -34,9 +34,12 @@ class AppContainer(context: Context) {
 
     private val tmdbApi = TmdbClient.create(ReadToken(BuildConfig.TMDB_READ_ACCESS_TOKEN))
 
-    val tmdbRepository = TmdbRepository(tmdbApi, appGeneration, settings = settingsRepository::current)
+    val tmdbRepository: TmdbRepository = TmdbRepository(
+        tmdbApi, appGeneration, settings = settingsRepository::current,
+        onSessionExpired = { authRepository.expireSession(it) },
+    )
 
-    val authRepository = AuthRepository(
+    val authRepository: AuthRepository = AuthRepository(
         api = tmdbApi,
         store = CredentialStore(context.credentialDataStore, CredentialCipher(AndroidKeystoreKeys())),
         onAccountChanged = tmdbRepository::onAccountChanged,
