@@ -77,12 +77,13 @@ fun AuthSpikeScreen(auth: AuthRepository) {
                 if (current != null) {
                     Text("Open on your phone:", style = MaterialTheme.typography.bodyMedium)
                     Text(current.approvalUrl, style = MaterialTheme.typography.bodySmall, maxLines = 3)
-                    Button(onClick = { polling = true }, enabled = !polling, modifier = Modifier.focusRequester(primary)) {
-                        Text("I've approved it")
-                    }
-                } else {
-                    Button(
-                        onClick = {
+                }
+                // One button for both steps, so D-pad focus stays on it when the code arrives.
+                Button(
+                    onClick = {
+                        if (current != null) {
+                            polling = true
+                        } else {
                             scope.launch {
                                 status = "Requesting code…"
                                 status = try {
@@ -92,10 +93,11 @@ fun AuthSpikeScreen(auth: AuthRepository) {
                                     "Couldn't get a code (${e.error})"
                                 }
                             }
-                        },
-                        modifier = Modifier.focusRequester(primary),
-                    ) { Text("Get sign-in code") }
-                }
+                        }
+                    },
+                    enabled = !polling,
+                    modifier = Modifier.focusRequester(primary),
+                ) { Text(if (current != null) "I've approved it" else "Get sign-in code") }
                 if (credentials != null) {
                     Button(onClick = { scope.launch { auth.signOut(); status = "Signed out · Your library stays on this TV" } }) {
                         Text("Sign out")
@@ -105,5 +107,5 @@ fun AuthSpikeScreen(auth: AuthRepository) {
             }
         }
     }
-    LaunchedEffect(code) { runCatching { primary.requestFocus() } }
+    LaunchedEffect(polling) { if (!polling) primary.requestFocus() }
 }
