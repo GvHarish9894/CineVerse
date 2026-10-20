@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,11 +14,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
@@ -29,8 +33,13 @@ import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.ui.components.ExitDialog
 import com.techgv.cineverse.ui.components.PlaceholderScreen
 import com.techgv.cineverse.ui.home.HomeScreen
+import com.techgv.cineverse.ui.feedback.LocalFeedback
+import com.techgv.cineverse.ui.feedback.navigationFeedback
+import com.techgv.cineverse.ui.login.AccountToastHost
+import com.techgv.cineverse.ui.login.AccountToasts
 import com.techgv.cineverse.ui.login.LoginScreen
 import com.techgv.cineverse.ui.player.PlayerScreen
+import com.techgv.cineverse.ui.settings.SettingsScreen
 import com.techgv.cineverse.ui.spikes.spikeDestinations
 import com.techgv.cineverse.ui.splash.SplashScreen
 
@@ -74,6 +83,8 @@ fun AppNav(container: AppContainer) {
     var exitDialog by rememberSaveable { mutableStateOf(false) }
     var loginMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val activity = LocalActivity.current
+    val toasts = remember { AccountToasts() }
+    val credentials by container.authRepository.credentials.collectAsStateWithLifecycle(initialValue = null)
     val leaveLogin: () -> Unit = {
         loginMessage = null
         if (nav.previousBackStackEntry != null) nav.popBackStack() else nav.reset(Route.Home)
@@ -87,7 +98,7 @@ fun AppNav(container: AppContainer) {
         }
     }
 
-    Row(Modifier.fillMaxSize()) {
+    Row(Modifier.fillMaxSize().navigationFeedback(LocalFeedback.current, LocalFocusManager.current)) {
         if (destination?.isRailScreen() == true) {
             val current = entry?.railItem()
             NavRail(
@@ -95,6 +106,7 @@ fun AppNav(container: AppContainer) {
                 // Rail press on the current root: no navigation, focus goes into the content.
                 onSelect = { item -> if (item == current) contentFocus.requestFocus() else nav.reset(item.route) },
                 modifier = Modifier.onFocusChanged { railFocused = it.hasFocus },
+                accountName = credentials?.displayName,
             )
         }
         Box(Modifier.weight(1f).fillMaxHeight().focusRequester(contentFocus).focusRestorer()) {
@@ -106,8 +118,25 @@ fun AppNav(container: AppContainer) {
                 composable<Route.Browse> { PlaceholderScreen("Browse", it.toRoute<Route.Browse>().kind.name) }
                 composable<Route.Search> { PlaceholderScreen("Search") }
                 composable<Route.Library> { PlaceholderScreen("My Library") }
-                composable<Route.Settings> { PlaceholderScreen("Settings") }
-                composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, message = loginMessage) }
+                composable<Route.Settings> {
+                    SettingsScreen(
+                        onSignIn = { nav.navigate(Route.Login) },
+                        onSignedOut = { toasts.show("Signed out", "Your library stays on this TV") },
+                    )
+                }
+                composable<Route.Login> {
+                    LoginScreen(
+                        message = loginMessage,
+                        onContinueAsGuest = {
+                            toasts.show("Browsing as a guest", "Sign in from Settings whenever you like")
+                            leaveLogin()
+                        },
+                        onSignedIn = { name ->
+                            toasts.show("Signed in as $name", "Watchlist, favourites and ratings will sync")
+                            leaveLogin()
+                        },
+                    )
+                }
                 composable<Route.Detail> {
                     val route = it.toRoute<Route.Detail>()
                     PlaceholderScreen("Detail", "${route.mediaType.path} ${route.id}")
@@ -140,6 +169,8 @@ fun AppNav(container: AppContainer) {
             BackAction.FocusHomeOrigin -> homeBack.focusOrigin()
         }
     }
+
+    AccountToastHost(toasts, Modifier.fillMaxSize().wrapContentSize(Alignment.BottomCenter))
 
     if (exitDialog) ExitDialog(onStay = { exitDialog = false }, onExit = { activity?.finish() })
 }

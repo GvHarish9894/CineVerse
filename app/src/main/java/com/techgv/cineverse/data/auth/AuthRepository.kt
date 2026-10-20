@@ -3,6 +3,7 @@ package com.techgv.cineverse.data.auth
 import android.util.Log
 import com.techgv.cineverse.data.tmdb.AccessTokenBody
 import com.techgv.cineverse.data.tmdb.AccessTokenDto
+import com.techgv.cineverse.data.tmdb.AccountDto
 import com.techgv.cineverse.data.tmdb.AccountId
 import com.techgv.cineverse.data.tmdb.AccountObjectId
 import com.techgv.cineverse.data.tmdb.ConvertSessionBody
@@ -43,7 +44,8 @@ class RequestCode(val requestToken: String) {
 }
 
 sealed interface SignInOutcome {
-    data class SignedIn(val credentials: Credentials) : SignInOutcome
+    /** [account] carries the account's content defaults (iso_639_1 / iso_3166_1 / include_adult, §7.9). */
+    data class SignedIn(val credentials: Credentials, val account: AccountDto) : SignInOutcome
     /** 33: "Code expired — press OK for a new one" → new request code. */
     data object CodeExpired : SignInOutcome
     /** 7 / 10: app-credential banner. */
@@ -136,7 +138,7 @@ class AuthRepository(
                 onAccountChanged()
                 withContext(NonCancellable) { store.save(credentials) } // one atomic edit; never torn
             }
-            return SignInOutcome.SignedIn(credentials)
+            return SignInOutcome.SignedIn(credentials, account)
         } finally {
             pollLock.unlock()
         }

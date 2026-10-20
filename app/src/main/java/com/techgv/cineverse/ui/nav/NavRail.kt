@@ -2,13 +2,16 @@ package com.techgv.cineverse.ui.nav
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -40,6 +44,8 @@ fun NavRail(
     current: RailItem?,
     onSelect: (RailItem) -> Unit,
     modifier: Modifier = Modifier,
+    /** Signed-in display name; null = guest (§5, D3: initials only, no photo). */
+    accountName: String? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Column(
@@ -52,6 +58,7 @@ fun NavRail(
             .selectableGroup(),
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
     ) {
+        Spacer(Modifier.weight(1f))
         RailItem.entries.forEach { item ->
             Surface(
                 onClick = { onSelect(item) },
@@ -69,6 +76,36 @@ fun NavRail(
                     }
                 }
             }
+        }
+        Spacer(Modifier.weight(1f))
+        RailAccount(accountName, expanded)
+    }
+}
+
+/** Up to two initials of [name] ("Harish Gv" → "HG"); "G" for the guest. */
+internal fun accountInitials(name: String?): String =
+    name?.split(Regex("\\s+"))?.filter { it.isNotEmpty() }?.take(2)?.joinToString("") { it.first().uppercase() }
+        ?.ifEmpty { null } ?: "G"
+
+@Composable
+private fun RailAccount(accountName: String?, expanded: Boolean) {
+    Row(Modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(32.dp).background(
+                if (accountName != null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.14f),
+                CircleShape,
+            ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                accountInitials(accountName),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (accountName != null) MaterialTheme.colorScheme.onPrimary else Color.White,
+            )
+        }
+        if (expanded) {
+            Spacer(Modifier.width(12.dp))
+            Text(accountName?.let { "$it · TMDB" } ?: "Guest", style = MaterialTheme.typography.bodySmall, maxLines = 1)
         }
     }
 }
