@@ -19,7 +19,7 @@ Rules carried over: Lane 1 owns the shell. Each domain file (`MediaRef.kt`, `Tit
 `LibraryState.kt`, `LibraryActions.kt`) keeps one copy, the current integration version, and add/add is never
 concatenated. `docs/IMPLEMENTATION_SPEC.md` merges cleanly in both lanes (no diff vs integration).
 
-## lane4-wave2 (Library)
+## lane4-wave2 (Library) — merged as `b4b18a7`, resolved as below (D4-b: option b)
 | File | Conflict | Intended resolution |
 |---|---|---|
 | `domain/MediaRef.kt` | add/add | Integration's copy. Lane 4's differs only in formatting and a doc comment; same `key`. |
@@ -54,11 +54,13 @@ Lane 1's 88 inset that puts it at x 136, the same as Settings. Check it visually
 | `ui/nav/AppNav.kt` | content | Start from integration's file and replace the three placeholder routes with `DetailScreen(it.toRoute(), container, onNavigate = { nav.navigate(it) })` / `PersonScreen(…)` / `SeasonScreen(…)`. `isRailScreen` is unchanged, so Detail, Person and Season get no rail. |
 | `ui/components/DetailCardSurface.kt` | **semantic** (compiles clean as text, then fails) | Lane 2 declares `fun tmdbImageUrl(base: String, size: String, path: String?)` in `ui.components`, which clashes with Lane 1's `tmdbImageUrl(baseUrl, size, path)` in `TmdbImage.kt` (conflicting overloads, 12 call sites ambiguous). Delete Lane 2's copy and use Lane 1's. Both give the same URL: Lane 1 normalises the slashes; Lane 2's mappers already turn blank paths into null via `nonBlank()`, so Lane 2's blank check is not needed. |
 
-Auto-merged with no conflict: `ui/components/FocusMemory.kt`. This is a **behaviour change in a shared file**: on a D-pad
+| `ui/components/FocusMemory.kt` | content (`restoreRowFocus` `onEnter`), since integration `c864c85` (re-checked with `git merge-tree` against lane2-wave2 @ 1e4094e) | Integration's fix (a programmatic `requestFocus`, direction `Enter`, keeps its target; memory applies to D-pad entries only) and Lane 2's column-0 first entry fold into one rule: `val dpad = requestedFocusDirection != FocusDirection.Enter`; `val saved = memory.savedIn(…)?.takeIf { dpad }`; `val entryKey = saved?.itemKey ?: row.itemKeys.firstOrNull()?.takeIf { dpad }`; `val target = entryKey?.let { attachedRequester(row.panelKey, row.rowKey, it) }`. Keep the `when` below unchanged. |
+
+The lane 2 `FocusMemory.kt` change is a **behaviour change in a shared file**: on a D-pad
 entry into a row with nothing remembered, `onEnter` now lands on the row's first item instead of the
-geometrically nearest one, while a programmatic `requestFocus` keeps its own target. Lane 1's rows
-(Home / Browse / Search) and Lane 3's Settings are affected. Run all `ui.*` instrumented tests after the merge
-and smoke Home row entry.
+geometrically nearest one. Lane 1's rows (Home / Browse / Search), Lane 3's Settings and Lane 4's Library are
+affected. Run all `ui.*` instrumented tests after the merge (including
+`SearchDpadTest.clearFocusesTheFirstResultEvenWhenAnotherTrendingResultIsRemembered`) and smoke Home row entry.
 Also auto-merged: domain `Credit/Detail/Episode/Review/Season/Video.kt` (new), `data/tmdb/DetailMappers.kt`, the
 cards (`CreditCard`, `FactCard`, `ReviewCard`, `SeasonCard`, `DetailCardSurface`), the screens and the tests.
 
@@ -72,8 +74,10 @@ Post-merge checks: run instrumented `ui.*` tests, including Lane 2's `DetailScre
 restores focus on the card), Detail → Person → BACK, Detail → Season (LEFT from episodes goes to the seasons
 list, not a rail).
 
-## Known pre-existing failure (not caused by any merge)
-`ui.search.SearchDpadTest.everyClearMovesFocusToTheFirstResult` (Lane 1) fails on emulator-5554 at
-`SearchDpadTest.kt:115`: focus is not on the first trending result 5 s after Clear. It fails the same way on 3 of 3
-runs. The merge changed none of the files it uses (`ui/search`, `NavRail`, `FocusMemory`, `data/tmdb`).
-Lane 1 never ran it on a device. This needs a Lane 1 fix; it is not part of the merges.
+## Formerly failing: `SearchDpadTest.everyClearMovesFocusToTheFirstResult` (fixed in `c864c85`)
+It failed at `SearchDpadTest.kt:115` (waiting for the `x` results). Cause: `restoreRowFocus`'s `onEnter` sent every
+entry into a row to the row's remembered item, programmatic `requestFocus` included. The test's second
+`requestFocus` on the `x` key was redirected to the remembered `Clear` key, so OK cleared instead of typing. The
+same redirect broke §7.7 in the app: after Clear, focus went to a remembered trending item instead of the first
+result. Fix: only D-pad entries use the row memory. Regression test:
+`clearFocusesTheFirstResultEvenWhenAnotherTrendingResultIsRemembered`.
