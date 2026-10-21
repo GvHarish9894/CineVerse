@@ -133,13 +133,52 @@ Other shared (non-shell) changes:
 | `ui/components/RateDialog.kt`, `ImportLibraryDialog.kt` | none (follow-on) | `Dialog { DesignCanvas { FeedbackRoot { … } } }`, as `ExitDialog`. |
 | `MERGE_NOTES.md` | none (new file) | Still-valid points moved here (FocusMemory deltas, dialogs, AppNav `onPlayer` gates, cards follow-up); the `paused` Toasts request is superseded (see `Toasts.kt` row). File deleted. |
 
-Pending from Lane 4's notes: Lane 2's directional first entry in `FocusMemory.kt` lands with the Lane 2 merge;
-the file must keep all three deltas (Lane 1 initial snapshot + public `focusIn`, Lane 2 directional entry,
-Lane 4 `lazyIndices`).
-
-Follow-up (D4-b, decided: not in this merge): replace Lane 4's `ui/library/LibraryPosterCard.kt` and the
-private `TabChip` in `LibraryScreen.kt` with Lane 1's shared `PosterCard` / `Chip`. They must honour reduce
-motion and ambient glow (§6 focus rules), and the Library grid must keep its PinToStart scrolling. Owner: Lane 4.
+D4-b (decided: not in this merge) was done after the Lane 2 merge, see below.
 
 Noted, not changed: Library content keeps Lane 4's `padding(start = 48)` (sized for master's `Row` rail);
 inside Lane 1's 88 inset it starts at x 136, the same as Settings.
+
+Integration fix after this merge (`c864c85`): `SearchDpadTest.everyClearMovesFocusToTheFirstResult` failed at
+`SearchDpadTest.kt:115`. `restoreRowFocus`'s `onEnter` sent every entry into a row, programmatic `requestFocus`
+included, to the row's remembered item, so the test's `requestFocus` on the `x` key went to the remembered `Clear`
+key (and in the app, after Clear, focus went to a remembered trending item instead of the first result, §7.7).
+Only D-pad entries use the row memory now (FocusMemory table above).
+
+### lane2-wave2 (cd8b817) → integration (`18d67ef`)
+Dry-run first at 1e4094e, then again at cd8b817 (9 more commits) over integration `8d226d8`; the conflict set did
+not change. Since 1e4094e Lane 2 dropped its own `tmdbImageUrl(base, size, path)` (which clashed with
+`TmdbImage.kt`'s), and its `TmdbImage.kt` / `LocalSettings.kt` are byte-identical to integration's.
+
+| File | Conflict | Resolution |
+|---|---|---|
+| `domain/MediaRef.kt`, `domain/Title.kt` | add/add | Integration's copies. |
+| `ui/nav/AppNav.kt` | content | Integration's file; the three placeholder routes → the Lane 2 screens (AppNav table above). `PlaceholderScreen` import dropped. |
+| `ui/components/FocusMemory.kt` | content (`restoreRowFocus` `onEnter`) | Lane 2's `entryKey` (column 0 on a D-pad entry with no memory) folded into `c864c85`'s rule: `entryKey` returns null for `Enter` whether or not a key is remembered, and the async `saved` fallback only runs for D-pad entries. `FocusMemoryTest`'s Enter-with-memory assertion flipped to `assertNull`. |
+
+Auto-merged: `data/tmdb/TmdbRepository.kt` (`season(…, language)` next to Lane 4's edits), debug `HttpLogging.kt`
+(+ redaction test), domain `Credit/Detail/Episode/Review/Season/Video.kt`, `DetailMappers.kt`, the Lane 2 cards,
+screens and tests.
+
+Follow-ups, one commit each:
+- `8f8ea6c` Season's "Season not available" uses `ui/components/Toasts.kt`'s `LocalToaster` (Lane 2's no-op
+  stand-in deleted).
+- `6f5d353` Shared cards (D4-b + Lane 2): Detail / Person / Season / Library use Lane 1's `PosterCard`,
+  `PersonCard`, `LandscapeCard`, `ScoreRing`, `Chip`, `ActionButton` (all on `FocusSurface`: Reduce motion snaps
+  the scale, Ambient glow off drops the glow). Deleted: `Lane2PosterCard`, `Lane2PersonCard`, `Lane2LandscapeCard`,
+  `DetailScoreRing`, `DetailActionButton`, Lane 2's `posterSubtitle`, `ui/library/LibraryPosterCard.kt` (+
+  `posterSubline`), `TabChip`, and `LibraryUiState.imageBaseUrl` (only the lane card read it). Kept: Lane 2's
+  `ReviewCard` / `FactCard` / `CreditCard` / `SeasonCard`, and `DetailChip`, the non-focusable hero metadata chip
+  (prototype `.mchip`; the §6 `Chip` is a focusable tab / filter). Additive: `LandscapeCard(imageUrl = …)` for
+  Detail's YouTube thumbnails. Detail rows keep `PinToStart` (`DetailRow`). Shared cards put the caller's modifier
+  on their column, so `LibraryContentTest` finds a card as the focusable child of its tagged column, and
+  `PersonScreenDpadTest` matches the poster description by substring (the shared card adds the sub-line).
+- `d86b626` Focus root (section above).
+- `af4f8ad` Detail: one `activeReview` drives both the review panel and its `BackHandler` (Lane 2 r2 LOW).
+
+Noted, not changed: Lane 2's `initialsOf` duplicates `initials`, and `DetailCardSurface`'s image box duplicates
+`TmdbImage`. Lane 2 reads Reduce motion through `LocalFeedback.current.reduceMotion`, Lane 1 through
+`LocalSettings.current.motion`; both come from the same settings `State` in MainActivity. The shared
+`posterSubtitle` shows "{year} · Unrated" for a past unrated title (Lane 2 / 4 showed "Unrated"; §6 says
+"Unrated"). The Library grid has no `PinToStart` (it never had one; its section headers would scroll away).
+
+`INTEGRATION_PLAN.md` (dry runs and intended resolutions for lanes 4 and 2) is folded into this log and deleted.
