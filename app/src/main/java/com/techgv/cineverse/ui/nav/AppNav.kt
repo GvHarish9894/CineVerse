@@ -2,9 +2,20 @@ package com.techgv.cineverse.ui.nav
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.techgv.cineverse.ui.browse.BrowseScreen
+import com.techgv.cineverse.ui.components.LocalToasts
+import com.techgv.cineverse.ui.components.ToastHost
+import com.techgv.cineverse.ui.components.ToastState
+import com.techgv.cineverse.ui.search.SearchScreen
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -87,39 +98,62 @@ fun AppNav(container: AppContainer) {
         }
     }
 
-    Row(Modifier.fillMaxSize()) {
-        if (destination?.isRailScreen() == true) {
-            val current = entry?.railItem()
-            NavRail(
-                current = current,
-                // Rail press on the current root: no navigation, focus goes into the content.
-                onSelect = { item -> if (item == current) contentFocus.requestFocus() else nav.reset(item.route) },
-                modifier = Modifier.onFocusChanged { railFocused = it.hasFocus },
-            )
-        }
-        Box(Modifier.weight(1f).fillMaxHeight().focusRequester(contentFocus).focusRestorer()) {
-            NavHost(nav, startDestination = Route.Splash) {
-                composable<Route.Splash> {
-                    SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
+    val credentials by container.authRepository.credentials.collectAsStateWithLifecycle(null)
+    val accountName = credentials?.displayName
+    val toasts = remember { ToastState() }
+    val railScreen = destination?.isRailScreen() == true
+
+    CompositionLocalProvider(LocalToasts provides toasts) {
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = if (railScreen) RAIL_COLLAPSED_WIDTH else 0.dp)
+                    .focusRequester(contentFocus)
+                    .focusRestorer(),
+            ) {
+                NavHost(nav, startDestination = Route.Splash) {
+                    composable<Route.Splash> {
+                        SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
+                    }
+                    composable<Route.Home> { HomeScreen(container, onOpen = { nav.navigate(it) }, backHandle = homeBack) }
+                    composable<Route.Browse> { BrowseScreen(container, it.toRoute<Route.Browse>().kind, onOpen = { route -> nav.navigate(route) }) }
+                    composable<Route.Search> { SearchScreen(container, onOpen = { route -> nav.navigate(route) }) }
+                    composable<Route.Library> { PlaceholderScreen("My Library") }
+                    composable<Route.Settings> { PlaceholderScreen("Settings") }
+                    composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, message = loginMessage) }
+                    composable<Route.Detail> {
+                        val route = it.toRoute<Route.Detail>()
+                        PlaceholderScreen("Detail", "${route.mediaType.path} ${route.id}")
+                    }
+                    composable<Route.Person> { PlaceholderScreen("Person", "${it.toRoute<Route.Person>().id}") }
+                    composable<Route.Season> {
+                        val route = it.toRoute<Route.Season>()
+                        PlaceholderScreen("Season", "series ${route.seriesId} · season ${route.seasonNumber}")
+                    }
+                    composable<Route.Player> { PlayerScreen(it.toRoute(), onBack = { nav.popBackStack() }) }
+                    spikeDestinations(nav, container)
                 }
-                composable<Route.Home> { HomeScreen(onOpen = { nav.navigate(it) }, backHandle = homeBack) }
-                composable<Route.Browse> { PlaceholderScreen("Browse", it.toRoute<Route.Browse>().kind.name) }
-                composable<Route.Search> { PlaceholderScreen("Search") }
-                composable<Route.Library> { PlaceholderScreen("My Library") }
-                composable<Route.Settings> { PlaceholderScreen("Settings") }
-                composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, message = loginMessage) }
-                composable<Route.Detail> {
-                    val route = it.toRoute<Route.Detail>()
-                    PlaceholderScreen("Detail", "${route.mediaType.path} ${route.id}")
-                }
-                composable<Route.Person> { PlaceholderScreen("Person", "${it.toRoute<Route.Person>().id}") }
-                composable<Route.Season> {
-                    val route = it.toRoute<Route.Season>()
-                    PlaceholderScreen("Season", "series ${route.seriesId} · season ${route.seasonNumber}")
-                }
-                composable<Route.Player> { PlayerScreen(it.toRoute(), onBack = { nav.popBackStack() }) }
-                spikeDestinations(nav, container)
             }
+            // §5 clock: every screen but Splash and Player (nothing drawn over the player).
+            if (destination != null && !destination.hasRoute<Route.Splash>() && !destination.hasRoute<Route.Player>()) {
+                Clock(Modifier.align(Alignment.TopEnd).padding(top = 30.dp, end = 48.dp))
+            }
+            if (railScreen) {
+                val current = entry?.railItem()
+                // The expanded rail overlays the content behind a scrim (prototype `.nav-scrim`).
+                if (railFocused) {
+                    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xE607060F), Color(0x4007060F)))))
+                }
+                NavRail(
+                    current = current,
+                    // Rail press on the current root: no navigation, focus goes into the content.
+                    onSelect = { item -> if (item == current) contentFocus.requestFocus() else nav.reset(item.route) },
+                    accountName = accountName,
+                    modifier = Modifier.onFocusChanged { railFocused = it.hasFocus },
+                )
+            }
+            ToastHost(toasts)
         }
     }
 
