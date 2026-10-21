@@ -180,6 +180,11 @@ class TmdbRepository(
         cache.invalidate(bumpGeneration = false) { it.ids == ids || it.endpoint == ACCOUNT_LIST }
     }
 
+    /** Account lists only (§7.8 revalidate on entry, §8.3 import preflight); in-flight list reads are not cached. */
+    fun invalidateAccountLists() {
+        cache.invalidate(bumpGeneration = false) { it.endpoint == ACCOUNT_LIST }
+    }
+
     /** Language / region / adult changed: everything but the image configuration; visible screens reload. */
     fun onContentSettingsChanged() {
         cache.invalidate(bumpGeneration = true) { it != CONFIGURATION_KEY }

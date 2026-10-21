@@ -91,7 +91,8 @@ fun rememberSavedLazyGridState(memory: FocusMemory, gridKey: String): LazyGridSt
 
 /**
  * One focusable row (or grid) as the restorer sees it: [itemKeys] in display order. A grid is one row
- * whose [gridState] scrolls it.
+ * whose [gridState] scrolls it. [lazyIndices]: the lazy-item index of each item key when the list / grid also
+ * has non-focusable items (headers, status rows); null when item i is lazy item i.
  */
 class FocusRow(
     val panelKey: String,
@@ -99,6 +100,7 @@ class FocusRow(
     val itemKeys: List<String>,
     val listState: LazyListState? = null,
     val gridState: LazyGridState? = null,
+    val lazyIndices: List<Int>? = null,
 )
 
 /**
@@ -204,8 +206,9 @@ class FocusRestorer(private val memory: FocusMemory) {
 
     /** Item into view → await composition → focus it; gives up when [wanted] turns false. */
     suspend fun focusIn(row: FocusRow, itemIndex: Int, wanted: () -> Boolean = { true }): Boolean {
-        row.listState?.bringIntoView(itemIndex)
-        row.gridState?.let { grid -> if (grid.layoutInfo.visibleItemsInfo.none { it.index == itemIndex }) grid.scrollToItem(itemIndex) }
+        val lazyIndex = row.lazyIndices?.get(itemIndex) ?: itemIndex
+        row.listState?.bringIntoView(lazyIndex)
+        row.gridState?.let { grid -> if (grid.layoutInfo.visibleItemsInfo.none { it.index == lazyIndex }) grid.scrollToItem(lazyIndex) }
         val target = requester(row.panelKey, row.rowKey, row.itemKeys[itemIndex])
         repeat(FRAMES_TO_WAIT) {
             withFrameNanos { }

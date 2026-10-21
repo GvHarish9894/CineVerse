@@ -44,6 +44,9 @@ import com.techgv.cineverse.ui.components.PlaceholderScreen
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.feedback.navigationFeedback
 import com.techgv.cineverse.ui.home.HomeScreen
+import com.techgv.cineverse.ui.library.ImportLibraryHost
+import com.techgv.cineverse.ui.library.LibraryActionsHost
+import com.techgv.cineverse.ui.library.LibraryScreen
 import com.techgv.cineverse.ui.login.LoginScreen
 import com.techgv.cineverse.ui.player.PlayerScreen
 import com.techgv.cineverse.ui.spikes.spikeDestinations
@@ -106,6 +109,7 @@ fun AppNav(container: AppContainer) {
     val accountName = credentials?.displayName
     val toaster = remember { Toaster() }
     val railScreen = destination?.isRailScreen() == true
+    val onPlayer = destination?.hasRoute<Route.Player>() == true
 
     CompositionLocalProvider(LocalToaster provides toaster) {
         // §9 D-pad hook, once, on the root holding both rail and content (dialogs use FeedbackRoot).
@@ -117,30 +121,39 @@ fun AppNav(container: AppContainer) {
                     .focusRequester(contentFocus)
                     .focusRestorer(),
             ) {
-                NavHost(nav, startDestination = Route.Splash) {
-                    composable<Route.Splash> {
-                        SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
+                // §7.12: the Rate dialog waits while the Player is up.
+                LibraryActionsHost(container.libraryRepository, container.appScope, playerActive = onPlayer) {
+                    NavHost(nav, startDestination = Route.Splash) {
+                        composable<Route.Splash> {
+                            SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
+                        }
+                        composable<Route.Home> { HomeScreen(container, onOpen = { nav.navigate(it) }, backHandle = homeBack) }
+                        composable<Route.Browse> { BrowseScreen(container, it.toRoute<Route.Browse>().kind, onOpen = { route -> nav.navigate(route) }) }
+                        composable<Route.Search> { SearchScreen(container, onOpen = { route -> nav.navigate(route) }) }
+                        composable<Route.Library> {
+                            LibraryScreen(
+                                container,
+                                onOpenTitle = { nav.navigate(Route.Detail(it.mediaType, it.id)) },
+                                onExplore = { nav.reset(Route.Browse(BrowseKind.Movies)) },
+                                onSignIn = { nav.navigate(Route.Login) },
+                            )
+                        }
+                        composable<Route.Settings> { SettingsScreen(onSignIn = { nav.navigate(Route.Login) }) }
+                        composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, onSignedIn = leaveLogin, message = loginMessage) }
+                        composable<Route.Detail> {
+                            val route = it.toRoute<Route.Detail>()
+                            PlaceholderScreen("Detail", "${route.mediaType.path} ${route.id}")
+                        }
+                        composable<Route.Person> { PlaceholderScreen("Person", "${it.toRoute<Route.Person>().id}") }
+                        composable<Route.Season> {
+                            val route = it.toRoute<Route.Season>()
+                            PlaceholderScreen("Season", "series ${route.seriesId} · season ${route.seasonNumber}")
+                        }
+                        composable<Route.Player> { PlayerScreen(it.toRoute(), onBack = { nav.popBackStack() }) }
+                        spikeDestinations(nav, container)
                     }
-                    composable<Route.Home> { HomeScreen(container, onOpen = { nav.navigate(it) }, backHandle = homeBack) }
-                    composable<Route.Browse> { BrowseScreen(container, it.toRoute<Route.Browse>().kind, onOpen = { route -> nav.navigate(route) }) }
-                    composable<Route.Search> { SearchScreen(container, onOpen = { route -> nav.navigate(route) }) }
-                    composable<Route.Library> { PlaceholderScreen("My Library") }
-                    composable<Route.Settings> { SettingsScreen(onSignIn = { nav.navigate(Route.Login) }) }
-                    composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, onSignedIn = leaveLogin, message = loginMessage) }
-                    composable<Route.Detail> {
-                        val route = it.toRoute<Route.Detail>()
-                        PlaceholderScreen("Detail", "${route.mediaType.path} ${route.id}")
-                    }
-                    composable<Route.Person> { PlaceholderScreen("Person", "${it.toRoute<Route.Person>().id}") }
-                    composable<Route.Season> {
-                        val route = it.toRoute<Route.Season>()
-                        PlaceholderScreen("Season", "series ${route.seriesId} · season ${route.seasonNumber}")
-                    }
-                    composable<Route.Player> { PlayerScreen(it.toRoute(), onBack = { nav.popBackStack() }) }
-                    spikeDestinations(nav, container)
                 }
             }
-            val onPlayer = destination?.hasRoute<Route.Player>() == true
             // §5 clock: every screen but Splash and Player (nothing drawn over the player).
             if (destination != null && !destination.hasRoute<Route.Splash>() && !onPlayer) {
                 Clock(Modifier.align(Alignment.TopEnd).padding(top = 30.dp, end = 48.dp))
@@ -161,6 +174,7 @@ fun AppNav(container: AppContainer) {
             }
             // §7.12 bottom area, never over the player: on Player a toast waits in the queue until it closes.
             if (!onPlayer) ToastHost(toaster, Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp))
+            ImportLibraryHost(container.libraryRepository, container.libraryImporter, playerActive = onPlayer)
         }
     }
 

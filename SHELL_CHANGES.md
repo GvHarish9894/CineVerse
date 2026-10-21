@@ -1,4 +1,4 @@
-# Shell changes (Lane 1 owner + Lane 3, merged on `integration`)
+# Shell changes (Lane 1 owner + Lanes 3 and 4, merged on `integration`)
 
 Lane 1 owns the §5 shell for wave 2 (rail expand-on-focus, clock, ambient backdrop) besides Home / Browse /
 Search. These are deliberate Lane 1 deliverables, not WIP. Unchanged vs master: BACK precedence
@@ -16,15 +16,19 @@ neither.
 | Routes: `Home` → `HomeScreen(container, onOpen, backHandle)`; `Browse` → `BrowseScreen(container, kind, onOpen)`; `Search` → `SearchScreen(container, onOpen)`. | Lane 1 screens (Home needs `container` now). |
 | (Lane 3) Routes: `Settings` → `SettingsScreen(onSignIn = { nav.navigate(Route.Login) })`; `Login` → `LoginScreen(onContinueAsGuest = leaveLogin, onSignedIn = leaveLogin, message = loginMessage)`. Both show their own toasts via `LocalToaster`. | §7.9, §4.1. |
 | (Lane 3) `.navigationFeedback(LocalFeedback.current, LocalFocusManager.current)` on the root `Box` (holds rail + content), once. | §9 D-pad hook. Adding it anywhere else in the main window would make OK give feedback twice. |
+| (Lane 4) `val onPlayer = destination?.hasRoute<Route.Player>() == true` is computed next to `railScreen`, before the root `Box`. | One Player flag feeds the toast gate, `LibraryActionsHost` and `ImportLibraryHost`. |
+| (Lane 4) `NavHost` is wrapped in `LibraryActionsHost(container.libraryRepository, container.appScope, playerActive = onPlayer)` inside the content `Box`. | Provides `LocalLibraryActions` (Home hero Watchlist etc.); the Rate dialog waits while the Player is up (§7.12). |
+| (Lane 4) Route `Library` → `LibraryScreen(container, onOpenTitle = Detail, onExplore = reset to Browse(Movies), onSignIn = Login)`. | §7.8. |
+| (Lane 4) `ImportLibraryHost(container.libraryRepository, container.libraryImporter, playerActive = onPlayer)` in the root `Box`, after `ToastHost` (under `LocalToaster`). | §8.3 guest → account import prompt; waits while the Player is up. |
 
-Merge notes for the remaining lanes: Lane 2 replaces the Detail / Person / Season lines, Lane 4 Library and
-wraps `NavHost` in `LibraryActionsHost` + hosts `ImportLibraryHost` — all inside the content `Box` above.
-Lane 4 installs its own toast host: keep **one** `Toaster` / `ToastHost` (this placement).
+Merge notes for the remaining lanes: Lane 2 replaces the Detail / Person / Season lines inside
+`LibraryActionsHost { NavHost { … } }`. If a lane rewrites the AppNav scaffold, keep all three `onPlayer` gates
+(toast, `LibraryActionsHost`, `ImportLibraryHost`) and **one** `Toaster` / `ToastHost` (this placement).
 
 Toast policy: non-essential toasts are held while the Player route is active — one waiting message is kept
 (a newer one replaces it); a toast already showing when Player opens is disposed, not replayed; Player errors
-are inline, not toasts. Lane 4's Import / Rate hosts are not covered by this and must be gated on the Player
-route by Lane 4 separately.
+are inline, not toasts. Lane 4's Rate / Import hosts get the same route flag (`playerActive = onPlayer`) and
+wait while the Player is up.
 
 ## `ui/nav/NavRail.kt`
 Public surface: `NavRail(current: RailItem?, onSelect: (RailItem) -> Unit, modifier: Modifier = Modifier,
@@ -46,6 +50,7 @@ Lane 3's own rail account footer (`RailAccount` / `accountInitials`) was dropped
 |---|---|
 | `savedAtEntry`: the screen's `SavedFocus` (row, item key, index) captured when the restorer is created; the **first** `restore()` targets it, then clears it so later restores read the memory again. | After a pop the window regains focus and default focus lands on (e.g.) item 0 of the saved row, overwriting the memory before `restore()` runs; the screen then restored to the wrong item (review finding 5). |
 | `focusIn(row, index)` is public (was private). | Search moves focus to the first result after Clear (§7.7). |
+| (Lane 4) `FocusRow.lazyIndices` (optional, default null): the lazy-item index of each item key; `focusIn` scrolls by it. | The Library grid has header items, so item index ≠ lazy index; it restores by lazy index. |
 
 No change to `FocusMemory`, `rememberFocus`, `restoreRowFocus`, `entryIndex` results, or saved keys.
 
@@ -57,12 +62,13 @@ No change to `FocusMemory`, `rememberFocus`, `restoreRowFocus`, `entryIndex` res
   `ProvideFeedback` is installed once; it also turns off the view's own sound effects while in-app sounds
   are on (§9).
 - `ui/components/ExitDialog.kt`: dialog content wrapped as `DesignCanvas { FeedbackRoot { … } }` — a Dialog
-  is a new composition root (§6 units) and its own window, so AppNav's §9 hook never sees its keys. Rate /
-  Import dialogs must do the same.
+  is a new composition root (§6 units) and its own window, so AppNav's §9 hook never sees its keys. Lane 4's
+  `RateDialog` / `ImportLibraryDialog` do the same.
 - `ui/components/Toasts.kt`: the pinned `class Toaster { fun show(title: String, subtitle: String? = null) }`,
   `val LocalToaster`, `ToastHost(toaster, modifier)`: 2.4 s, queue of 1 (newest waiting replaces older),
   polite live region. `ToastHost` here is only as large as the toast and the caller places it (Lane 3's /
-  Lane 4's copy fills the screen) — this file is the one kept.
+  Lane 4's copy fills the screen) — this file is the one kept. Lane 4's `ToastHost(…, paused)` was not merged:
+  the AppNav route gate gives the same behaviour.
 - Domain merge note: canonical files are `domain/MediaRef.kt`, `Title.kt`, `Person.kt`, `LibraryState.kt`,
   `LibraryActions.kt` — byte-identical across lanes (`MediaRef` and its `key` live only in `MediaRef.kt`).
 
@@ -95,3 +101,25 @@ Other shared (non-shell) changes:
 | `test/.../ui/nav/AccountInitialsTest.kt` | none (follow-on) | Points at `ui/components/initials` (Lane 3's `accountInitials` no longer exists). |
 
 `docs/IMPLEMENTATION_SPEC.md` and the `domain/` files merged without change (identical on both sides).
+
+### lane4-wave2 (2a94515) → integration
+| File | Conflict | Resolution |
+|---|---|---|
+| `domain/MediaRef.kt`, `domain/Title.kt` | add/add | Integration's copies (Lane 4's differ only in formatting / doc comment). |
+| `ui/components/DesignCanvas.kt` | add/add | Integration's (Lane 1's real canvas); Lane 4's pass-through stand-in dropped. |
+| `ui/components/Toasts.kt` | add/add | Integration's file. Lane 4's `paused` parameter not merged: AppNav's `if (!onPlayer) ToastHost(…)` gives the same behaviour (newest toast waits in the 1-slot queue, the showing one is dropped); no Lane 4 code or test uses `paused`. |
+| `ui/components/FocusMemory.kt` | content | Union: Lane 1's public `focusIn` with Lane 4's `lazyIndex` body; `FocusRow.lazyIndices` auto-merged. |
+| `ui/nav/AppNav.kt` | content | Integration's file plus the four Lane 4 rows in the AppNav table above; Lane 4's own `Toaster` / `ToastHost` and `Row` layout dropped. |
+| `ui/components/RateDialog.kt`, `ImportLibraryDialog.kt` | none (follow-on) | `Dialog { DesignCanvas { FeedbackRoot { … } } }`, as `ExitDialog`. |
+| `MERGE_NOTES.md` | none (new file) | Still-valid points moved here (FocusMemory deltas, dialogs, AppNav `onPlayer` gates, cards follow-up); the `paused` Toasts request is superseded (see `Toasts.kt` row). File deleted. |
+
+Pending from Lane 4's notes: Lane 2's directional first entry in `FocusMemory.kt` lands with the Lane 2 merge;
+the file must keep all three deltas (Lane 1 initial snapshot + public `focusIn`, Lane 2 directional entry,
+Lane 4 `lazyIndices`).
+
+Follow-up (D4-b, decided: not in this merge): replace Lane 4's `ui/library/LibraryPosterCard.kt` and the
+private `TabChip` in `LibraryScreen.kt` with Lane 1's shared `PosterCard` / `Chip`. They must honour reduce
+motion and ambient glow (§6 focus rules), and the Library grid must keep its PinToStart scrolling. Owner: Lane 4.
+
+Noted, not changed: Library content keeps Lane 4's `padding(start = 48)` (sized for master's `Row` rail);
+inside Lane 1's 88 inset it starts at x 136, the same as Settings.
