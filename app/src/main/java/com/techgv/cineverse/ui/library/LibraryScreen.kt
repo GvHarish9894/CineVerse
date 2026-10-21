@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -20,7 +19,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -35,8 +33,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.tv.material3.Button
-import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.Surface
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
@@ -44,9 +40,11 @@ import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.data.library.LibraryEntry
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
+import com.techgv.cineverse.ui.components.Chip
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
+import com.techgv.cineverse.ui.components.PosterCard
 import com.techgv.cineverse.ui.components.SectionErrorKind
 import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.components.formatRating
@@ -58,7 +56,7 @@ fun LibraryScreen(container: AppContainer, onOpenTitle: (MediaRef) -> Unit, onEx
     val vm: LibraryViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                LibraryViewModel(createSavedStateHandle(), container.libraryRepository, container.tmdbRepository::imageBaseUrl)
+                LibraryViewModel(createSavedStateHandle(), container.libraryRepository)
             }
         },
     )
@@ -136,7 +134,7 @@ fun LibraryContent(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             LibraryTab.entries.forEachIndexed { index, tab ->
-                TabChip(
+                Chip(
                     label = tab.label,
                     selected = tab == state.tab,
                     onClick = ::focusBody,
@@ -176,15 +174,14 @@ fun LibraryContent(
                         is LibraryGridItem.Card -> {
                             if (item.loadsMore) LaunchedEffect(item.focusIndex) { onLoadMore(item.media) }
                             val entry = item.entry
-                            LibraryPosterCard(
+                            PosterCard(
                                 title = entry.title,
-                                // Only Rated cards carry the badge; v4 watchlist / favourite items may also have account_rating.
-                                badge = entry.rating?.takeIf { state.tab == LibraryTab.Rated }?.let { "★ ${formatRating(it)}" },
-                                imageBaseUrl = state.imageBaseUrl,
                                 onClick = { onOpenTitle(entry.title.ref) },
                                 modifier = with(restorer) { Modifier.rememberFocus(GRID, state.tab.name, item.key, item.focusIndex) }
                                     .then(topUp)
                                     .testTag(item.key),
+                                // Only Rated cards carry the badge; v4 watchlist / favourite items may also have account_rating.
+                                badge = entry.rating?.takeIf { state.tab == LibraryTab.Rated }?.let { "★ ${formatRating(it)}" },
                             )
                         }
                         is LibraryGridItem.LoadingMore -> Message("Loading more…")
@@ -257,25 +254,6 @@ internal fun libraryGridItems(state: LibraryUiState): List<LibraryGridItem> = bu
                 group.moreError?.let { add(LibraryGridItem.MoreError(media, it)) }
             }
         }
-    }
-}
-
-/** Lane-local §6 Chip (h 44); the shared chip replaces it at merge. */
-@Composable
-private fun TabChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.height(44.dp),
-        shape = ClickableSurfaceDefaults.shape(MaterialTheme.shapes.extraLarge),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
-            focusedContentColor = MaterialTheme.colorScheme.inverseOnSurface,
-        ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
-    ) {
-        Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.align(Alignment.Center).padding(horizontal = 20.dp))
     }
 }
 

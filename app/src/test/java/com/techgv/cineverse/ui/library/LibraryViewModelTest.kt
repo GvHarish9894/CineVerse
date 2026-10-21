@@ -42,7 +42,7 @@ class LibraryViewModelTest {
     @Test
     fun `entry revalidation reads past the warm list cache and a failed refresh keeps the items with an error`() = runTest(dispatcher) {
         api.watchlist += MediaRef(MediaType.Movie, 1)
-        val vm = LibraryViewModel(SavedStateHandle(), repo) { "" }
+        val vm = LibraryViewModel(SavedStateHandle(), repo)
         runCurrent() // the first load warms the 10-min list cache
         assertEquals(listOf(1), vm.movieIds())
 

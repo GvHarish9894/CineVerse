@@ -16,7 +16,6 @@ class LibraryGridItemsTest {
         val state = LibraryUiState(
             movies = LibraryGroup(cards(1, 2, media = MediaType.Movie), loadingMore = true, refreshError = SectionErrorKind.Offline),
             tv = LibraryGroup(cards(3, media = MediaType.Tv)),
-            imageBaseUrl = "",
         )
         assertEquals(
             listOf("header:movie", "refreshError:movie", "movie:1", "movie:2", "more:movie", "header:tv", "tv:3"),

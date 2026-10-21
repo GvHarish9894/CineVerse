@@ -56,11 +56,17 @@ import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.domain.Review
 import com.techgv.cineverse.domain.Video
+import com.techgv.cineverse.ui.components.ActionButton
+import com.techgv.cineverse.ui.components.ActionButtonStyle
 import com.techgv.cineverse.ui.components.FactCard
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
+import com.techgv.cineverse.ui.components.LandscapeCard
+import com.techgv.cineverse.ui.components.PersonCard
+import com.techgv.cineverse.ui.components.PosterCard
 import com.techgv.cineverse.ui.components.ReviewCard
+import com.techgv.cineverse.ui.components.ScoreRing
 import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.SeasonCard
 import com.techgv.cineverse.ui.components.Section
@@ -213,8 +219,8 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
                         "cast" -> DetailRow("Top billed cast", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
                             val people = detail.cast + crew
                             itemsIndexed(people, key = { index, _ -> row.itemKeys[index] }) { index, person ->
-                                Lane2PersonCard(
-                                    person.name, person.role, tmdbImageUrl(imageBase, "w185", person.profilePath),
+                                PersonCard(
+                                    person.name, person.role, person.profilePath, seed = row.itemKeys[index],
                                     onClick = { actions.onNavigate(Route.Person(person.personId)) },
                                     modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.itemKeys[index], index) },
                                 )
@@ -222,17 +228,18 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
                         }
                         "videos" -> DetailRow("Videos", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
                             itemsIndexed(detail.videos, key = { _, v -> v.key }) { index, video ->
-                                Lane2LandscapeCard(
-                                    video.name, video.type, "https://i.ytimg.com/vi/${video.key}/hqdefault.jpg",
+                                LandscapeCard(
+                                    video.name, video.type, imagePath = null, seed = video.key,
                                     onClick = { actions.onNavigate(playerRoute(detail, video)) },
                                     modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, video.key, index) },
+                                    imageUrl = "https://i.ytimg.com/vi/${video.key}/hqdefault.jpg",
                                 )
                             }
                         }
                         "recommendations" -> DetailRow("Recommendations", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
                             itemsIndexed(detail.recommendations, key = { index, _ -> row.itemKeys[index] }) { index, title ->
-                                Lane2PosterCard(
-                                    title, tmdbImageUrl(imageBase, "w342", title.posterPath),
+                                PosterCard(
+                                    title,
                                     onClick = { actions.onNavigate(Route.Detail(title.ref.mediaType, title.ref.id)) },
                                     modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.itemKeys[index], index) },
                                 )
@@ -330,7 +337,7 @@ private fun Hero(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { chips.forEach { DetailChip(it) } }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
-                if (detail.voteCount > 0) DetailScoreRing(detail.voteAverage)
+                ScoreRing(detail.voteAverage, detail.voteCount)
                 Column {
                     if (detail.overviewInEnglish) {
                         Text("(English)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -351,10 +358,15 @@ private fun Hero(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 buttons.forEachIndexed { index, b ->
-                    DetailActionButton(
-                        b.glyph, b.label, b.onClick,
+                    ActionButton(
+                        b.label, b.glyph, b.onClick,
                         modifier = with(restorer) { Modifier.rememberFocus(PANEL, buttonRow.rowKey, b.key, index) },
-                        primary = b.primary, on = b.on, enabled = b.enabled,
+                        style = when {
+                            b.primary -> ActionButtonStyle.Solid
+                            b.on -> ActionButtonStyle.On
+                            else -> ActionButtonStyle.Default
+                        },
+                        enabled = b.enabled,
                     )
                 }
             }

@@ -49,7 +49,6 @@ data class LibraryUiState(
     val tab: LibraryTab = LibraryTab.Watchlist,
     val movies: LibraryGroup = LibraryGroup(),
     val tv: LibraryGroup = LibraryGroup(),
-    val imageBaseUrl: String,
 ) {
     fun group(media: MediaType) = if (media == MediaType.Movie) movies else tv
 }
@@ -62,11 +61,10 @@ data class LibraryUiState(
 class LibraryViewModel(
     private val handle: SavedStateHandle,
     private val repository: LibraryRepository,
-    imageBaseUrl: () -> String,
 ) : ViewModel() {
     val memory = FocusMemory(handle)
     private val tab = MutableStateFlow(handle.get<String>(TAB)?.let(LibraryTab::valueOf) ?: LibraryTab.Watchlist)
-    private val _state = MutableStateFlow(LibraryUiState(tab = tab.value, imageBaseUrl = imageBaseUrl()))
+    private val _state = MutableStateFlow(LibraryUiState(tab = tab.value))
     val state: StateFlow<LibraryUiState> = _state.asStateFlow()
 
     private val generations = MediaType.entries.associateWith { GenerationCounter() }

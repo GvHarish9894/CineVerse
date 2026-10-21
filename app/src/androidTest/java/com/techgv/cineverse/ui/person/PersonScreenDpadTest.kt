@@ -63,7 +63,7 @@ class PersonScreenDpadTest {
         compose.onNodeWithText("Show less", substring = true).assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
         compose.waitForIdle()
         // Known for: vote_count desc.
-        compose.onNodeWithContentDescription("Famous Film").assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithContentDescription("Famous Film", substring = true).assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
         compose.waitForIdle()
         // Acting credits: date desc → the 2020 film first.
         compose.onNodeWithText("Acting credits").assertExists()

@@ -37,16 +37,18 @@ import com.techgv.cineverse.ui.components.CreditCard
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
+import com.techgv.cineverse.ui.components.ActionButton
+import com.techgv.cineverse.ui.components.ActionButtonStyle
+import com.techgv.cineverse.ui.components.ActionIcon
 import com.techgv.cineverse.ui.components.FocusRow
+import com.techgv.cineverse.ui.components.PosterCard
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.components.screenFocusRoot
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
-import com.techgv.cineverse.ui.detail.DetailActionButton
 import com.techgv.cineverse.ui.detail.DetailChip
-import com.techgv.cineverse.ui.detail.Lane2PosterCard
 import com.techgv.cineverse.ui.detail.DetailRow
 import com.techgv.cineverse.ui.detail.ROW_TOP_INSET
 import com.techgv.cineverse.ui.detail.RevealVertically
@@ -164,10 +166,10 @@ private fun PersonBody(
                                 )
                             }
                             Row(with(restorer) { Modifier.restoreRowFocus(focusRows[0], scope) }.revealHeroOnFocus(outer, scope, LocalFeedback.current.reduceMotion)) {
-                                DetailActionButton(
-                                    "ⓘ", if (bioExpanded) "Show less" else "Read full biography", onToggleBio,
+                                ActionButton(
+                                    if (bioExpanded) "Show less" else "Read full biography", ActionIcon.INFO, onToggleBio,
                                     modifier = with(restorer) { Modifier.rememberFocus(PANEL, BUTTONS, "bio", 0) },
-                                    primary = true,
+                                    style = ActionButtonStyle.Solid,
                                 )
                             }
                         } else {
@@ -180,8 +182,8 @@ private fun PersonBody(
                 if (person.knownFor.isNotEmpty()) {
                     DetailRow("Known for", restorer, focusRows[1], knownForState) {
                         itemsIndexed(person.knownFor, key = { index, _ -> knownForKeys[index] }) { index, title ->
-                            Lane2PosterCard(
-                                title, tmdbImageUrl(imageBase, "w342", title.posterPath),
+                            PosterCard(
+                                title,
                                 onClick = { onNavigate(Route.Detail(title.ref.mediaType, title.ref.id)) },
                                 modifier = with(restorer) { Modifier.rememberFocus(PANEL, KNOWN_FOR, knownForKeys[index], index) },
                             )

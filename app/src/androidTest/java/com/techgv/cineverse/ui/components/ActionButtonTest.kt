@@ -1,4 +1,4 @@
-package com.techgv.cineverse.ui.detail
+package com.techgv.cineverse.ui.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.CompositionLocalProvider
@@ -30,7 +30,7 @@ import org.junit.runner.RunWith
 /** §9: one OK → one confirm (the root hook's, none from the button); a pending (disabled) button keeps focus and ignores OK. */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
-class DetailActionButtonTest {
+class ActionButtonTest {
     @get:Rule
     val compose = createComposeRule()
 
@@ -48,7 +48,7 @@ class DetailActionButtonTest {
             CompositionLocalProvider(LocalFeedback provides feedback) {
                 // Stand-in for the app root's §9 hook (ui/feedback navigationFeedback): OK key down → confirm.
                 Box(Modifier.onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionCenter) feedback.confirm(); false }) {
-                    DetailActionButton("♥", "Favourite", onClick = { clicks++ }, enabled = enabled)
+                    ActionButton("Favourite", ActionIcon.HEART, onClick = { clicks++ }, enabled = enabled)
                 }
             }
         }

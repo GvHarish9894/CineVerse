@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.techgv.cineverse.domain.Review
+import com.techgv.cineverse.ui.components.ActionButton
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.ScrollableText
 
@@ -53,7 +54,7 @@ internal fun ReviewPanel(review: Review, avatarUrl: String?, onClose: () -> Unit
                 review.rating?.let { Text("★ ${oneDecimal(it)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) }
             }
             ScrollableText(review.text, MaterialTheme.typography.bodyLarge, MaterialTheme.colorScheme.onSurface, Modifier.weight(1f, fill = false))
-            DetailActionButton("✕", "Close", onClose, modifier = Modifier.focusRequester(close))
+            ActionButton("Close", "✕", onClose, Modifier.focusRequester(close))
         }
     }
     LaunchedEffect(review.id) { close.requestFocus() }

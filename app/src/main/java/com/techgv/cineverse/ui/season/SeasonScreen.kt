@@ -52,8 +52,10 @@ import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.DetailCardSurface
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
+import com.techgv.cineverse.ui.components.ActionButton
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.LocalToaster
+import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.Section
@@ -61,8 +63,6 @@ import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.components.screenFocusRoot
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
-import com.techgv.cineverse.ui.detail.DetailActionButton
-import com.techgv.cineverse.ui.detail.Lane2PersonCard
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
 import com.techgv.cineverse.ui.detail.oneDecimal
 import com.techgv.cineverse.ui.nav.Route
@@ -363,16 +363,16 @@ private fun EpisodePanel(episode: Episode, restorer: FocusRestorer, imageBase: S
             episode.overview.ifBlank { "No overview available" }, MaterialTheme.typography.bodyLarge, MaterialTheme.colorScheme.onSurface,
             Modifier.weight(1f, fill = false),
         )
-        DetailActionButton(
-            "✕", "Close", onClose,
+        ActionButton(
+            "Close", "✕", onClose,
             modifier = with(restorer) { Modifier.rememberFocus(PANEL, PANEL_ACTIONS, "close", 0) },
         )
         if (episode.guestStars.isNotEmpty()) {
             Text("Guest stars", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             LazyRow(state = guestsState, horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
                 itemsIndexed(episode.guestStars, key = { index, _ -> guestKeys[index] }) { index, guest ->
-                    Lane2PersonCard(
-                        guest.name, guest.role, tmdbImageUrl(imageBase, "w185", guest.profilePath),
+                    PersonCard(
+                        guest.name, guest.role, guest.profilePath, seed = guestKeys[index],
                         onClick = { actions.onNavigate(Route.Person(guest.personId)) },
                         modifier = with(restorer) { Modifier.rememberFocus(PANEL, PANEL_GUESTS, guestKeys[index], index) },
                     )

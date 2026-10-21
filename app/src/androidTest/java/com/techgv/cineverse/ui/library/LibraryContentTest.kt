@@ -6,6 +6,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.hasParent
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.isFocusable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performKeyInput
@@ -31,6 +34,9 @@ class LibraryContentTest {
     @get:Rule
     val compose = createComposeRule()
 
+    /** The shared PosterCard puts the caller's modifier (test tag) on its column; the focusable is its child. */
+    private fun card(tag: String) = compose.onNode(isFocusable() and hasParent(hasTestTag(tag)))
+
     private fun entry(id: Int, media: MediaType = MediaType.Movie) = LibraryEntry(
         Title(MediaRef(media, id), "Title $id", "", null, null, "2020-01-01", 7.0, 3, emptyList(), media),
         rating = null,
@@ -40,7 +46,6 @@ class LibraryContentTest {
         tab = LibraryTab.Watchlist,
         movies = LibraryGroup(SectionState.Content(listOf(entry(1), entry(2), entry(3)))),
         tv = LibraryGroup(SectionState.Empty),
-        imageBaseUrl = "https://image.tmdb.org/t/p/",
     )
 
     @Test
@@ -64,11 +69,11 @@ class LibraryContentTest {
             )
         }
         compose.waitForIdle()
-        compose.onNodeWithTag("movie:1").assertIsFocused().performKeyInput { pressKey(Key.DirectionRight) }
-        compose.onNodeWithTag("movie:2").assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
+        card("movie:1").assertIsFocused().performKeyInput { pressKey(Key.DirectionRight) }
+        card("movie:2").assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
         assertEquals(MediaRef(MediaType.Movie, 2), opened)
 
-        compose.onNodeWithTag("movie:2").performKeyInput { pressKey(Key.DirectionUp) }
+        card("movie:2").performKeyInput { pressKey(Key.DirectionUp) }
         compose.onNodeWithTag("tab:Watchlist").assertIsFocused().performKeyInput { pressKey(Key.DirectionRight) }
         compose.waitForIdle()
         assertEquals(LibraryTab.Favourites, state.tab)
@@ -117,6 +122,6 @@ class LibraryContentTest {
             LibraryContent(state, memory, onTab = {}, onLoadMore = {}, onRetry = {}, onOpenTitle = {}, onExplore = {}, onSignIn = {})
         }
         compose.waitForIdle()
-        compose.onNodeWithTag("tv:2").assertIsFocused()
+        card("tv:2").assertIsFocused()
     }
 }
