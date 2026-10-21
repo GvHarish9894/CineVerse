@@ -1,16 +1,20 @@
 package com.techgv.cineverse.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -53,7 +57,10 @@ fun ImportLibraryDialog(
         // A Dialog window is a new composition root: re-apply the design canvas and the §9 key hook.
         DesignCanvas { FeedbackRoot {
         Column(
-            Modifier.width(620.dp).background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.large).padding(32.dp),
+            Modifier.width(620.dp).background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.large).padding(32.dp)
+                // The window's initial focus enters top-down (the titles list); it belongs on [first].
+                .focusProperties { onEnter = { if (requestedFocusDirection != FocusDirection.Enter) first.requestFocus() } }
+                .focusGroup(),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             when (state) {
@@ -84,7 +91,13 @@ fun ImportLibraryDialog(
                 is ImportDialogState.Unconfirmed -> {
                     val n = state.titles.size
                     Heading("Couldn't confirm $n ${if (n == 1) "item" else "items"}")
-                    Body(state.titles.joinToString(" · "))
+                    // Bounded so the warning and Done / Retry stay on screen however many titles there are.
+                    ScrollableText(
+                        state.titles.joinToString("\n"),
+                        MaterialTheme.typography.bodyLarge,
+                        MaterialTheme.colorScheme.onSurfaceVariant,
+                        Modifier.heightIn(max = 180.dp),
+                    )
                     Body(
                         "${state.written} imported. TMDB didn't confirm these. Retrying may re-add items " +
                             "you removed on TMDB since.",
