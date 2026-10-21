@@ -7,6 +7,7 @@ import com.techgv.cineverse.domain.LibraryKind
 import com.techgv.cineverse.domain.LibraryState
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
+import kotlinx.coroutines.flow.first
 
 /** One import step of one title (§8.3 rule 3). */
 data class ImportStep(val ref: MediaRef, val kind: LibraryKind)
@@ -29,6 +30,8 @@ sealed interface ImportResult {
     data class Done(val written: Int, val unconfirmed: List<ImportStep>, val unconfirmedTitles: List<String> = emptyList()) : ImportResult
     /** Reading the account's lists failed: nothing was written. */
     data class Aborted(val error: TmdbError) : ImportResult
+    /** The account was signed out before a POST: stopped there, unfinished (offered for resuming). */
+    data object Superseded : ImportResult
 }
 
 /**
@@ -95,6 +98,7 @@ class LibraryImporter(
                     when (outcome) {
                         Outcome.Written -> written++
                         Outcome.Satisfied, Outcome.Landed -> Unit
+                        Outcome.Superseded -> return ImportResult.Superseded
                         Outcome.Unconfirmed -> {
                             unconfirmed += step
                             if (kind == LibraryKind.RATING) break // rule 3: the title waits for its rating
@@ -110,8 +114,8 @@ class LibraryImporter(
         return ImportResult.Done(written, unconfirmed, unconfirmed.map { it.ref }.distinct().map { titles.getValue(it).first().title.title })
     }
 
-    /** [Landed]: the POST errored but TMDB has the value. */
-    private enum class Outcome { Written, Satisfied, Landed, Unconfirmed }
+    /** [Landed]: the POST errored but TMDB has the value. [Superseded]: [c] was signed out before the POST. */
+    private enum class Outcome { Written, Satisfied, Landed, Unconfirmed, Superseded }
 
     /**
      * Decided holding the (title, kind) write lock, against TMDB's state at execution time unless the snapshot
@@ -130,6 +134,8 @@ class LibraryImporter(
                 present == null -> Outcome.Unconfirmed
                 // A prior attempt has an unknown outcome and TMDB lacks it: ambiguous (maybe removed on TMDB).
                 previous == ImportLedgerEntity.ATTEMPTING && !forced -> Outcome.Unconfirmed
+                // The account_states read above may have outlived the sign-in: re-checked right before the POST.
+                repository.credentials.first() != c -> Outcome.Superseded
                 else -> post(c, step, value)
             }
         }

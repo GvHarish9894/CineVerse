@@ -3,11 +3,11 @@ package com.techgv.cineverse.ui.library
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import com.techgv.cineverse.data.auth.Credentials
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.library.LibraryWriteResult
@@ -21,73 +21,113 @@ import com.techgv.cineverse.ui.components.RateDialog
 import com.techgv.cineverse.ui.components.Toaster
 import com.techgv.cineverse.ui.components.formatRating
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
  * Provides [LocalLibraryActions] to [content]: writes run in [scope] (app-wide, so a write outlives the
- * screen), outcomes become toasts (§7.12), and [LibraryActions.openRate] shows the [RateDialog].
+ * screen), outcomes become toasts (§7.12), and [LibraryActions.openRate] shows the [RateDialog] — never over the
+ * Player ([playerActive]: a rate request waits until it closes).
  */
 @Composable
-fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, content: @Composable () -> Unit) {
+fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, playerActive: Boolean, content: @Composable () -> Unit) {
     val toaster = LocalToaster.current
-    var rating by remember { mutableStateOf<RateRequest?>(null) }
     val uiScope = rememberCoroutineScope()
-    val actions = remember(repository, scope, toaster) {
-        object : LibraryActions {
-            override fun state(ref: MediaRef) = repository.state(ref)
+    val controller = remember(repository, scope, toaster, uiScope) { LibraryActionsController(repository, toaster, scope, uiScope) }
+    LaunchedEffect(controller) { repository.credentials.collect(controller::onIdentity) }
+    SideEffect { controller.setPlayerActive(playerActive) }
+    CompositionLocalProvider(LocalLibraryActions provides controller, content = content)
 
-            override fun toggleWatchlist(title: Title) {
-                scope.launch {
-                    val result = repository.toggleWatchlist(title)
-                    toaster.report(title, result) { if (it.watchlist) "Added “${title.title}” to Watchlist" else "Removed from Watchlist" }
-                }
-            }
-
-            override fun toggleFavourite(title: Title) {
-                scope.launch {
-                    val result = repository.toggleFavourite(title)
-                    toaster.report(title, result) { if (it.favourite) "Added “${title.title}” to Favourites" else "Removed from Favourites" }
-                }
-            }
-
-            override fun openRate(title: Title) {
-                uiScope.launch {
-                    val identity = repository.credentials.first()
-                    rating = RateRequest(title, repository.currentRating(identity, title.ref), identity)
-                }
-            }
-        }
-    }
-    CompositionLocalProvider(LocalLibraryActions provides actions, content = content)
-
-    // The dialog belongs to the identity it was opened under: a sign-in change closes it without writing.
-    LaunchedEffect(repository) {
-        repository.credentials.collect { c -> if (rating != null && rating?.identity != c) rating = null }
-    }
-
-    rating?.let { request ->
-        val title = request.title
+    val request by controller.shown.collectAsState(initial = null)
+    request?.let {
         RateDialog(
-            titleName = title.title,
-            initial = request.initial,
-            onSubmit = { value ->
-                rating = null
-                scope.launch {
-                    val result = repository.rate(title, value, request.identity)
-                    toaster.report(title, result) { "Rated ${title.title} ${formatRating(value)} / 10" }
-                }
-            },
-            onRemove = {
-                rating = null
-                scope.launch { toaster.report(title, repository.unrate(title, request.identity)) { "Rating removed" } }
-            },
-            onCancel = { rating = null },
+            titleName = it.title.title,
+            initial = it.initial,
+            onSubmit = controller::submitRating,
+            onRemove = controller::removeRating,
+            onCancel = controller::closeRate,
         )
     }
 }
 
-private class RateRequest(val title: Title, val initial: Double?, val identity: Credentials?)
+/** A Rate dialog for [title], bound to the [identity] it was opened under. */
+class RateRequest(val title: Title, val initial: Double?, val identity: Credentials?)
+
+/**
+ * [LibraryActions] bound to the identity signed in at click time: each action captures [identity] synchronously
+ * and the repository rejects it (Superseded, no toast) if that sign-in is gone, so it never retargets.
+ */
+class LibraryActionsController(
+    private val repository: LibraryRepository,
+    private val toaster: Toaster,
+    private val appScope: CoroutineScope,
+    private val uiScope: CoroutineScope,
+) : LibraryActions {
+    private var identity: Credentials? = null
+    private val request = MutableStateFlow<RateRequest?>(null)
+    private val playerActive = MutableStateFlow(false)
+
+    /** The Rate dialog to display: null while the Player is up (the request waits). */
+    val shown: Flow<RateRequest?> = combine(request, playerActive) { r, player -> r.takeUnless { player } }
+
+    /** The collected sign-in changed: a dialog of another identity closes without writing. */
+    fun onIdentity(c: Credentials?) {
+        identity = c
+        if (request.value?.identity != c) request.value = null
+    }
+
+    fun setPlayerActive(active: Boolean) {
+        playerActive.value = active
+    }
+
+    override fun state(ref: MediaRef) = repository.state(ref)
+
+    override fun toggleWatchlist(title: Title) {
+        val identity = identity
+        appScope.launch {
+            val result = repository.toggleWatchlist(title, identity)
+            toaster.report(title, result) { if (it.watchlist) "Added “${title.title}” to Watchlist" else "Removed from Watchlist" }
+        }
+    }
+
+    override fun toggleFavourite(title: Title) {
+        val identity = identity
+        appScope.launch {
+            val result = repository.toggleFavourite(title, identity)
+            toaster.report(title, result) { if (it.favourite) "Added “${title.title}” to Favourites" else "Removed from Favourites" }
+        }
+    }
+
+    override fun openRate(title: Title) {
+        val identity = identity
+        uiScope.launch {
+            val initial = repository.currentRating(identity, title.ref)
+            // The sign-in may have changed while the rating was read.
+            if (identity == this@LibraryActionsController.identity) request.value = RateRequest(title, initial, identity)
+        }
+    }
+
+    fun submitRating(value: Double) {
+        val r = request.value ?: return
+        request.value = null
+        appScope.launch {
+            val result = repository.rate(r.title, value, r.identity)
+            toaster.report(r.title, result) { "Rated ${r.title.title} ${formatRating(value)} / 10" }
+        }
+    }
+
+    fun removeRating() {
+        val r = request.value ?: return
+        request.value = null
+        appScope.launch { toaster.report(r.title, repository.unrate(r.title, r.identity)) { "Rating removed" } }
+    }
+
+    fun closeRate() {
+        request.value = null
+    }
+}
 
 private fun Toaster.report(title: Title, result: LibraryWriteResult, message: (LibraryState) -> String) {
     when (result) {

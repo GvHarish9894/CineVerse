@@ -95,6 +95,8 @@ fun AppNav(container: AppContainer) {
     }
 
     val toaster = remember { Toaster() }
+    // §7.12: never over the player — toasts queue, the rate and import dialogs wait until it closes.
+    val playerActive = destination?.hasRoute<Route.Player>() == true
     CompositionLocalProvider(LocalToaster provides toaster) { Box(Modifier.fillMaxSize()) {
     Row(Modifier.fillMaxSize()) {
         if (destination?.isRailScreen() == true) {
@@ -107,7 +109,7 @@ fun AppNav(container: AppContainer) {
             )
         }
         Box(Modifier.weight(1f).fillMaxHeight().focusRequester(contentFocus).focusRestorer()) {
-            LibraryActionsHost(container.libraryRepository, container.appScope) { NavHost(nav, startDestination = Route.Splash) {
+            LibraryActionsHost(container.libraryRepository, container.appScope, playerActive) { NavHost(nav, startDestination = Route.Splash) {
                 composable<Route.Splash> {
                     SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
                 }
@@ -138,8 +140,6 @@ fun AppNav(container: AppContainer) {
             } }
         }
     }
-    // §7.12: never over the player — toasts queue and the import prompt waits until it closes.
-    val playerActive = destination?.hasRoute<Route.Player>() == true
     ToastHost(toaster, paused = playerActive)
     ImportLibraryHost(container.libraryRepository, container.libraryImporter, playerActive)
     } }

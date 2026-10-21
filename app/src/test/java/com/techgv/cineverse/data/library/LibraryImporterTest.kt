@@ -244,6 +244,22 @@ class LibraryImporterTest {
     }
 
     @Test
+    fun `a sign-in change during a step's account_states read stops the import before its POST`() = runTest {
+        val t = title(1)
+        guestHas(t, watchlist = true) // not in the snapshot: the step reads account_states holding the lock
+        val gate = CompletableDeferred<Unit>().also { api.statesGates += it }
+        val import = async { importer.import(account) }
+        runCurrent()
+        identity.value = credentials(aoid = "b", session = "sb")
+        gate.complete(Unit)
+
+        assertEquals(ImportResult.Superseded, import.await())
+        assertTrue(api.writes.isEmpty())
+        assertNull("never marked attempting", ledgerState(t.ref, LibraryKind.WATCHLIST))
+        assertEquals("unfinished: offered for resuming", ImportOffer.Resume(1), importer.offer(account))
+    }
+
+    @Test
     fun `a cancelled old-account import does not touch the new account`() = runTest {
         val waiting = title(1)
         guestHas(waiting, watchlist = true)

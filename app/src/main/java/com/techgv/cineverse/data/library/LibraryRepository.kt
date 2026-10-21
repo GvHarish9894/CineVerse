@@ -43,7 +43,8 @@ sealed interface LibraryWriteResult {
  * No offline queue: a failed signed-in write is reported, never retried.
  *
  * Every write is bound to the identity it was made under (a [Credentials] tuple is one sign-in: each sign-in
- * mints a new session) and re-checks it holding the lock: a superseded write is rejected, never redirected.
+ * mints a new session) and re-checks it holding the lock and again right before its POST: a superseded write is
+ * rejected, never redirected.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryRepository(
@@ -101,10 +102,12 @@ class LibraryRepository(
         else -> slot(identity, ref)?.shown?.rating
     }
 
-    /** Toggles bind to the identity signed in when called. */
-    suspend fun toggleWatchlist(title: Title) = write(credentials.first(), title, LibraryKind.WATCHLIST) { it.copy(watchlist = !it.watchlist) }
+    /** [identity]: the one signed in when the user clicked (captured synchronously by the caller). */
+    suspend fun toggleWatchlist(title: Title, identity: Credentials?) =
+        write(identity, title, LibraryKind.WATCHLIST) { it.copy(watchlist = !it.watchlist) }
 
-    suspend fun toggleFavourite(title: Title) = write(credentials.first(), title, LibraryKind.FAVOURITE) { it.copy(favourite = !it.favourite) }
+    suspend fun toggleFavourite(title: Title, identity: Credentials?) =
+        write(identity, title, LibraryKind.FAVOURITE) { it.copy(favourite = !it.favourite) }
 
     /** [identity]: the one the Rate dialog was opened under. */
     suspend fun rate(title: Title, value: Double, identity: Credentials?) = write(identity, title, LibraryKind.RATING) { it.copy(rating = value) }
@@ -158,7 +161,9 @@ class LibraryRepository(
         } catch (e: TmdbException) {
             return LibraryWriteResult.Failed(e.error)
         }
-        val before = slot(c, ref) ?: return LibraryWriteResult.Failed(null) // identity changed meanwhile
+        // The read above may have outlived the sign-in: re-checked right before the POST.
+        if (credentials.first() != c) return LibraryWriteResult.Superseded
+        val before = slot(c, ref) ?: return LibraryWriteResult.Superseded
         val target = change(before.shown)
         updateSlot(c, ref) { it.copy(shown = it.shown.copyKind(kind, target).copy(pending = it.shown.pending + kind)) }
         try {

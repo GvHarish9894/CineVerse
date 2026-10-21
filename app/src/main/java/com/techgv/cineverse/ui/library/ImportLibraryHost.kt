@@ -107,6 +107,7 @@ class ImportLibraryController(private val importer: LibraryImporter, private val
             dialog.value = ImportDialogState.Running
             dialog.value = when (val result = importer.import(c, retry)) {
                 is ImportResult.Aborted -> ImportDialogState.Failed
+                ImportResult.Superseded -> null // signed out: the new account's flow owns the dialog
                 is ImportResult.Done -> if (result.unconfirmed.isEmpty()) {
                     toaster.show("Guest library imported", "Synced to your TMDB account")
                     null

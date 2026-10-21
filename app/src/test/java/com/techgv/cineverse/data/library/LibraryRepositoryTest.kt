@@ -37,8 +37,8 @@ class LibraryRepositoryTest {
     fun `guest writes go to Room, newest first, and need no network`() = runTest {
         identity.value = null
         val state = watchState()
-        repo.toggleWatchlist(movie)
-        repo.toggleWatchlist(title(2, MediaType.Movie))
+        repo.toggleWatchlist(movie, identity.value)
+        repo.toggleWatchlist(title(2, MediaType.Movie), identity.value)
         repo.rate(movie, 8.5, null)
         runCurrent()
         assertEquals(LibraryState(known = true, watchlist = true, favourite = false, rating = 8.5, pending = emptySet()), state())
@@ -61,8 +61,8 @@ class LibraryRepositoryTest {
     fun `writes per title and kind are serialized and pending while in flight`() = runTest {
         val state = watchState()
         api.writeGate = CompletableDeferred()
-        val first = async { repo.toggleWatchlist(movie) }
-        val second = async { repo.toggleWatchlist(movie) }
+        val first = async { repo.toggleWatchlist(movie, identity.value) }
+        val second = async { repo.toggleWatchlist(movie, identity.value) }
         runCurrent()
         assertEquals(listOf("watchlist/movie:1=true"), api.writes) // the second waits for the first
         assertEquals(setOf(LibraryKind.WATCHLIST), state().pending)
@@ -79,7 +79,7 @@ class LibraryRepositoryTest {
     fun `offline write fails visibly and rolls back`() = runTest {
         val state = watchState()
         api.failWrites = 1
-        val result = repo.toggleFavourite(movie)
+        val result = repo.toggleFavourite(movie, identity.value)
         runCurrent()
         assertEquals(LibraryWriteResult.Failed(TmdbError.Network), result)
         assertFalse(state().favourite)
@@ -92,7 +92,7 @@ class LibraryRepositoryTest {
         api.writeGate = CompletableDeferred()
         api.failWrites = 1
         api.landThenFail = true
-        val write = async { repo.toggleWatchlist(movie) }
+        val write = async { repo.toggleWatchlist(movie, identity.value) }
         runCurrent()
         // The POST lands on TMDB but its response is lost; a fresh read sees the success first.
         api.watchlist += movie.ref
@@ -110,7 +110,7 @@ class LibraryRepositoryTest {
         val state = watchState() // known, not on the watchlist
         val staleGate = CompletableDeferred<Unit>().also { api.statesGates += it }
         watchState() // a second screen starts a read that will answer "not on watchlist"
-        repo.toggleWatchlist(movie) // succeeds; its own post-write read (ungated) commits first
+        repo.toggleWatchlist(movie, identity.value) // succeeds; its own post-write read (ungated) commits first
         runCurrent()
         assertTrue(state().watchlist)
         staleGate.complete(Unit)
@@ -123,7 +123,7 @@ class LibraryRepositoryTest {
     fun `rating reports removal from the watchlist only when observed`() = runTest {
         watchState()
         api.watchlist += movie.ref
-        repo.toggleFavourite(movie) // any write refreshes states: watchlist now known true
+        repo.toggleFavourite(movie, identity.value) // any write refreshes states: watchlist now known true
         api.rateRemovesFromWatchlist = true
         val removed = repo.rate(movie, 9.0, identity.value) as LibraryWriteResult.Done
         assertTrue(removed.removedFromWatchlist)
@@ -132,7 +132,7 @@ class LibraryRepositoryTest {
 
         api.rateRemovesFromWatchlist = false
         api.watchlist += movie.ref
-        repo.toggleFavourite(movie)
+        repo.toggleFavourite(movie, identity.value)
         val kept = repo.rate(movie, 6.5, identity.value) as LibraryWriteResult.Done
         assertFalse(kept.removedFromWatchlist)
         assertEquals(listOf("rate/movie:1=9.0", "rate/movie:1=6.5"), api.writes.filter { it.startsWith("rate") })
@@ -142,7 +142,7 @@ class LibraryRepositoryTest {
     fun `a result for a signed-out identity is dropped`() = runTest {
         val state = watchState()
         api.writeGate = CompletableDeferred()
-        val write = async { repo.toggleWatchlist(movie) }
+        val write = async { repo.toggleWatchlist(movie, identity.value) }
         runCurrent()
         identity.value = credentials(aoid = "other", session = "s2")
         runCurrent() // the new identity reads its own states: not on its watchlist
@@ -156,7 +156,7 @@ class LibraryRepositoryTest {
     fun `mutation bumps the list revision`() = runTest {
         watchState()
         val before = repo.listRevision.value
-        repo.toggleWatchlist(movie)
+        repo.toggleWatchlist(movie, identity.value)
         assertTrue(repo.listRevision.value > before)
     }
 
@@ -164,9 +164,10 @@ class LibraryRepositoryTest {
     fun `a queued write of a signed-out account is rejected and never touches the new account`() = runTest {
         watchState()
         api.writeGate = CompletableDeferred()
-        val a1 = async { repo.toggleWatchlist(movie) }
+        val a = identity.value
+        val a1 = async { repo.toggleWatchlist(movie, a) }
         runCurrent()
-        val a2 = async { repo.toggleWatchlist(movie) } // queued behind a1 on the same (title, kind) lock
+        val a2 = async { repo.toggleWatchlist(movie, a) } // queued behind a1 on the same (title, kind) lock
         runCurrent()
         identity.value = credentials(aoid = "b", session = "sb")
         val history = mutableListOf<LibraryState>()
@@ -179,6 +180,31 @@ class LibraryRepositoryTest {
         runCurrent()
         assertEquals("only a1 had reached TMDB", listOf("watchlist/movie:1=true"), api.writes)
         assertTrue("B's button states were never cleared", history.drop(bKnownAt - 1).all { it.known })
+    }
+
+    @Test
+    fun `a toggle made under A and dispatched after a switch to B is superseded and B is untouched`() = runTest {
+        val a = identity.value
+        identity.value = credentials(aoid = "b", session = "sb")
+        val b = watchState()
+        assertEquals(LibraryWriteResult.Superseded, repo.toggleWatchlist(movie, a))
+        assertEquals(LibraryWriteResult.Superseded, repo.toggleFavourite(movie, a))
+        runCurrent()
+        assertTrue(api.writes.isEmpty())
+        assertTrue(b().known)
+        assertFalse(b().watchlist || b().favourite)
+    }
+
+    @Test
+    fun `a sign-in change during the pre-write account_states read sends no POST`() = runTest {
+        val gate = CompletableDeferred<Unit>().also { api.statesGates += it }
+        val a = identity.value
+        val write = async { repo.toggleWatchlist(movie, a) } // no cached state: reads account_states first
+        runCurrent()
+        identity.value = credentials(aoid = "b", session = "sb")
+        gate.complete(Unit)
+        assertEquals(LibraryWriteResult.Superseded, write.await())
+        assertTrue(api.writes.isEmpty())
     }
 
     @Test
@@ -206,7 +232,7 @@ class LibraryRepositoryTest {
         val state = watchState()
         api.failWrites = 1
         api.landThenFail = true
-        assertTrue(repo.toggleWatchlist(movie) is LibraryWriteResult.Failed)
+        assertTrue(repo.toggleWatchlist(movie, identity.value) is LibraryWriteResult.Failed)
         runCurrent()
         assertTrue("TMDB has it: shown as on the watchlist", state().watchlist)
         assertTrue(state().pending.isEmpty())
