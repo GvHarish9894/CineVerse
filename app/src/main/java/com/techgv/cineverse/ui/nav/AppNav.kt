@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,7 +29,13 @@ import androidx.navigation.toRoute
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.ui.components.ExitDialog
 import com.techgv.cineverse.ui.components.PlaceholderScreen
+import com.techgv.cineverse.ui.components.LocalToaster
+import com.techgv.cineverse.ui.components.ToastHost
+import com.techgv.cineverse.ui.components.Toaster
 import com.techgv.cineverse.ui.home.HomeScreen
+import com.techgv.cineverse.ui.library.ImportLibraryHost
+import com.techgv.cineverse.ui.library.LibraryActionsHost
+import com.techgv.cineverse.ui.library.LibraryScreen
 import com.techgv.cineverse.ui.login.LoginScreen
 import com.techgv.cineverse.ui.player.PlayerScreen
 import com.techgv.cineverse.ui.spikes.spikeDestinations
@@ -87,6 +94,8 @@ fun AppNav(container: AppContainer) {
         }
     }
 
+    val toaster = remember { Toaster() }
+    CompositionLocalProvider(LocalToaster provides toaster) { Box(Modifier.fillMaxSize()) {
     Row(Modifier.fillMaxSize()) {
         if (destination?.isRailScreen() == true) {
             val current = entry?.railItem()
@@ -98,14 +107,21 @@ fun AppNav(container: AppContainer) {
             )
         }
         Box(Modifier.weight(1f).fillMaxHeight().focusRequester(contentFocus).focusRestorer()) {
-            NavHost(nav, startDestination = Route.Splash) {
+            LibraryActionsHost(container.libraryRepository, container.appScope) { NavHost(nav, startDestination = Route.Splash) {
                 composable<Route.Splash> {
                     SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
                 }
                 composable<Route.Home> { HomeScreen(onOpen = { nav.navigate(it) }, backHandle = homeBack) }
                 composable<Route.Browse> { PlaceholderScreen("Browse", it.toRoute<Route.Browse>().kind.name) }
                 composable<Route.Search> { PlaceholderScreen("Search") }
-                composable<Route.Library> { PlaceholderScreen("My Library") }
+                composable<Route.Library> {
+                    LibraryScreen(
+                        container,
+                        onOpenTitle = { nav.navigate(Route.Detail(it.mediaType, it.id)) },
+                        onExplore = { nav.reset(Route.Browse(BrowseKind.Movies)) },
+                        onSignIn = { nav.navigate(Route.Login) },
+                    )
+                }
                 composable<Route.Settings> { PlaceholderScreen("Settings") }
                 composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, message = loginMessage) }
                 composable<Route.Detail> {
@@ -119,9 +135,12 @@ fun AppNav(container: AppContainer) {
                 }
                 composable<Route.Player> { PlayerScreen(it.toRoute(), onBack = { nav.popBackStack() }) }
                 spikeDestinations(nav, container)
-            }
+            } }
         }
     }
+    ToastHost(toaster)
+    ImportLibraryHost(container.libraryRepository, container.libraryImporter)
+    } }
 
     // Declared after NavHost so it takes precedence over NavHost's own pop handler.
     BackHandler(enabled = destination != null && !destination.hasRoute<Route.Splash>()) {
