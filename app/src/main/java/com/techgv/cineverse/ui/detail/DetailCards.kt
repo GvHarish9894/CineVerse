@@ -24,10 +24,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -40,10 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.techgv.cineverse.data.tmdb.formatDate
 import com.techgv.cineverse.data.tmdb.parseDate
@@ -182,7 +183,10 @@ internal fun DetailChip(label: String) {
     }
 }
 
-/** §6 ActionButton (h 56): glyph + label; [primary] solid, [on] filled. [modifier] goes on the focusable. */
+/**
+ * §6 ActionButton (h 56): glyph + label; [primary] solid, [on] filled. Disabled (e.g. a pending library write)
+ * it stays focusable, ignores OK and is dimmed, glyph included. [modifier] goes on the focusable.
+ */
 @Composable
 internal fun DetailActionButton(
     glyph: String,
@@ -193,17 +197,28 @@ internal fun DetailActionButton(
     on: Boolean = false,
     enabled: Boolean = true,
 ) {
-    val content: @Composable () -> Unit = {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(glyph, style = MaterialTheme.typography.titleMedium)
-            Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-        }
+    var focused by remember { mutableStateOf(false) }
+    val (background, content) = when {
+        focused -> Color.White to Color.Black
+        primary -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary
+        on -> MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) to Color.White
+        else -> Color.White.copy(alpha = 0.12f) to Color.White
     }
-    val padding = PaddingValues(horizontal = 22.dp)
-    if (primary || on) {
-        Button(onClick = onClick, enabled = enabled, contentPadding = padding, modifier = modifier.height(56.dp), scale = ButtonDefaults.scale(focusedScale = 1.08f)) { content() }
-    } else {
-        OutlinedButton(onClick = onClick, enabled = enabled, contentPadding = padding, modifier = modifier.height(56.dp)) { content() }
+    DetailCardSurface(
+        onClick = onClick,
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
+        shape = RoundedCornerShape(28.dp),
+        enabled = enabled,
+        containerColor = background,
+    ) {
+        Row(
+            Modifier.height(56.dp).padding(horizontal = 22.dp).alpha(if (enabled) 1f else 0.5f),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(glyph, style = MaterialTheme.typography.titleMedium, color = content)
+            Text(label, style = MaterialTheme.typography.titleSmall, color = content, maxLines = 1)
+        }
     }
 }
 
