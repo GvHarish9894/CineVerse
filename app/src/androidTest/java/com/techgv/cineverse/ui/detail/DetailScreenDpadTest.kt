@@ -61,7 +61,7 @@ class DetailScreenDpadTest {
         compose.onNodeWithText("Watchlist").assertIsNotEnabled()
 
         compose.onNodeWithText("Play trailer").performKeyInput { pressKey(Key.DirectionCenter) }
-        assertEquals(Route.Player("yt1", "Official Trailer", "Fight Club · Trailer"), navigated.single())
+        assertEquals(Route.Player("yt1", title = "Fight Club", kicker = "Official Trailer"), navigated.single())
 
         // Entering a row without memory lands on its first item (prototype rowMem), not the nearest one.
         compose.onNodeWithText("Play trailer").performKeyInput { pressKey(Key.DirectionDown) }

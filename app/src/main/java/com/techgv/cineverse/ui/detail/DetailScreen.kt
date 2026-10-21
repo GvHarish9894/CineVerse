@@ -96,8 +96,8 @@ class DetailActions(
     val onNavigate: (Route) -> Unit,
 )
 
-/** Player route for [video] of [detail] (§7.10): BACK pops back here and focus is restored. */
-fun playerRoute(detail: Detail, video: Video) = Route.Player(video.key, video.name, "${detail.title} · ${video.type}")
+/** Player route for [video] of [detail] (§7.10): film title, video name as kicker; BACK pops back here and focus is restored. */
+fun playerRoute(detail: Detail, video: Video) = Route.Player(video.key, title = detail.title, kicker = video.name.ifBlank { "Trailer" })
 
 @Composable
 fun DetailContent(

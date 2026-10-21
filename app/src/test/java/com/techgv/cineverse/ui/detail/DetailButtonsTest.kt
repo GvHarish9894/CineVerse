@@ -65,7 +65,9 @@ class DetailButtonsTest {
     @Test
     fun `play trailer opens the player route, hidden without a YouTube video`() {
         buttons(LibraryState.Unknown).getValue("trailer").onClick()
-        assertEquals(Route.Player("yt1", "Official Trailer", "Fight Club · Trailer"), navigated.single())
+        assertEquals(Route.Player("yt1", title = "Fight Club", kicker = "Official Trailer"), navigated.single())
+        val unnamed = MovieDetailDto(550, title = "Fight Club", videos = VideosDto(listOf(trailer.copy(name = "")))).toDetail("IN")
+        assertEquals("Trailer", playerRoute(unnamed, unnamed.videos.single()).kicker)
         val noVideo = MovieDetailDto(1, videos = VideosDto(listOf(trailer.copy(site = "Vimeo")))).toDetail("IN")
         assertFalse("trailer" in buttons(LibraryState.Unknown, detail = noVideo))
     }
