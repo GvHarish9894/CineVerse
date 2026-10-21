@@ -1,8 +1,5 @@
 package com.techgv.cineverse.domain
 
-/** Identity of a movie or TV title. */
-data class MediaRef(val mediaType: MediaType, val id: Int)
-
 /**
  * A movie or TV title as lists, trending, search and recommendations return it. Lists carry genre ids
  * only (§13); `*_path` and dates are null when TMDB sends null or "".

@@ -86,7 +86,7 @@ class HomeViewModel(
     private var genresJob: Job? = null
     private val genresGeneration = GenerationCounter()
 
-    /** Bumped when a pending trailer fetch must not navigate any more (settings reload, screen stopped). */
+    /** Bumped when a pending trailer fetch must not navigate any more (settings reload, screen paused). */
     private val trailerGeneration = GenerationCounter()
     private var active = false
 
@@ -132,7 +132,7 @@ class HomeViewModel(
         }
     }
 
-    /** Home's lifecycle is STARTED; a trailer fetch outliving it never navigates on a later return. */
+    /** Home's lifecycle is RESUMED; a trailer fetch outliving it never navigates (on top of the next screen or on a later return). */
     fun setActive(active: Boolean) {
         this.active = active
         if (!active) cancelTrailer()

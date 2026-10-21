@@ -7,8 +7,6 @@ sealed interface Hero {
 }
 
 /** Stable focus / list key (§1.3): `movie:603`, `tv:1399`, `person:287`. */
-val MediaRef.key: String get() = "$mediaType:$id"
-
 val Hero.key: String
     get() = when (this) {
         is Hero.OfTitle -> title.ref.key

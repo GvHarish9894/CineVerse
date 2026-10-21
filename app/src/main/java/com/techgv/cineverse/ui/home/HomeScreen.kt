@@ -34,7 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
@@ -105,9 +105,10 @@ fun HomeScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     val toaster = LocalToaster.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LifecycleStartEffect(vm) {
+    // RESUMED, not STARTED: during a NavHost exit transition Home stays STARTED under the new screen.
+    LifecycleResumeEffect(vm) {
         vm.setActive(true)
-        onStopOrDispose { vm.setActive(false) }
+        onPauseOrDispose { vm.setActive(false) }
     }
     LaunchedEffect(vm, lifecycle) {
         vm.events.flowWithLifecycle(lifecycle).collect { event ->

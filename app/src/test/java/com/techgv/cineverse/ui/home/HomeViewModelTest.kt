@@ -130,4 +130,19 @@ class HomeViewModelTest {
         advanceUntilIdle()
         assertEquals(emptyList<HomeEvent>(), events)
     }
+
+    @Test fun `trailer fetch completing after Home paused emits no navigation while events are still collected`() = runTest {
+        api.videos = listOf(VideoDto(key = "yt1", name = "Trailer", site = "YouTube", type = "Trailer"))
+        val gate = api.gate("videos/7/en-US")
+        val vm = viewModel()
+        val events = events(vm)
+        vm.setActive(true)
+        vm.playTrailer(dune)
+        advanceUntilIdle()
+        vm.setActive(false) // RESUMED → STARTED: Detail pushed, Home still STARTED during the exit transition
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(emptyList<HomeEvent>(), events)
+        assertNull(vm.uiState.value.trailerLoading)
+    }
 }

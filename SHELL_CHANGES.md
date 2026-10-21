@@ -17,8 +17,12 @@ Season, Player), `FocusMemory` storage format, `HomeBackHandle`.
 Merge notes: Lane 2 replaces the Detail / Person / Season lines, Lane 3 Settings / Login, Lane 4 Library and
 wraps `NavHost` in `LibraryActionsHost` + hosts `ImportLibraryHost` — all inside the content `Box` above.
 Lane 3's `navigationFeedback` modifier goes on the root `Box` (it was on master's `Row`). Lane 4 and
-Lane 3 each install their own toast host: keep **one** `Toaster` / `ToastHost` (this placement); Lane 3's
-`AccountToasts` / `AccountToastHost` should become `LocalToaster.current.show(...)`.
+Lane 3 each install their own toast host: keep **one** `Toaster` / `ToastHost` (this placement).
+
+Toast policy: non-essential toasts are held while the Player route is active — one waiting message is kept
+(a newer one replaces it); a toast already showing when Player opens is disposed, not replayed; Player errors
+are inline, not toasts. Lane 4's Import / Rate hosts are not covered by this and must be gated on the Player
+route by Lane 4 separately.
 
 ## `ui/nav/NavRail.kt`
 Public surface: `NavRail(current: RailItem?, onSelect: (RailItem) -> Unit, modifier: Modifier = Modifier,
@@ -49,4 +53,5 @@ No change to `FocusMemory`, `rememberFocus`, `restoreRowFocus`, `entryIndex` res
 - `ui/components/ExitDialog.kt`: dialog content wrapped in `DesignCanvas` (a Dialog is a new composition root, §6).
 - `ui/components/Toasts.kt`: the pinned `Toaster` / `LocalToaster` / `ToastHost`, same API as Lane 4's;
   `ToastHost` here is only as large as the toast (Lane 4's fills the screen) — keep this one.
-- `domain/LibraryState.kt`, `domain/LibraryActions.kt`: byte-identical to Lanes 2 and 4.
+- Domain merge note: canonical files are `domain/MediaRef.kt`, `Title.kt`, `Person.kt`, `LibraryState.kt`,
+  `LibraryActions.kt` — byte-identical across lanes (`MediaRef` and its `key` live only in `MediaRef.kt`).
