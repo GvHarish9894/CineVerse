@@ -106,6 +106,12 @@ class FocusRow(
  * saved item key → else item at `min(savedIndex, lastIndex)` → else first item of the first non-empty row.
  */
 class FocusRestorer(private val memory: FocusMemory) {
+    /**
+     * The screen's focus when this restorer was created (screen entry): default focus that lands before
+     * [restore] runs (e.g. the window regaining focus after a pop) must not replace the item to restore.
+     */
+    private val savedAtEntry: SavedFocus? = memory.saved
+
     private val requesters = HashMap<String, FocusRequester>()
 
     /** Attached [rememberFocus] nodes per item key: only their requesters can take focus right now. */
@@ -176,7 +182,7 @@ class FocusRestorer(private val memory: FocusMemory) {
 
     /** (row index, item index) that [restore] focuses, or null when every row is empty. */
     internal fun restoreTarget(rows: List<FocusRow>): Pair<Int, Int>? {
-        val saved = memory.saved
+        val saved = savedAtEntry ?: memory.saved
         val savedRow = saved?.let { s -> rows.indexOfFirst { it.panelKey == s.panelKey && it.rowKey == s.rowKey } } ?: -1
         if (savedRow >= 0 && rows[savedRow].itemKeys.isNotEmpty()) return savedRow to entryIndex(rows[savedRow])
         val firstRow = rows.indexOfFirst { it.itemKeys.isNotEmpty() }
