@@ -42,6 +42,7 @@ class TmdbRepositoryCacheTest {
         override suspend fun setWatchlist(accountId: Int, sessionId: String, body: WatchlistBody) =
             StatusDto(success = true).also { watchlisted = body.watchlist; calls += "watchlist/${body.mediaId}" }
         override suspend fun videos(media: MediaType, id: Int, language: String) = VideosDto().also { calls += "videos/$id" }
+        override suspend fun genres(media: MediaType, language: String) = GenreListDto(listOf(GenreDto(16, ""), GenreDto(18, "Drama")))
         override suspend fun accountList(
             bearer: UserBearer, accountObjectId: String, media: MediaType, list: AccountList, language: String, page: Int, sortBy: String,
         ) = PageDto<MediaItemDto>().also { calls += "account/$accountObjectId/$list" }
@@ -230,6 +231,11 @@ class TmdbRepositoryCacheTest {
         repo.movieDetail(551)
         assertEquals(3, calls.size)
         assertTrue(calls.none { it.startsWith("movie/551") })
+    }
+
+    @Test
+    fun `genre names drop blank untranslated names`() = runTest {
+        assertEquals(mapOf(18 to "Drama"), repo.genreNames())
     }
 
     @Test

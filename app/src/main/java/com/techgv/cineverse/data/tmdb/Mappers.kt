@@ -82,5 +82,6 @@ suspend fun TmdbRepository.genreNames(): Map<Int, String> = coroutineScope {
             }
         }
     }
-    lists.flatMap { it.await() }.associate { it.id to it.name }
+    // TMDB returns blank names for untranslated genres (e.g. hi-IN); drop them so the hero shows no empty chips.
+    lists.flatMap { it.await() }.filter { it.name.isNotBlank() }.associate { it.id to it.name }
 }
