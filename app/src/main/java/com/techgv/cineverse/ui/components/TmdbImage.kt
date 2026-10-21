@@ -59,8 +59,9 @@ fun fallbackColor(seed: String): Color {
 }
 
 /**
- * Artwork of a card / hero: [url] when present; otherwise (and while loading) a gradient from [seed]
- * with [fallback] text (title or initials) on top. Coil cross-fade is off with Reduce motion (§6).
+ * Artwork of a card / hero: [url] when present; otherwise (and while loading) a gradient from [seed],
+ * with [fallback] text (title or initials) on top when there is no [url] or it failed to load. Coil
+ * cross-fade is off with Reduce motion (§6).
  */
 @Composable
 fun TmdbImage(
@@ -72,16 +73,23 @@ fun TmdbImage(
 ) {
     val base = fallbackColor(seed)
     Box(modifier.background(Brush.linearGradient(listOf(base, base.copy(alpha = 0.55f).compositeOverDark())))) {
-        if (url == null) {
-            fallback()
-        } else {
+        var failed by remember(url) { mutableStateOf(false) }
+        if (url != null) {
             val reduceMotion = LocalSettings.current.motion
             val context = LocalContext.current
             val request = remember(url, reduceMotion) {
                 ImageRequest.Builder(context).data(url).crossfade(!reduceMotion).build()
             }
-            AsyncImage(model = request, contentDescription = null, contentScale = contentScale, modifier = Modifier.fillMaxSize())
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = contentScale,
+                modifier = Modifier.fillMaxSize(),
+                onSuccess = { failed = false },
+                onError = { failed = true },
+            )
         }
+        if (url == null || failed) fallback()
     }
 }
 
