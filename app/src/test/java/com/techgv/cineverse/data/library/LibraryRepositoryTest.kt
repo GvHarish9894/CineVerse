@@ -26,12 +26,11 @@ class LibraryRepositoryTest {
     private val repo = LibraryRepository(identity, GuestLibrarySource(dao) { ++clock }, AccountLibrarySource(tmdbRepository(api)))
     private val movie = title(1)
 
-    /** Latest emitted state of [movie], collected for the whole test. */
-    private fun TestScope.watchState(): () -> LibraryState {
-        var latest = LibraryState.Unknown
-        backgroundScope.launch { repo.state(movie.ref).collect { latest = it } }
+    /** Latest emitted state of [movie], collected for the whole test; [history] gets every emission. */
+    private fun TestScope.watchState(history: MutableList<LibraryState> = mutableListOf()): () -> LibraryState {
+        backgroundScope.launch { repo.state(movie.ref).collect { history += it } }
         runCurrent()
-        return { latest }
+        return { history.lastOrNull() ?: LibraryState.Unknown }
     }
 
     @Test
@@ -40,7 +39,7 @@ class LibraryRepositoryTest {
         val state = watchState()
         repo.toggleWatchlist(movie)
         repo.toggleWatchlist(title(2, MediaType.Movie))
-        repo.rate(movie, 8.5)
+        repo.rate(movie, 8.5, null)
         runCurrent()
         assertEquals(LibraryState(known = true, watchlist = true, favourite = false, rating = 8.5, pending = emptySet()), state())
         assertEquals(listOf(2, 1), repo.guestEntries(LibraryKind.WATCHLIST, MediaType.Movie).first().map { it.title.ref.id })
@@ -126,7 +125,7 @@ class LibraryRepositoryTest {
         api.watchlist += movie.ref
         repo.toggleFavourite(movie) // any write refreshes states: watchlist now known true
         api.rateRemovesFromWatchlist = true
-        val removed = repo.rate(movie, 9.0) as LibraryWriteResult.Done
+        val removed = repo.rate(movie, 9.0, identity.value) as LibraryWriteResult.Done
         assertTrue(removed.removedFromWatchlist)
         assertFalse(removed.state.watchlist)
         assertEquals(9.0, removed.state.rating)
@@ -134,7 +133,7 @@ class LibraryRepositoryTest {
         api.rateRemovesFromWatchlist = false
         api.watchlist += movie.ref
         repo.toggleFavourite(movie)
-        val kept = repo.rate(movie, 6.5) as LibraryWriteResult.Done
+        val kept = repo.rate(movie, 6.5, identity.value) as LibraryWriteResult.Done
         assertFalse(kept.removedFromWatchlist)
         assertEquals(listOf("rate/movie:1=9.0", "rate/movie:1=6.5"), api.writes.filter { it.startsWith("rate") })
     }
@@ -159,5 +158,57 @@ class LibraryRepositoryTest {
         val before = repo.listRevision.value
         repo.toggleWatchlist(movie)
         assertTrue(repo.listRevision.value > before)
+    }
+
+    @Test
+    fun `a queued write of a signed-out account is rejected and never touches the new account`() = runTest {
+        watchState()
+        api.writeGate = CompletableDeferred()
+        val a1 = async { repo.toggleWatchlist(movie) }
+        runCurrent()
+        val a2 = async { repo.toggleWatchlist(movie) } // queued behind a1 on the same (title, kind) lock
+        runCurrent()
+        identity.value = credentials(aoid = "b", session = "sb")
+        val history = mutableListOf<LibraryState>()
+        val b = watchState(history)
+        assertTrue(b().known)
+        val bKnownAt = history.size
+        api.writeGate!!.complete(Unit)
+        assertEquals("finished after the switch: no toast", LibraryWriteResult.Superseded, a1.await())
+        assertEquals("rejected inside the lock, not redirected to B", LibraryWriteResult.Superseded, a2.await())
+        runCurrent()
+        assertEquals("only a1 had reached TMDB", listOf("watchlist/movie:1=true"), api.writes)
+        assertTrue("B's button states were never cleared", history.drop(bKnownAt - 1).all { it.known })
+    }
+
+    @Test
+    fun `a rate request opened under another identity is rejected`() = runTest {
+        val opener = identity.value
+        identity.value = null
+        assertEquals(LibraryWriteResult.Superseded, repo.rate(movie, 8.0, opener))
+        assertTrue(api.writes.isEmpty())
+        assertTrue(dao.rows.value.isEmpty())
+    }
+
+    @Test
+    fun `external writes make an active collector refetch account_states`() = runTest {
+        val state = watchState()
+        assertFalse(state().watchlist)
+        api.watchlist += movie.ref // written outside the repository (import)
+        repo.onExternalWrites(identity.value!!)
+        runCurrent()
+        assertTrue(state().known)
+        assertTrue(state().watchlist)
+    }
+
+    @Test
+    fun `a write that lands then errors re-reads account_states`() = runTest {
+        val state = watchState()
+        api.failWrites = 1
+        api.landThenFail = true
+        assertTrue(repo.toggleWatchlist(movie) is LibraryWriteResult.Failed)
+        runCurrent()
+        assertTrue("TMDB has it: shown as on the watchlist", state().watchlist)
+        assertTrue(state().pending.isEmpty())
     }
 }

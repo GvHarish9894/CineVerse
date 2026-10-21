@@ -14,7 +14,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -28,6 +30,8 @@ sealed interface LibraryWriteResult {
     /** [synced]: written to TMDB (signed in) rather than this TV. [removedFromWatchlist]: observed after a rating (D6). */
     data class Done(val state: LibraryState, val synced: Boolean, val removedFromWatchlist: Boolean = false) : LibraryWriteResult
     data class Failed(val error: TmdbError?) : LibraryWriteResult
+    /** The identity the action was made under is no longer signed in: not written (or its outcome is stale). No toast. */
+    data object Superseded : LibraryWriteResult
 }
 
 /**
@@ -37,6 +41,9 @@ sealed interface LibraryWriteResult {
  * confirmed value per kind only if no write or read committed that kind since the read started
  * (per-kind generation), so neither a stale read nor a rollback ever overrides a later success.
  * No offline queue: a failed signed-in write is reported, never retried.
+ *
+ * Every write is bound to the identity it was made under (a [Credentials] tuple is one sign-in: each sign-in
+ * mints a new session) and re-checks it holding the lock: a superseded write is rejected, never redirected.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryRepository(
@@ -46,8 +53,11 @@ class LibraryRepository(
 ) {
     private data class Slot(val confirmed: LibraryState, val shown: LibraryState, val generations: Map<LibraryKind, Long>)
 
-    /** Signed-in button states, valid for [identity] only (a new sign-in starts empty). */
-    private data class AccountStore(val identity: Credentials?, val slots: Map<MediaRef, Slot> = emptyMap())
+    /**
+     * Signed-in button states, valid for [identity] only (a new sign-in starts empty). [refetch] is bumped by
+     * [onExternalWrites]: active [state] collectors of this identity re-read `account_states`.
+     */
+    private data class AccountStore(val identity: Credentials?, val slots: Map<MediaRef, Slot> = emptyMap(), val refetch: Long = 0)
 
     private val store = MutableStateFlow(AccountStore(null))
     private val locks = ConcurrentHashMap<Pair<MediaRef, LibraryKind>, Mutex>()
@@ -64,10 +74,12 @@ class LibraryRepository(
             channelFlow {
                 enter(c)
                 launch {
-                    try {
-                        refresh(c, ref)
-                    } catch (_: TmdbException) {
-                        // stays Unknown: buttons disabled
+                    store.map { s -> s.refetch.takeIf { s.identity == c } }.filterNotNull().distinctUntilChanged().collectLatest {
+                        try {
+                            refresh(c, ref)
+                        } catch (_: TmdbException) {
+                            // stays Unknown: buttons disabled
+                        }
                     }
                 }
                 store.map { if (it.identity == c) it.slots[ref]?.shown ?: LibraryState.Unknown else LibraryState.Unknown }
@@ -83,34 +95,48 @@ class LibraryRepository(
     suspend fun accountPage(account: Credentials, kind: LibraryKind, media: MediaType, page: Int): LibraryPage =
         this.account.page(account, kind, media, page)
 
-    suspend fun currentRating(ref: MediaRef): Double? = when (val c = credentials.first()) {
+    /** [identity]'s rating of [ref] as shown now (the Rate dialog's default). */
+    suspend fun currentRating(identity: Credentials?, ref: MediaRef): Double? = when (identity) {
         null -> guest.state(ref).rating
-        else -> store.value.takeIf { it.identity == c }?.slots?.get(ref)?.shown?.rating
+        else -> slot(identity, ref)?.shown?.rating
     }
 
-    suspend fun toggleWatchlist(title: Title) = write(title, LibraryKind.WATCHLIST) { it.copy(watchlist = !it.watchlist) }
+    /** Toggles bind to the identity signed in when called. */
+    suspend fun toggleWatchlist(title: Title) = write(credentials.first(), title, LibraryKind.WATCHLIST) { it.copy(watchlist = !it.watchlist) }
 
-    suspend fun toggleFavourite(title: Title) = write(title, LibraryKind.FAVOURITE) { it.copy(favourite = !it.favourite) }
+    suspend fun toggleFavourite(title: Title) = write(credentials.first(), title, LibraryKind.FAVOURITE) { it.copy(favourite = !it.favourite) }
 
-    suspend fun rate(title: Title, value: Double) = write(title, LibraryKind.RATING) { it.copy(rating = value) }
+    /** [identity]: the one the Rate dialog was opened under. */
+    suspend fun rate(title: Title, value: Double, identity: Credentials?) = write(identity, title, LibraryKind.RATING) { it.copy(rating = value) }
 
-    suspend fun unrate(title: Title) = write(title, LibraryKind.RATING) { it.copy(rating = null) }
+    suspend fun unrate(title: Title, identity: Credentials?) = write(identity, title, LibraryKind.RATING) { it.copy(rating = null) }
 
     /** Runs [block] holding the (title, kind) write lock: the importer's writes queue behind the user's. */
     internal suspend fun <T> serialized(ref: MediaRef, kind: LibraryKind, block: suspend () -> T): T =
         locks.getOrPut(ref to kind) { Mutex() }.withLock { block() }
 
-    /** Writes made outside [write] (import): drop cached button states and revalidate lists. */
-    internal fun onExternalWrites() {
-        store.update { it.copy(slots = emptyMap()) }
+    /** §3.4 "revalidate on entry" / import preflight: the next account list reads go to TMDB. */
+    fun invalidateAccountLists() = account.invalidateLists()
+
+    /**
+     * Writes made outside [write] for [c] (import, also attempted / unknown ones): [c]'s cached button states are
+     * dropped and its active collectors refetch; lists revalidate. Another identity's states are never touched.
+     */
+    internal fun onExternalWrites(c: Credentials) {
+        store.update { if (it.identity == c) it.copy(slots = emptyMap(), refetch = it.refetch + 1) else it }
         revision.update { it + 1 }
     }
 
-    private suspend fun write(title: Title, kind: LibraryKind, change: (LibraryState) -> LibraryState): LibraryWriteResult {
-        val c = credentials.first()
-        return serialized(title.ref, kind) {
-            if (c == null) guestWrite(title, kind, change) else accountWrite(c, title.ref, kind, change)
+    private suspend fun write(identity: Credentials?, title: Title, kind: LibraryKind, change: (LibraryState) -> LibraryState): LibraryWriteResult {
+        val result = serialized(title.ref, kind) {
+            when {
+                credentials.first() != identity -> LibraryWriteResult.Superseded
+                identity == null -> guestWrite(title, kind, change)
+                else -> accountWrite(identity, title.ref, kind, change)
+            }
         }
+        // Finished after a sign-in change: its toast would describe another identity's library.
+        return if (credentials.first() != identity) LibraryWriteResult.Superseded else result
     }
 
     private suspend fun guestWrite(title: Title, kind: LibraryKind, change: (LibraryState) -> LibraryState): LibraryWriteResult {
@@ -141,7 +167,15 @@ class LibraryRepository(
             // Rollback to the last confirmed value: a later success (a read committed meanwhile) already moved it.
             updateSlot(c, ref) { it.copy(shown = it.shown.copyKind(kind, it.confirmed).copy(pending = it.shown.pending - kind)) }
             revision.update { it + 1 } // the write may have landed before the error surfaced
-            if (e is TmdbException) return LibraryWriteResult.Failed(e.error)
+            if (e is TmdbException) {
+                // ... so re-read: a landed write shows as soon as TMDB reports it.
+                try {
+                    refresh(c, ref)
+                } catch (_: TmdbException) {
+                    // stays at the confirmed value
+                }
+                return LibraryWriteResult.Failed(e.error)
+            }
             throw e
         }
         updateSlot(c, ref) {

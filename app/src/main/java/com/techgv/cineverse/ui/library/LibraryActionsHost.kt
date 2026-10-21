@@ -2,11 +2,13 @@ package com.techgv.cineverse.ui.library
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.techgv.cineverse.data.auth.Credentials
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.library.LibraryWriteResult
 import com.techgv.cineverse.domain.LibraryActions
@@ -19,6 +21,7 @@ import com.techgv.cineverse.ui.components.RateDialog
 import com.techgv.cineverse.ui.components.Toaster
 import com.techgv.cineverse.ui.components.formatRating
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -49,11 +52,19 @@ fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, con
             }
 
             override fun openRate(title: Title) {
-                uiScope.launch { rating = RateRequest(title, repository.currentRating(title.ref)) }
+                uiScope.launch {
+                    val identity = repository.credentials.first()
+                    rating = RateRequest(title, repository.currentRating(identity, title.ref), identity)
+                }
             }
         }
     }
     CompositionLocalProvider(LocalLibraryActions provides actions, content = content)
+
+    // The dialog belongs to the identity it was opened under: a sign-in change closes it without writing.
+    LaunchedEffect(repository) {
+        repository.credentials.collect { c -> if (rating != null && rating?.identity != c) rating = null }
+    }
 
     rating?.let { request ->
         val title = request.title
@@ -63,20 +74,20 @@ fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, con
             onSubmit = { value ->
                 rating = null
                 scope.launch {
-                    val result = repository.rate(title, value)
+                    val result = repository.rate(title, value, request.identity)
                     toaster.report(title, result) { "Rated ${title.title} ${formatRating(value)} / 10" }
                 }
             },
             onRemove = {
                 rating = null
-                scope.launch { toaster.report(title, repository.unrate(title)) { "Rating removed" } }
+                scope.launch { toaster.report(title, repository.unrate(title, request.identity)) { "Rating removed" } }
             },
             onCancel = { rating = null },
         )
     }
 }
 
-private class RateRequest(val title: Title, val initial: Double?)
+private class RateRequest(val title: Title, val initial: Double?, val identity: Credentials?)
 
 private fun Toaster.report(title: Title, result: LibraryWriteResult, message: (LibraryState) -> String) {
     when (result) {
@@ -89,5 +100,6 @@ private fun Toaster.report(title: Title, result: LibraryWriteResult, message: (L
             },
         )
         is LibraryWriteResult.Failed -> show("Couldn't sync — try again", title.title)
+        LibraryWriteResult.Superseded -> Unit // the sign-in changed: a toast would describe another library
     }
 }

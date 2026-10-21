@@ -61,6 +61,7 @@ class LibraryImporter(
     suspend fun import(c: Credentials, retry: Set<ImportStep> = emptySet()): ImportResult {
         val aoid = c.accountObjectId.value
         ledger.putOffer(ImportOfferEntity(aoid, imported = true, complete = false))
+        account.invalidateLists() // rule 1 reads TMDB, not the 10-min list cache
         val remote = try {
             LibraryKind.entries.associateWith { kind ->
                 MediaType.entries.flatMap { media -> account.all(c, kind, media) }.map { it.title.ref }.toSet()
@@ -73,12 +74,17 @@ class LibraryImporter(
         val titles = guest.all().groupBy { it.title.ref }
         try {
             for ((ref, rows) in titles) {
+                var ratingPosted = false
                 for (kind in STEP_ORDER) {
                     val row = rows.firstOrNull { it.kind == kind } ?: continue
                     val step = ImportStep(ref, kind)
-                    when (runStep(c, step, row.value, ref in remote.getValue(kind), step in retry)) {
+                    // D6: our rating POST may have taken the title off the watchlist the snapshot saw.
+                    val inSnapshot = ref in remote.getValue(kind) && !(kind == LibraryKind.WATCHLIST && ratingPosted)
+                    val outcome = runStep(c, step, row.value, inSnapshot, step in retry)
+                    if (kind == LibraryKind.RATING && (outcome == Outcome.Written || outcome == Outcome.Landed)) ratingPosted = true
+                    when (outcome) {
                         Outcome.Written -> written++
-                        Outcome.Satisfied -> Unit
+                        Outcome.Satisfied, Outcome.Landed -> Unit
                         Outcome.Unconfirmed -> {
                             unconfirmed += step
                             if (kind == LibraryKind.RATING) break // rule 3: the title waits for its rating
@@ -87,41 +93,49 @@ class LibraryImporter(
                 }
             }
         } finally {
-            if (written > 0 || retry.isNotEmpty()) repository.onExternalWrites()
+            // Also after attempted / unknown writes and on cancellation; bound to c, so never another account's states.
+            repository.onExternalWrites(c)
         }
         if (unconfirmed.isEmpty()) finish(c)
         return ImportResult.Done(written, unconfirmed, unconfirmed.map { it.ref }.distinct().map { titles.getValue(it).first().title.title })
     }
 
-    private enum class Outcome { Written, Satisfied, Unconfirmed }
+    /** [Landed]: the POST errored but TMDB has the value. */
+    private enum class Outcome { Written, Satisfied, Landed, Unconfirmed }
 
+    /**
+     * Decided holding the (title, kind) write lock, against TMDB's state at execution time unless the snapshot
+     * already has it: a user write that committed while the import waited (e.g. a rating) wins.
+     */
     private suspend fun runStep(c: Credentials, step: ImportStep, value: Double?, inSnapshot: Boolean, forced: Boolean): Outcome {
         val previous = ledger.state(c.accountObjectId.value, step.ref.mediaType.path, step.ref.id, step.kind.name)
         if (previous == ImportLedgerEntity.DONE) return Outcome.Satisfied
-        val satisfied = if (previous == ImportLedgerEntity.ATTEMPTING) {
-            // A prior attempt has an unknown outcome: reconcile against TMDB's current state.
-            when (remoteHas(c, step)) {
-                true -> true
-                false -> if (forced) false else return Outcome.Unconfirmed // ambiguous: maybe removed on TMDB
-                null -> return Outcome.Unconfirmed
+        return repository.serialized(step.ref, step.kind) {
+            val present = if (previous == ImportLedgerEntity.ATTEMPTING || !inSnapshot) remoteHas(c, step) else true
+            when {
+                present == true -> {
+                    mark(c, step, ImportLedgerEntity.DONE)
+                    Outcome.Satisfied
+                }
+                present == null -> Outcome.Unconfirmed
+                // A prior attempt has an unknown outcome and TMDB lacks it: ambiguous (maybe removed on TMDB).
+                previous == ImportLedgerEntity.ATTEMPTING && !forced -> Outcome.Unconfirmed
+                else -> post(c, step, value)
             }
-        } else {
-            inSnapshot
         }
-        if (satisfied) {
-            mark(c, step, ImportLedgerEntity.DONE)
-            return Outcome.Satisfied
-        }
+    }
+
+    private suspend fun post(c: Credentials, step: ImportStep, value: Double?): Outcome {
         mark(c, step, ImportLedgerEntity.ATTEMPTING)
         return try {
-            repository.serialized(step.ref, step.kind) { account.write(c, step.ref, step.kind, target(step.kind, value)) }
+            account.write(c, step.ref, step.kind, target(step.kind, value))
             mark(c, step, ImportLedgerEntity.DONE)
             Outcome.Written
         } catch (_: TmdbException) {
             // Unknown outcome: the POST may have landed. Present now → done; absent → ambiguous, not resumed.
             if (remoteHas(c, step) == true) {
                 mark(c, step, ImportLedgerEntity.DONE)
-                Outcome.Satisfied
+                Outcome.Landed
             } else {
                 Outcome.Unconfirmed
             }

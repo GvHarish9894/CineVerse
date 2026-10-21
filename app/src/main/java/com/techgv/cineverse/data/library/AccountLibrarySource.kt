@@ -42,6 +42,9 @@ class AccountLibrarySource(private val tmdb: TmdbRepository) {
         return LibraryPage(dto.results.map { it.toLibraryEntry(media) }, page, minOf(dto.totalPages, MAX_PAGE))
     }
 
+    /** Cached account lists are dropped: the next reads go to TMDB (Library entry, import preflight). */
+    fun invalidateLists() = tmdb.invalidateAccountLists()
+
     /** §8.3 rule 1: every page of one list. */
     suspend fun all(account: Credentials, kind: LibraryKind, media: MediaType): List<LibraryEntry> {
         val entries = mutableListOf<LibraryEntry>()
