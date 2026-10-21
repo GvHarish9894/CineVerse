@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
@@ -62,7 +63,7 @@ import com.techgv.cineverse.ui.components.HeroBackdrop
 import com.techgv.cineverse.ui.components.HeroInfo
 import com.techgv.cineverse.ui.components.ImageSize
 import com.techgv.cineverse.ui.components.LandscapeCard
-import com.techgv.cineverse.ui.components.LocalToasts
+import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.PagedItems
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.PinToStart
@@ -90,7 +91,7 @@ private val CONTENT_INSET = 32.dp
 
 /**
  * §7.2 Home: hero stage following focus + rows. BACK steps 6–7 via [backHandle]: origin = the first hero
- * button. The hero's Watchlist toggle reads [LocalLibraryActions]; a null provider renders it disabled.
+ * button. The hero's Watchlist toggle reads [LocalLibraryActions]; disabled until its state is known.
  */
 @Composable
 fun HomeScreen(
@@ -102,13 +103,17 @@ fun HomeScreen(
         HomeViewModel(container.tmdbRepository, container.appGeneration, container.settingsRepository.settings, createSavedStateHandle())
     }
     val state by vm.uiState.collectAsStateWithLifecycle()
-    val toasts = LocalToasts.current
+    val toaster = LocalToaster.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LifecycleStartEffect(vm) {
+        vm.setActive(true)
+        onStopOrDispose { vm.setActive(false) }
+    }
     LaunchedEffect(vm, lifecycle) {
         vm.events.flowWithLifecycle(lifecycle).collect { event ->
             when (event) {
                 is HomeEvent.Open -> onOpen(event.route)
-                is HomeEvent.Toast -> toasts.show(event.message)
+                is HomeEvent.Toast -> toaster.show(event.title, event.subtitle)
             }
         }
     }
@@ -321,7 +326,11 @@ private fun HeroButtons(
     }
 }
 
-/** Hero Watchlist toggle (§7.2) driven by the Library lane's [LocalLibraryActions]; null provider → disabled. */
+/** §6: enabled only with a provider, a known state and no Watchlist write in flight. */
+fun heroWatchlistEnabled(hasActions: Boolean, state: LibraryState): Boolean =
+    hasActions && state.known && LibraryKind.WATCHLIST !in state.pending
+
+/** Hero Watchlist toggle (§7.2) driven by the Library lane's [LocalLibraryActions]; see [heroWatchlistEnabled]. */
 @Composable
 private fun HeroWatchlistButton(title: Title, modifier: Modifier) {
     val actions = LocalLibraryActions.current
@@ -333,7 +342,7 @@ private fun HeroWatchlistButton(title: Title, modifier: Modifier) {
         icon = if (onList) ActionIcon.CHECK else ActionIcon.PLUS,
         onClick = { actions?.toggleWatchlist(title) },
         style = if (onList) ActionButtonStyle.On else ActionButtonStyle.Default,
-        enabled = actions != null && LibraryKind.Watchlist !in libraryState.pending,
+        enabled = heroWatchlistEnabled(actions != null, libraryState),
         modifier = modifier,
     )
 }

@@ -11,9 +11,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.techgv.cineverse.ui.browse.BrowseScreen
-import com.techgv.cineverse.ui.components.LocalToasts
+import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.ToastHost
-import com.techgv.cineverse.ui.components.ToastState
+import com.techgv.cineverse.ui.components.Toaster
 import com.techgv.cineverse.ui.search.SearchScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -100,10 +100,10 @@ fun AppNav(container: AppContainer) {
 
     val credentials by container.authRepository.credentials.collectAsStateWithLifecycle(null)
     val accountName = credentials?.displayName
-    val toasts = remember { ToastState() }
+    val toaster = remember { Toaster() }
     val railScreen = destination?.isRailScreen() == true
 
-    CompositionLocalProvider(LocalToasts provides toasts) {
+    CompositionLocalProvider(LocalToaster provides toaster) {
         Box(Modifier.fillMaxSize()) {
             Box(
                 Modifier
@@ -135,8 +135,9 @@ fun AppNav(container: AppContainer) {
                     spikeDestinations(nav, container)
                 }
             }
+            val onPlayer = destination?.hasRoute<Route.Player>() == true
             // §5 clock: every screen but Splash and Player (nothing drawn over the player).
-            if (destination != null && !destination.hasRoute<Route.Splash>() && !destination.hasRoute<Route.Player>()) {
+            if (destination != null && !destination.hasRoute<Route.Splash>() && !onPlayer) {
                 Clock(Modifier.align(Alignment.TopEnd).padding(top = 30.dp, end = 48.dp))
             }
             if (railScreen) {
@@ -153,7 +154,8 @@ fun AppNav(container: AppContainer) {
                     modifier = Modifier.onFocusChanged { railFocused = it.hasFocus },
                 )
             }
-            ToastHost(toasts)
+            // §7.12 bottom area, never over the player: on Player a toast waits in the queue until it closes.
+            if (!onPlayer) ToastHost(toaster, Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp))
         }
     }
 

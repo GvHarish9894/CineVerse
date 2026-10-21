@@ -22,7 +22,6 @@ import com.techgv.cineverse.ui.components.PageSource
 import com.techgv.cineverse.ui.components.PagedItems
 import com.techgv.cineverse.ui.components.PagedSection
 import com.techgv.cineverse.ui.components.SectionState
-import com.techgv.cineverse.ui.components.ToastMessage
 import com.techgv.cineverse.ui.nav.Route
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.Job
@@ -66,12 +65,12 @@ data class HomeUiState(
 
 sealed interface HomeEvent {
     data class Open(val route: Route) : HomeEvent
-    data class Toast(val message: ToastMessage) : HomeEvent
+    data class Toast(val title: String, val subtitle: String?) : HomeEvent
 }
 
 class HomeViewModel(
     private val repository: TmdbRepository,
-    appGeneration: GenerationCounter,
+    private val appGeneration: GenerationCounter,
     private val settings: Flow<Settings>,
     private val handle: SavedStateHandle,
 ) : ViewModel() {
@@ -84,6 +83,12 @@ class HomeViewModel(
     private val trailerLoading = MutableStateFlow<MediaRef?>(null)
     private var heroJob: Job? = null
     private var trailerJob: Job? = null
+    private var genresJob: Job? = null
+    private val genresGeneration = GenerationCounter()
+
+    /** Bumped when a pending trailer fetch must not navigate any more (settings reload, screen stopped). */
+    private val trailerGeneration = GenerationCounter()
+    private var active = false
 
     private val mutableEvents = MutableSharedFlow<HomeEvent>(extraBufferCapacity = 1)
 
@@ -106,12 +111,37 @@ class HomeViewModel(
             settings.map { Triple(it.language, it.region, it.includeAdult) }.distinctUntilChanged().drop(1).collect {
                 sections.values.forEach { it.reload() }
                 loadGenres()
+                // The focused hero belongs to the old language; fall back to the new first trending item.
+                heroJob?.cancel()
+                focusedHero.value = null
+                cancelTrailer()
             }
         }
     }
 
+    /** Genre names of the current settings; a newer load (or a newer app generation) supersedes this one. */
     private fun loadGenres() {
-        viewModelScope.launch { genres.value = repository.genreNames() }
+        genresJob?.cancel()
+        val gen = genresGeneration.bump()
+        val app = appGeneration.current
+        genresJob = viewModelScope.launch {
+            val names = repository.genreNames()
+            if (gen != genresGeneration.current) return@launch
+            if (app != appGeneration.current) return@launch loadGenres()
+            genres.value = names
+        }
+    }
+
+    /** Home's lifecycle is STARTED; a trailer fetch outliving it never navigates on a later return. */
+    fun setActive(active: Boolean) {
+        this.active = active
+        if (!active) cancelTrailer()
+    }
+
+    private fun cancelTrailer() {
+        trailerGeneration.bump()
+        trailerJob?.cancel()
+        trailerLoading.value = null
     }
 
     private fun load(row: HomeRow) {
@@ -153,27 +183,29 @@ class HomeViewModel(
      * non-`en-US` language → one `en-US` fetch (§7.4 rule). No YouTube video → "No trailer available".
      */
     fun playTrailer(title: Title) {
-        if (trailerJob?.isActive == true) return
+        if (!active || trailerJob?.isActive == true) return
+        val gen = trailerGeneration.bump()
+        val app = appGeneration.current
         trailerLoading.value = title.ref
         trailerJob = viewModelScope.launch {
-            try {
+            val event = try {
                 var videos = repository.videos(title.mediaType, title.ref.id).results.youTubeInTrailerOrder()
                 if (videos.isEmpty() && settings.first().language != ENGLISH) {
                     videos = repository.videos(title.mediaType, title.ref.id, ENGLISH).results.youTubeInTrailerOrder()
                 }
                 val video = videos.firstOrNull()
-                mutableEvents.emit(
-                    if (video == null) {
-                        HomeEvent.Toast(ToastMessage("No trailer available", title.title, icon = "!"))
-                    } else {
-                        HomeEvent.Open(Route.Player(video.key, video.name.ifBlank { "Trailer" }, "${title.title} · YouTube"))
-                    },
-                )
+                if (video == null) {
+                    HomeEvent.Toast("No trailer available", title.title)
+                } else {
+                    HomeEvent.Open(Route.Player(video.key, title = title.title, kicker = video.name.ifBlank { "Trailer" }))
+                }
             } catch (_: TmdbException) {
-                mutableEvents.emit(HomeEvent.Toast(ToastMessage("Couldn’t load the trailer", "Try again", icon = "!")))
-            } finally {
-                trailerLoading.value = null
+                HomeEvent.Toast("Couldn’t load the trailer", "Try again")
             }
+            // Superseded: cancelTrailer() already cleared the loading flag.
+            if (gen != trailerGeneration.current || !active) return@launch
+            trailerLoading.value = null
+            if (app == appGeneration.current) mutableEvents.emit(event)
         }
     }
 
