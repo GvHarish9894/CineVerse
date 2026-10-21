@@ -8,6 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.ui.components.DesignCanvas
@@ -16,6 +17,7 @@ import com.techgv.cineverse.ui.feedback.ProvideFeedback
 import com.techgv.cineverse.ui.nav.AppNav
 import com.techgv.cineverse.ui.theme.CineVerseTheme
 
+@OptIn(ExperimentalTvMaterial3Api::class)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
