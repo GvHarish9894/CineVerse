@@ -156,6 +156,14 @@ class FocusRestorer(private val memory: FocusMemory) {
         restoreRowFocus(FocusRow(panelKey, rowKey, emptyList()), scope = null)
 
     /**
+     * Item key a D-pad entry into [row] targets: its remembered item, else the first item (prototype `rowMem`,
+     * not the geometric nearest). A programmatic requestFocus ([FocusDirection.Enter]) keeps its own target (null).
+     */
+    internal fun entryKey(row: FocusRow, direction: FocusDirection): String? =
+        if (direction == FocusDirection.Enter) null
+        else memory.savedIn(row.panelKey, row.rowKey)?.itemKey ?: row.itemKeys.firstOrNull()
+
+    /**
      * [restoreRowFocus] that also handles a remembered item that is not attached (scrolled off, or removed:
      * `min(savedIndex, lastIndex)`): the default target takes focus first, then [scope] scrolls [row]'s
      * list / grid state to the entry item, awaits its composition and focuses it while the row still has
@@ -168,7 +176,7 @@ class FocusRestorer(private val memory: FocusMemory) {
                 onEnter = {
                     // A programmatic requestFocus (direction Enter) keeps its own target; only D-pad entries are redirected.
                     val saved = memory.savedIn(row.panelKey, row.rowKey)?.takeIf { requestedFocusDirection != FocusDirection.Enter }
-                    val target = saved?.let { attachedRequester(row.panelKey, row.rowKey, it.itemKey) }
+                    val target = entryKey(row, requestedFocusDirection)?.let { attachedRequester(row.panelKey, row.rowKey, it) }
                     when {
                         target != null -> target.tryFocus() // false: the default target keeps focus
                         saved != null && scope != null && row.itemKeys.isNotEmpty() ->
