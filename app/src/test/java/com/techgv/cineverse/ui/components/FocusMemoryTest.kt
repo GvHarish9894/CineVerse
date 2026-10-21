@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Test
+import kotlinx.coroutines.test.runTest
 
 class FocusMemoryTest {
     private val memory = FocusMemory(SavedStateHandle())
@@ -45,5 +46,17 @@ class FocusMemoryTest {
         assertEquals(1, memory.savedIn("right", "r")!!.index)
         assertNotSame(restorer.requester("left", "r", "x"), restorer.requester("right", "r", "x"))
         assertEquals(restorer.requester("left", "r", "x"), restorer.requester("left", "r", "x"))
+    }
+
+    @Test
+    fun `initial restore uses the focus saved at entry, not an incidental default-focus save`() = runTest {
+        memory.save(SavedFocus("rows", "A", "movie:8", 8))
+        val entered = FocusRestorer(memory)
+        memory.save(SavedFocus("rows", "A", "movie:0", 0)) // default focus lands before restore runs
+        assertEquals(0 to 8, entered.restoreTarget(listOf(rowA, rowB)))
+
+        // Later restores are not frozen: after the first restore they follow the memory again.
+        entered.restore(listOf(FocusRow("rows", "A", emptyList()))) // nothing focusable: returns at once
+        assertEquals(0 to 0, entered.restoreTarget(listOf(rowA, rowB)))
     }
 }

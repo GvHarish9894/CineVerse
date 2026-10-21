@@ -106,6 +106,13 @@ class FocusRow(
  * saved item key → else item at `min(savedIndex, lastIndex)` → else first item of the first non-empty row.
  */
 class FocusRestorer(private val memory: FocusMemory) {
+    /**
+     * The screen's focus (row, item key and index) when this restorer was created (screen entry): default
+     * focus that lands before the first [restore] (e.g. the window regaining focus after a pop) must not
+     * replace the item to restore. Cleared by that first [restore]; later ones read [memory].
+     */
+    private var savedAtEntry: SavedFocus? = memory.saved
+
     private val requesters = HashMap<String, FocusRequester>()
 
     /** Attached [rememberFocus] nodes per item key: only their requesters can take focus right now. */
@@ -169,16 +176,16 @@ class FocusRestorer(private val memory: FocusMemory) {
     }
 
     /** Index to focus inside [row]: its remembered item key, else `min(savedIndex, lastIndex)`, else 0. */
-    internal fun entryIndex(row: FocusRow): Int {
-        val saved = memory.savedIn(row.panelKey, row.rowKey) ?: return 0
-        return row.itemKeys.indexOf(saved.itemKey).takeIf { it >= 0 } ?: min(saved.index, row.itemKeys.lastIndex).coerceAtLeast(0)
-    }
+    internal fun entryIndex(row: FocusRow): Int = memory.savedIn(row.panelKey, row.rowKey)?.let { indexIn(row, it) } ?: 0
+
+    private fun indexIn(row: FocusRow, saved: SavedFocus): Int =
+        row.itemKeys.indexOf(saved.itemKey).takeIf { it >= 0 } ?: min(saved.index, row.itemKeys.lastIndex).coerceAtLeast(0)
 
     /** (row index, item index) that [restore] focuses, or null when every row is empty. */
     internal fun restoreTarget(rows: List<FocusRow>): Pair<Int, Int>? {
-        val saved = memory.saved
+        val saved = savedAtEntry ?: memory.saved
         val savedRow = saved?.let { s -> rows.indexOfFirst { it.panelKey == s.panelKey && it.rowKey == s.rowKey } } ?: -1
-        if (savedRow >= 0 && rows[savedRow].itemKeys.isNotEmpty()) return savedRow to entryIndex(rows[savedRow])
+        if (saved != null && savedRow >= 0 && rows[savedRow].itemKeys.isNotEmpty()) return savedRow to indexIn(rows[savedRow], saved)
         val firstRow = rows.indexOfFirst { it.itemKeys.isNotEmpty() }
         return if (firstRow >= 0) firstRow to 0 else null
     }
@@ -188,13 +195,15 @@ class FocusRestorer(private val memory: FocusMemory) {
      * `i` is `rows[i]`, if any.
      */
     suspend fun restore(rows: List<FocusRow>, outerList: LazyListState? = null): Boolean {
-        val (rowIndex, itemIndex) = restoreTarget(rows) ?: return false
+        val target = restoreTarget(rows)
+        savedAtEntry = null
+        val (rowIndex, itemIndex) = target ?: return false
         outerList?.bringIntoView(rowIndex)
         return focusIn(rows[rowIndex], itemIndex)
     }
 
     /** Item into view → await composition → focus it; gives up when [wanted] turns false. */
-    private suspend fun focusIn(row: FocusRow, itemIndex: Int, wanted: () -> Boolean = { true }): Boolean {
+    suspend fun focusIn(row: FocusRow, itemIndex: Int, wanted: () -> Boolean = { true }): Boolean {
         row.listState?.bringIntoView(itemIndex)
         row.gridState?.let { grid -> if (grid.layoutInfo.visibleItemsInfo.none { it.index == itemIndex }) grid.scrollToItem(itemIndex) }
         val target = requester(row.panelKey, row.rowKey, row.itemKeys[itemIndex])
