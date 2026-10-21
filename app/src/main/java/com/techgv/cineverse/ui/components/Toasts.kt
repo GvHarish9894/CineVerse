@@ -48,11 +48,16 @@ class Toaster {
 
 val LocalToaster = staticCompositionLocalOf { Toaster() }
 
-/** Bottom of the screen, never focusable, 2.4 s each, announced as a polite live region. */
+/**
+ * Bottom of the screen, never focusable, 2.4 s each, announced as a polite live region. [paused] (the Player is up,
+ * §7.12 "never over the player"): nothing shows; the newest toast waits in the queue until unpaused.
+ */
 @Composable
-fun ToastHost(toaster: Toaster, modifier: Modifier = Modifier) {
+fun ToastHost(toaster: Toaster, modifier: Modifier = Modifier, paused: Boolean = false) {
     var current by remember { mutableStateOf<Toast?>(null) }
-    LaunchedEffect(toaster) {
+    LaunchedEffect(toaster, paused) {
+        current = null
+        if (paused) return@LaunchedEffect
         toaster.toasts.collect {
             current = it
             delay(TOAST_MILLIS)

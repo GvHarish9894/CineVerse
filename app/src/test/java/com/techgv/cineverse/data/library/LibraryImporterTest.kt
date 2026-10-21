@@ -71,7 +71,7 @@ class LibraryImporterTest {
         val aborted = importer.import(account)
         assertTrue(aborted is ImportResult.Aborted)
         assertTrue("nothing written", api.writes.isEmpty())
-        assertEquals(ImportOffer.Resume, importer.offer(account))
+        assertEquals(ImportOffer.Resume(1), importer.offer(account))
 
         api.failListPage = null
         api.calls.clear()
@@ -162,7 +162,7 @@ class LibraryImporterTest {
         assertTrue(api.writes.isEmpty())
         assertEquals(listOf(ImportStep(t.ref, LibraryKind.WATCHLIST)), result.unconfirmed)
         assertEquals(listOf("Title 1"), result.unconfirmedTitles)
-        assertEquals(ImportOffer.Resume, importer.offer(account))
+        assertEquals(ImportOffer.Resume(1), importer.offer(account))
 
         val retried = importer.import(account, retry = result.unconfirmed.toSet()) as ImportResult.Done
         assertEquals(listOf("watchlist/movie:1=true"), api.writes)

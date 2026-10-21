@@ -20,7 +20,8 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 
 sealed interface ImportDialogState {
-    data class Ask(val accountName: String, val items: Int) : ImportDialogState
+    /** [resume]: an earlier import did not finish; [items] titles are left. */
+    data class Ask(val accountName: String, val items: Int, val resume: Boolean = false) : ImportDialogState
     data object Running : ImportDialogState
     /** Finished with [unconfirmed] steps left: "Couldn't confirm {n} items" + Retry (with the re-add warning). */
     data class Unconfirmed(val written: Int, val titles: List<String>) : ImportDialogState
@@ -29,8 +30,8 @@ sealed interface ImportDialogState {
 }
 
 /**
- * §8.3 Import dialog. Ask: **Keep separate** (default focus, also BACK) / Import. While running it cannot be
- * dismissed. BACK on a result closes it like Done / Later.
+ * §8.3 Import dialog. Ask: **Keep separate** (default focus, also BACK) / Import; resuming: **Later** (default, also
+ * BACK) / Resume. Running: **Later** (focused, also BACK) stops the import. BACK on a result closes it like Done / Later.
  */
 @Composable
 fun ImportLibraryDialog(
@@ -39,11 +40,12 @@ fun ImportLibraryDialog(
     onImport: () -> Unit,
     onRetry: () -> Unit,
     onClose: () -> Unit,
+    onLater: () -> Unit,
 ) {
     val first = remember(state) { FocusRequester() }
     val dismiss = when (state) {
-        is ImportDialogState.Ask -> onKeepSeparate
-        ImportDialogState.Running -> ({})
+        is ImportDialogState.Ask -> if (state.resume) onLater else onKeepSeparate
+        ImportDialogState.Running -> onLater
         else -> onClose
     }
     Dialog(onDismissRequest = dismiss) { DesignCanvas {
@@ -52,7 +54,14 @@ fun ImportLibraryDialog(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             when (state) {
-                is ImportDialogState.Ask -> {
+                is ImportDialogState.Ask -> if (state.resume) {
+                    Heading("Resume importing your guest library?")
+                    Body("${state.items} ${if (state.items == 1) "item" else "items"} left to import into ${state.accountName}.")
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Button(onClick = onLater, modifier = Modifier.focusRequester(first)) { Text("Later") }
+                        OutlinedButton(onClick = onImport) { Text("Resume") }
+                    }
+                } else {
                     Heading("Import this TV's guest library into ${state.accountName}?")
                     Body(
                         "${state.items} ${if (state.items == 1) "title" else "titles"} from this TV will be added to your TMDB " +
@@ -66,7 +75,8 @@ fun ImportLibraryDialog(
                 }
                 ImportDialogState.Running -> {
                     Heading("Importing your guest library…")
-                    Body("This only takes a moment.")
+                    Body("This only takes a moment. Later stops it; what was imported so far stays on TMDB.")
+                    OutlinedButton(onClick = onLater, modifier = Modifier.focusRequester(first)) { Text("Later") }
                 }
                 is ImportDialogState.Unconfirmed -> {
                     val n = state.titles.size
@@ -92,7 +102,7 @@ fun ImportLibraryDialog(
             }
         }
     } }
-    if (state != ImportDialogState.Running) LaunchedEffect(first) { first.requestFocus() }
+    LaunchedEffect(first) { first.requestFocus() }
 }
 
 @Composable

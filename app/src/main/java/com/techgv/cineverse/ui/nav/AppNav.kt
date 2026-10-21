@@ -138,8 +138,10 @@ fun AppNav(container: AppContainer) {
             } }
         }
     }
-    ToastHost(toaster)
-    ImportLibraryHost(container.libraryRepository, container.libraryImporter)
+    // §7.12: never over the player — toasts queue and the import prompt waits until it closes.
+    val playerActive = destination?.hasRoute<Route.Player>() == true
+    ToastHost(toaster, paused = playerActive)
+    ImportLibraryHost(container.libraryRepository, container.libraryImporter, playerActive)
     } }
 
     // Declared after NavHost so it takes precedence over NavHost's own pop handler.

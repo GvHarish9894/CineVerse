@@ -14,8 +14,11 @@ data class ImportStep(val ref: MediaRef, val kind: LibraryKind)
 sealed interface ImportOffer {
     /** Never asked for this account and the TV has [items] guest titles. */
     data class Ask(val items: Int) : ImportOffer
-    /** "Import" was chosen but the import did not finish (process death, abort): run it again. */
-    data object Resume : ImportOffer
+    /**
+     * "Import" was chosen but the import did not finish (Later, process death, abort) and [items] guest titles are
+     * not fully imported: ask whether to resume. Offered once per launch.
+     */
+    data class Resume(val items: Int) : ImportOffer
 }
 
 sealed interface ImportResult {
@@ -40,11 +43,18 @@ class LibraryImporter(
     private val account: AccountLibrarySource,
     private val repository: LibraryRepository,
 ) {
+    /** Accounts whose resume prompt this process already offered ("once per launch"). */
+    private val resumeOffered = mutableSetOf<String>()
+
     suspend fun offer(c: Credentials): ImportOffer? {
-        val offer = ledger.offer(c.accountObjectId.value)
+        val aoid = c.accountObjectId.value
+        val offer = ledger.offer(aoid)
         return when {
             offer == null -> guest.all().map { it.title.ref }.toSet().size.takeIf { it > 0 }?.let { ImportOffer.Ask(it) }
-            offer.imported && !offer.complete -> ImportOffer.Resume
+            offer.imported && !offer.complete && resumeOffered.add(aoid) -> {
+                val left = guest.all().filter { ledger.state(aoid, it.title.ref.mediaType.path, it.title.ref.id, it.kind.name) != ImportLedgerEntity.DONE }
+                ImportOffer.Resume(left.map { it.title.ref }.toSet().size)
+            }
             else -> null
         }
     }
