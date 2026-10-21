@@ -92,9 +92,6 @@ fun DetailCardArt(url: String?, fallbackText: String, modifier: Modifier = Modif
     }
 }
 
-/** `{base}{size}{path}`, or null for a missing path (§1.5 sizes: poster w342 / w780, backdrop w1280, profile w185 / h632, still w300). */
-fun tmdbImageUrl(base: String, size: String, path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { base + size + it }
-
 fun initialsOf(name: String): String =
     name.split(' ').filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }
 
