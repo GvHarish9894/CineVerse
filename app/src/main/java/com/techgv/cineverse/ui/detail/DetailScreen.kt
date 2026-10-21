@@ -1,5 +1,6 @@
 package com.techgv.cineverse.ui.detail
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,8 +21,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -50,12 +54,14 @@ import com.techgv.cineverse.domain.LibraryState
 import com.techgv.cineverse.domain.LocalLibraryActions
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
+import com.techgv.cineverse.domain.Review
 import com.techgv.cineverse.domain.Video
 import com.techgv.cineverse.ui.components.FactCard
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.ReviewCard
+import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.SeasonCard
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.SectionState
@@ -178,6 +184,14 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
     val rowStates = rows.drop(1).associate { row -> row.key to key(row.key) { rememberSavedLazyListState(memory, row.key) } }
     val focusRows = rows.map { FocusRow(PANEL, it.key, it.itemKeys, rowStates[it.key]) }
     fun focusRow(key: String) = focusRows.first { it.rowKey == key }
+    fun avatarUrl(review: Review) = review.avatarUrl ?: tmdbImageUrl(imageBase, "w185", review.avatarPath)
+    // Review reading panel (saved like the Season episode panel); closing it returns focus to its card.
+    var openReview by rememberSaveable { mutableStateOf<String?>(null) }
+    var refocusReview by remember { mutableStateOf<String?>(null) }
+    fun closeReview() {
+        refocusReview = openReview
+        openReview = null
+    }
 
     Backdrop(tmdbImageUrl(imageBase, "w1280", detail.backdropPath))
     RevealVertically(ROW_TOP_INSET) {
@@ -226,7 +240,8 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
                         "reviews" -> DetailRow("Reviews", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
                             itemsIndexed(detail.reviews, key = { _, r -> r.id }) { index, review ->
                                 ReviewCard(
-                                    review, review.avatarUrl ?: tmdbImageUrl(imageBase, "w185", review.avatarPath),
+                                    review, avatarUrl(review),
+                                    onClick = { openReview = review.id },
                                     modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, review.id, index) },
                                 )
                             }
@@ -241,8 +256,19 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
             }
         }
     }
-    // §1.3: data of the current generation is composed → restore the saved focus (else the first button).
-    LaunchedEffect(restorer) { restorer.restore(focusRows, outer) }
+    detail.reviews.firstOrNull { it.id == openReview }?.let { review -> ReviewPanel(review, avatarUrl(review), ::closeReview) }
+    BackHandler(enabled = openReview != null, onBack = ::closeReview)
+    LaunchedEffect(refocusReview) {
+        val id = refocusReview ?: return@LaunchedEffect
+        // Focus leaving the removed panel may land elsewhere first: pin the invoking card, then restore it.
+        memory.save(SavedFocus(PANEL, "reviews", id, detail.reviews.indexOfFirst { it.id == id }.coerceAtLeast(0)))
+        restorer.restore(focusRows, outer)
+        refocusReview = null
+    }
+
+    // §1.3: data of the current generation is composed → restore the saved focus (else the first button);
+    // entered with the review panel open (process death), the panel takes focus instead.
+    LaunchedEffect(restorer) { if (openReview == null) restorer.restore(focusRows, outer) }
 }
 
 private class RowSpec(val key: String, val itemKeys: List<String>)
