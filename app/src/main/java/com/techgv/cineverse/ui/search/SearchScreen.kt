@@ -41,7 +41,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.Text
@@ -78,10 +80,13 @@ private const val NO_RESULTS = "Nothing on TMDB matches that yet. Try a shorter 
  * Hardware keyboard characters and DEL also edit the query, wherever focus is on this screen.
  */
 @Composable
-fun SearchScreen(container: AppContainer, onOpen: (Route) -> Unit) {
-    val vm: SearchViewModel = viewModel {
+fun SearchScreen(
+    container: AppContainer,
+    onOpen: (Route) -> Unit,
+    vm: SearchViewModel = viewModel {
         SearchViewModel(container.tmdbRepository, container.appGeneration, container.settingsRepository.settings, createSavedStateHandle())
-    }
+    },
+) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val restorer = remember(vm) { FocusRestorer(vm.focusMemory) }
     val gridState = rememberSavedLazyGridState(vm.focusMemory, RESULTS_GRID)
@@ -110,6 +115,14 @@ fun SearchScreen(container: AppContainer, onOpen: (Route) -> Unit) {
         if (settled && !restored) {
             restored = true
             restorer.restore(listOf(keyboardRow, resultsRow))
+        }
+    }
+    // After every Clear: first result once the new results settled; none → focus stays on the keyboard (Clear key).
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(vm, lifecycle) {
+        vm.clearSettled.flowWithLifecycle(lifecycle).collect { settledResults ->
+            val first = (settledResults as? SectionState.Content)?.value?.items?.firstOrNull() ?: return@collect
+            restorer.focusIn(FocusRow(RESULTS_PANEL, "$RESULTS_GRID:", listOf(first.key), gridState = gridState), 0)
         }
     }
 

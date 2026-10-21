@@ -14,7 +14,11 @@ import com.techgv.cineverse.ui.components.PagedItems
 import com.techgv.cineverse.ui.components.PagedSection
 import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.util.GenerationCounter
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +60,11 @@ class SearchViewModel(
     val focusMemory = FocusMemory(handle)
     private val query = MutableStateFlow(handle.get<String>(QUERY).orEmpty())
     private val results = PagedSection(viewModelScope, appGeneration)
+    private var clearJob: Job? = null
+    private val mutableClearSettled = MutableSharedFlow<SectionState<PagedItems>>(extraBufferCapacity = 1)
+
+    /** The results of each Clear once they settled (§7.7: focus then returns to the first result or the keyboard). */
+    val clearSettled: SharedFlow<SectionState<PagedItems>> = mutableClearSettled
 
     val uiState: StateFlow<SearchUiState> = combine(query, results.state, ::SearchUiState)
         .stateIn(viewModelScope, SharingStarted.Eagerly, SearchUiState(query.value, SectionState.Loading))
@@ -67,7 +76,13 @@ class SearchViewModel(
         }
     }
 
-    fun onKey(key: KeyboardKey) = setQuery(editQuery(query.value, key))
+    fun onKey(key: KeyboardKey) {
+        setQuery(editQuery(query.value, key))
+        if (key == KeyboardKey.Clear) {
+            // setQuery already started the new generation (Loading), so this waits for its result.
+            clearJob = viewModelScope.launch { mutableClearSettled.emit(results.state.first { it !is SectionState.Loading }) }
+        }
+    }
 
     /** Hardware keyboard / remote digits. */
     fun onTyped(char: Char) = setQuery(typeIntoQuery(query.value, char))
@@ -77,6 +92,7 @@ class SearchViewModel(
     fun retry() = results.reload()
 
     private fun setQuery(new: String) {
+        clearJob?.cancel() // a newer edit supersedes a Clear still waiting for its results
         val old = query.value
         if (new == old) return
         query.value = new
