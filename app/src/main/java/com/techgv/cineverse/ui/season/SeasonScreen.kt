@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,9 +35,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,7 +66,6 @@ import com.techgv.cineverse.ui.detail.Lane2PersonCard
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
 import com.techgv.cineverse.ui.detail.oneDecimal
 import com.techgv.cineverse.ui.nav.Route
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -78,7 +75,11 @@ private const val EPISODES = "episodes"
 private const val PANEL = "episodePanel"
 private const val PANEL_ACTIONS = "actions"
 private const val PANEL_GUESTS = "guests"
-private const val NOTICE_MILLIS = 2_400L
+
+// Stand-in for ui/components/Toasts.kt's LocalToaster (§6 pin), not on this branch: integration deletes these
+// two declarations and imports com.techgv.cineverse.ui.components.LocalToaster (§7.12 toast host).
+private fun interface NoToaster { fun show(title: String) }
+private val LocalToaster = staticCompositionLocalOf<NoToaster?> { null }
 
 private fun seasonKey(n: Int) = "season:$n"
 private fun episodeKey(n: Int) = "episode:$n"
@@ -122,18 +123,10 @@ fun SeasonContent(state: SeasonUiState, focusMemory: FocusMemory, imageBase: Str
             is SectionState.Content -> SeasonBody(show.value, state, focusMemory, imageBase, actions)
             else -> Section(show, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
         }
+        val toaster = LocalToaster.current
         state.notice?.let { notice ->
-            Text(
-                notice,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)
-                    .background(Color.Black.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 24.dp, vertical = 12.dp)
-                    .semantics { liveRegion = LiveRegionMode.Polite },
-            )
             LaunchedEffect(notice) {
-                delay(NOTICE_MILLIS)
+                toaster?.show(notice)
                 actions.onNoticeShown()
             }
         }
