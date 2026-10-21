@@ -1,7 +1,11 @@
 package com.techgv.cineverse.ui.detail
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,15 +23,22 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
@@ -44,6 +55,8 @@ import com.techgv.cineverse.ui.components.DetailCardSurface
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.PinToStart
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -53,11 +66,17 @@ import kotlin.math.roundToInt
 
 internal val SCREEN_INSET = 48.dp
 
+/** Where a focused row's cards land below the viewport top: leaves its title visible. */
+internal val ROW_TOP_INSET = 80.dp
+
+/** Title + subtitle lines under a poster / person / season card. */
+private val CARD_LABELS_HEIGHT = 56.dp
+
 /** §6 PosterCard 140×210 (step 156). [modifier] goes on the focusable. */
 @Composable
 internal fun Lane2PosterCard(title: Title, posterUrl: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(Modifier.width(140.dp)) {
-        DetailCardSurface(onClick = onClick, modifier = modifier.size(140.dp, 210.dp)) {
+        DetailCardSurface(onClick = onClick, modifier = modifier.size(140.dp, 210.dp).describedAs(title.title)) {
             DetailCardArt(posterUrl, title.title, Modifier.fillMaxSize())
             if (title.mediaType == MediaType.Tv) {
                 Text(
@@ -84,7 +103,7 @@ internal fun posterSubtitle(title: Title, today: LocalDate): String {
 @Composable
 internal fun Lane2PersonCard(name: String, role: String, profileUrl: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(Modifier.width(132.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        DetailCardSurface(onClick = onClick, shape = CircleShape, modifier = modifier.size(132.dp)) {
+        DetailCardSurface(onClick = onClick, shape = CircleShape, modifier = modifier.size(132.dp).describedAs(name, role)) {
             DetailCardArt(profileUrl, name, Modifier.fillMaxSize(), initials = true)
         }
         CardLabel(name, role, center = true)
@@ -95,12 +114,16 @@ internal fun Lane2PersonCard(name: String, role: String, profileUrl: String?, on
 @Composable
 internal fun Lane2LandscapeCard(title: String, subtitle: String, imageUrl: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(Modifier.width(248.dp)) {
-        DetailCardSurface(onClick = onClick, modifier = modifier.size(248.dp, 140.dp)) {
+        DetailCardSurface(onClick = onClick, modifier = modifier.size(248.dp, 140.dp).describedAs(title, subtitle)) {
             DetailCardArt(imageUrl, title, Modifier.fillMaxSize())
         }
         CardLabel(title, subtitle)
     }
 }
+
+/** The label sits below the focusable card, so the card itself carries it for TalkBack (and tests). */
+internal fun Modifier.describedAs(vararg lines: String): Modifier =
+    semantics { contentDescription = lines.filter { it.isNotBlank() }.joinToString(", ") }
 
 @Composable
 private fun CardLabel(title: String, subtitle: String, center: Boolean = false) {
@@ -216,5 +239,37 @@ internal fun DetailRow(
         }
     }
 }
+
+/**
+ * Wrap the outer vertical list: it scrolls only when the focused child is not fully visible, then puts its
+ * top [topInset] below the viewport top (room for the row title). The TV default pivot would scroll even
+ * the hero's buttons to 30 % and cut the title off. Rows inside keep their own [PinToStart].
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun RevealVertically(topInset: Dp, content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    val insetPx = with(density) { topInset.toPx() }
+    val labelsPx = with(density) { CARD_LABELS_HEIGHT.toPx() }
+    val spec = remember(insetPx, labelsPx) {
+        object : BringIntoViewSpec {
+            // The focused card's labels sit below it: they must fit too.
+            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float) =
+                if (offset >= 0f && offset + size + labelsPx <= containerSize) 0f else offset - insetPx
+        }
+    }
+    CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
+}
+
+/** Focus entering the hero (outer item 0) shows all of it; the TV pivot alone would cut the title off. */
+internal fun Modifier.revealHeroOnFocus(outer: LazyListState, scope: CoroutineScope, reduceMotion: Boolean): Modifier =
+    onFocusChanged { if (it.hasFocus) scope.launch { if (reduceMotion) outer.scrollToItem(0) else outer.animateScrollToItem(0) } }
+
+/**
+ * Full-screen root that is one focus group. AppNav's content `focusRestorer()` has no focus target of its
+ * own, so its onEnter otherwise applies to every top-level group inside the screen: focusing the Season
+ * episode panel's Close was redirected to the last focused season.
+ */
+internal fun Modifier.screenFocusRoot(): Modifier = fillMaxSize().focusGroup()
 
 internal fun oneDecimal(value: Double): String = String.format(Locale.US, "%.1f", value)

@@ -45,7 +45,12 @@ import com.techgv.cineverse.ui.detail.DetailActionButton
 import com.techgv.cineverse.ui.detail.DetailChip
 import com.techgv.cineverse.ui.detail.Lane2PosterCard
 import com.techgv.cineverse.ui.detail.DetailRow
+import com.techgv.cineverse.ui.detail.ROW_TOP_INSET
+import com.techgv.cineverse.ui.detail.RevealVertically
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
+import com.techgv.cineverse.ui.detail.revealHeroOnFocus
+import com.techgv.cineverse.ui.detail.screenFocusRoot
+import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.nav.Route
 
 private const val PANEL = "main"
@@ -73,7 +78,7 @@ internal fun PersonContent(
     onRetry: () -> Unit,
     onNavigate: (Route) -> Unit,
 ) {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.screenFocusRoot().background(MaterialTheme.colorScheme.background)) {
         when (person) {
             is SectionState.Content -> PersonBody(person.value, bioExpanded, memory, imageBase, onToggleBio, onNavigate)
             else -> Section(person, onRetry = onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
@@ -112,76 +117,78 @@ private fun PersonBody(
     )
     val scope = rememberCoroutineScope()
 
-    LazyColumn(state = outer, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
-        item(key = BUTTONS) {
-            Row(
-                Modifier.fillMaxWidth().padding(start = SCREEN_INSET, end = SCREEN_INSET, top = 40.dp),
-                horizontalArrangement = Arrangement.spacedBy(40.dp),
-            ) {
-                DetailCardArt(
-                    tmdbImageUrl(imageBase, "h632", person.profilePath), person.name,
-                    Modifier.size(240.dp, 360.dp).clip(RoundedCornerShape(16.dp)), initials = true,
-                )
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    person.department?.let {
-                        Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text(
-                        person.name,
-                        fontSize = if (person.name.length > 17) 46.sp else 60.sp,
-                        lineHeight = if (person.name.length > 17) 50.sp else 64.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
+    RevealVertically(ROW_TOP_INSET) {
+        LazyColumn(state = outer, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
+            item(key = BUTTONS) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = SCREEN_INSET, end = SCREEN_INSET, top = 40.dp),
+                    horizontalArrangement = Arrangement.spacedBy(40.dp),
+                ) {
+                    DetailCardArt(
+                        tmdbImageUrl(imageBase, "h632", person.profilePath), person.name,
+                        Modifier.size(240.dp, 360.dp).clip(RoundedCornerShape(16.dp)), initials = true,
                     )
-                    val chips = listOfNotNull(bornChip(person.birthday, person.deathday), person.placeOfBirth, "${person.creditCount} credits")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { chips.forEach { DetailChip(it) } }
-                    if (hasBio) {
-                        if (person.biographyInEnglish) {
-                            Text("(English)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        person.department?.let {
+                            Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Text(
-                            person.biography,
-                            style = MaterialTheme.typography.bodyLarge,
+                            person.name,
+                            fontSize = if (person.name.length > 17) 46.sp else 60.sp,
+                            lineHeight = if (person.name.length > 17) 50.sp else 64.sp,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = if (bioExpanded) Int.MAX_VALUE else 4,
-                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 2,
                         )
-                        Row(with(restorer) { Modifier.restoreRowFocus(focusRows[0], scope) }) {
-                            DetailActionButton(
-                                "ⓘ", if (bioExpanded) "Show less" else "Read full biography", onToggleBio,
-                                modifier = with(restorer) { Modifier.rememberFocus(PANEL, BUTTONS, "bio", 0) },
-                                primary = true,
+                        val chips = listOfNotNull(bornChip(person.birthday, person.deathday), person.placeOfBirth, "${person.creditCount} credits")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { chips.forEach { DetailChip(it) } }
+                        if (hasBio) {
+                            if (person.biographyInEnglish) {
+                                Text("(English)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(
+                                person.biography,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = if (bioExpanded) Int.MAX_VALUE else 4,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Row(with(restorer) { Modifier.restoreRowFocus(focusRows[0], scope) }.revealHeroOnFocus(outer, scope, LocalFeedback.current.reduceMotion)) {
+                                DetailActionButton(
+                                    "ⓘ", if (bioExpanded) "Show less" else "Read full biography", onToggleBio,
+                                    modifier = with(restorer) { Modifier.rememberFocus(PANEL, BUTTONS, "bio", 0) },
+                                    primary = true,
+                                )
+                            }
+                        } else {
+                            Text("No biography available", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            item(key = KNOWN_FOR) {
+                if (person.knownFor.isNotEmpty()) {
+                    DetailRow("Known for", restorer, focusRows[1], knownForState) {
+                        itemsIndexed(person.knownFor, key = { index, _ -> knownForKeys[index] }) { index, title ->
+                            Lane2PosterCard(
+                                title, tmdbImageUrl(imageBase, "w342", title.posterPath),
+                                onClick = { onNavigate(Route.Detail(title.ref.mediaType, title.ref.id)) },
+                                modifier = with(restorer) { Modifier.rememberFocus(PANEL, KNOWN_FOR, knownForKeys[index], index) },
                             )
                         }
-                    } else {
-                        Text("No biography available", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-        }
-        item(key = KNOWN_FOR) {
-            if (person.knownFor.isNotEmpty()) {
-                DetailRow("Known for", restorer, focusRows[1], knownForState) {
-                    itemsIndexed(person.knownFor, key = { index, _ -> knownForKeys[index] }) { index, title ->
-                        Lane2PosterCard(
-                            title, tmdbImageUrl(imageBase, "w342", title.posterPath),
-                            onClick = { onNavigate(Route.Detail(title.ref.mediaType, title.ref.id)) },
-                            modifier = with(restorer) { Modifier.rememberFocus(PANEL, KNOWN_FOR, knownForKeys[index], index) },
-                        )
-                    }
-                }
-            }
-        }
-        item(key = CREDITS) {
-            if (person.credits.isNotEmpty()) {
-                DetailRow(person.creditsTitle, restorer, focusRows[2], creditsState) {
-                    itemsIndexed(person.credits, key = { index, _ -> creditKeys[index] }) { index, credit ->
-                        CreditCard(
-                            credit, tmdbImageUrl(imageBase, "w342", credit.posterPath),
-                            onClick = { onNavigate(Route.Detail(credit.ref.mediaType, credit.ref.id)) },
-                            modifier = with(restorer) { Modifier.rememberFocus(PANEL, CREDITS, creditKeys[index], index) },
-                        )
+            item(key = CREDITS) {
+                if (person.credits.isNotEmpty()) {
+                    DetailRow(person.creditsTitle, restorer, focusRows[2], creditsState) {
+                        itemsIndexed(person.credits, key = { index, _ -> creditKeys[index] }) { index, credit ->
+                            CreditCard(
+                                credit, tmdbImageUrl(imageBase, "w342", credit.posterPath),
+                                onClick = { onNavigate(Route.Detail(credit.ref.mediaType, credit.ref.id)) },
+                                modifier = with(restorer) { Modifier.rememberFocus(PANEL, CREDITS, creditKeys[index], index) },
+                            )
+                        }
                     }
                 }
             }

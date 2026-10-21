@@ -67,6 +67,7 @@ import com.techgv.cineverse.ui.detail.DetailActionButton
 import com.techgv.cineverse.ui.detail.Lane2PersonCard
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
 import com.techgv.cineverse.ui.detail.oneDecimal
+import com.techgv.cineverse.ui.detail.screenFocusRoot
 import com.techgv.cineverse.ui.nav.Route
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -116,7 +117,8 @@ class SeasonActions(
 
 @Composable
 fun SeasonContent(state: SeasonUiState, focusMemory: FocusMemory, imageBase: String, actions: SeasonActions) {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    // ScreenFocusRoot: AppNav's focusRestorer must not act as onEnter of the panel / lists inside.
+    Box(Modifier.screenFocusRoot().background(MaterialTheme.colorScheme.background)) {
         when (val show = state.show) {
             is SectionState.Content -> SeasonBody(show.value, state, focusMemory, imageBase, actions)
             else -> Section(show, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}

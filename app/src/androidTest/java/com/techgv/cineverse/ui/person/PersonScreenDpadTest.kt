@@ -7,7 +7,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -59,7 +59,7 @@ class PersonScreenDpadTest {
         compose.onNodeWithText("Show less", substring = true).assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
         compose.waitForIdle()
         // Known for: vote_count desc.
-        compose.onAllNodesWithText("Famous Film")[0].assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithContentDescription("Famous Film").assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
         compose.waitForIdle()
         // Acting credits: date desc → the 2020 film first.
         compose.onNodeWithText("Acting credits").assertExists()

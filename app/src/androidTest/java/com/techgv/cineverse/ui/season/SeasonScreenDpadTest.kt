@@ -2,13 +2,18 @@ package com.techgv.cineverse.ui.season
 
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -50,7 +55,8 @@ class SeasonScreenDpadTest {
             onNoticeShown = {}, onNavigate = {},
         )
         val memory = FocusMemory(SavedStateHandle())
-        compose.setContent { SeasonContent(state, memory, imageBase = "", actions) }
+        // AppNav wraps every screen in a focusRestorer(); it must not hijack focus entering the panel.
+        compose.setContent { Box(Modifier.focusRestorer()) { SeasonContent(state, memory, imageBase = "", actions) } }
         compose.waitForIdle()
 
         compose.onNodeWithText("Season 1").assertIsFocused().performKeyInput { pressKey(Key.DirectionRight) }
@@ -61,7 +67,7 @@ class SeasonScreenDpadTest {
         compose.waitForIdle()
 
         // Panel: full overview, focus inside on Close; LEFT cannot leave it.
-        compose.onNodeWithText("Full overview").assertExists()
+        compose.onAllNodesWithText("Full overview").assertCountEquals(2) // card excerpt + panel
         compose.onNodeWithText("Close").assertIsFocused().performKeyInput { pressKey(Key.DirectionLeft) }
         compose.waitForIdle()
         compose.onNodeWithText("Close").assertIsFocused()

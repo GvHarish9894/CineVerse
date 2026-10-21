@@ -8,6 +8,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -62,17 +63,18 @@ class DetailScreenDpadTest {
         compose.onNodeWithText("Play trailer").performKeyInput { pressKey(Key.DirectionCenter) }
         assertEquals(Route.Player("yt1", "Official Trailer", "Fight Club · Trailer"), navigated.single())
 
+        // Entering a row without memory lands on its first item (prototype rowMem), not the nearest one.
         compose.onNodeWithText("Play trailer").performKeyInput { pressKey(Key.DirectionDown) }
         compose.waitForIdle()
-        compose.onNodeWithText("Actor One", substring = true).assertIsFocused().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithContentDescription("Actor One", substring = true).assertIsFocused().performKeyInput { pressKey(Key.DirectionRight) }
         compose.waitForIdle()
-        compose.onNodeWithText("Actor Two", substring = true).assertIsFocused()
+        compose.onNodeWithContentDescription("Actor Two", substring = true).assertIsFocused()
 
         // Push (Player / Person) and pop: the destination leaves and re-enters composition with the same memory.
         onScreen = false
         compose.waitForIdle()
         onScreen = true
         compose.waitForIdle()
-        compose.onNodeWithText("Actor Two", substring = true).assertIsFocused()
+        compose.onNodeWithContentDescription("Actor Two", substring = true).assertIsFocused()
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -61,6 +62,7 @@ import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
+import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.nav.Route
 
 private const val PANEL = "main"
@@ -105,7 +107,7 @@ fun DetailContent(
     imageBase: String,
     actions: DetailActions,
 ) {
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.screenFocusRoot().background(MaterialTheme.colorScheme.background)) {
         when (val section = state.detail) {
             is SectionState.Content -> DetailBody(section.value, libraryState, focusMemory, imageBase, actions)
             else -> Section(section, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
@@ -178,59 +180,61 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
     fun focusRow(key: String) = focusRows.first { it.rowKey == key }
 
     Backdrop(tmdbImageUrl(imageBase, "w1280", detail.backdropPath))
-    LazyColumn(state = outer, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
-        item(key = "buttons") { Hero(detail, buttons, restorer, focusRow("buttons"), imageBase) }
-        for (row in rows.drop(1)) {
-            item(key = row.key) {
-                when (row.key) {
-                    "seasons" -> DetailRow("Seasons", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
-                        itemsIndexed(detail.seasons, key = { _, s -> s.seasonNumber }) { index, season ->
-                            SeasonCard(
-                                season, tmdbImageUrl(imageBase, "w342", season.posterPath),
-                                onClick = { actions.onNavigate(Route.Season(detail.ref.id, season.seasonNumber)) },
-                                modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.itemKeys[index], index) },
-                            )
+    RevealVertically(ROW_TOP_INSET) {
+        LazyColumn(state = outer, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
+            item(key = "buttons") { Hero(detail, buttons, restorer, focusRow("buttons"), outer, imageBase) }
+            for (row in rows.drop(1)) {
+                item(key = row.key) {
+                    when (row.key) {
+                        "seasons" -> DetailRow("Seasons", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                            itemsIndexed(detail.seasons, key = { _, s -> s.seasonNumber }) { index, season ->
+                                SeasonCard(
+                                    season, tmdbImageUrl(imageBase, "w342", season.posterPath),
+                                    onClick = { actions.onNavigate(Route.Season(detail.ref.id, season.seasonNumber)) },
+                                    modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.itemKeys[index], index) },
+                                )
+                            }
                         }
-                    }
-                    "cast" -> DetailRow("Top billed cast", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
-                        val people = detail.cast + crew
-                        itemsIndexed(people, key = { index, _ -> row.itemKeys[index] }) { index, person ->
-                            Lane2PersonCard(
-                                person.name, person.role, tmdbImageUrl(imageBase, "w185", person.profilePath),
-                                onClick = { actions.onNavigate(Route.Person(person.personId)) },
-                                modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.itemKeys[index], index) },
-                            )
+                        "cast" -> DetailRow("Top billed cast", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                            val people = detail.cast + crew
+                            itemsIndexed(people, key = { index, _ -> row.itemKeys[index] }) { index, person ->
+                                Lane2PersonCard(
+                                    person.name, person.role, tmdbImageUrl(imageBase, "w185", person.profilePath),
+                                    onClick = { actions.onNavigate(Route.Person(person.personId)) },
+                                    modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.itemKeys[index], index) },
+                                )
+                            }
                         }
-                    }
-                    "videos" -> DetailRow("Videos", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
-                        itemsIndexed(detail.videos, key = { _, v -> v.key }) { index, video ->
-                            Lane2LandscapeCard(
-                                video.name, video.type, "https://i.ytimg.com/vi/${video.key}/hqdefault.jpg",
-                                onClick = { actions.onNavigate(playerRoute(detail, video)) },
-                                modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, video.key, index) },
-                            )
+                        "videos" -> DetailRow("Videos", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                            itemsIndexed(detail.videos, key = { _, v -> v.key }) { index, video ->
+                                Lane2LandscapeCard(
+                                    video.name, video.type, "https://i.ytimg.com/vi/${video.key}/hqdefault.jpg",
+                                    onClick = { actions.onNavigate(playerRoute(detail, video)) },
+                                    modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, video.key, index) },
+                                )
+                            }
                         }
-                    }
-                    "recommendations" -> DetailRow("Recommendations", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
-                        itemsIndexed(detail.recommendations, key = { index, _ -> row.itemKeys[index] }) { index, title ->
-                            Lane2PosterCard(
-                                title, tmdbImageUrl(imageBase, "w342", title.posterPath),
-                                onClick = { actions.onNavigate(Route.Detail(title.ref.mediaType, title.ref.id)) },
-                                modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.itemKeys[index], index) },
-                            )
+                        "recommendations" -> DetailRow("Recommendations", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                            itemsIndexed(detail.recommendations, key = { index, _ -> row.itemKeys[index] }) { index, title ->
+                                Lane2PosterCard(
+                                    title, tmdbImageUrl(imageBase, "w342", title.posterPath),
+                                    onClick = { actions.onNavigate(Route.Detail(title.ref.mediaType, title.ref.id)) },
+                                    modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.itemKeys[index], index) },
+                                )
+                            }
                         }
-                    }
-                    "reviews" -> DetailRow("Reviews", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
-                        itemsIndexed(detail.reviews, key = { _, r -> r.id }) { index, review ->
-                            ReviewCard(
-                                review, review.avatarUrl ?: tmdbImageUrl(imageBase, "w185", review.avatarPath),
-                                modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, review.id, index) },
-                            )
+                        "reviews" -> DetailRow("Reviews", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                            itemsIndexed(detail.reviews, key = { _, r -> r.id }) { index, review ->
+                                ReviewCard(
+                                    review, review.avatarUrl ?: tmdbImageUrl(imageBase, "w185", review.avatarPath),
+                                    modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, review.id, index) },
+                                )
+                            }
                         }
-                    }
-                    "facts" -> DetailRow("Details", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
-                        itemsIndexed(detail.facts, key = { _, f -> f.label }) { index, fact ->
-                            FactCard(fact, modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, fact.label, index) })
+                        "facts" -> DetailRow("Details", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                            itemsIndexed(detail.facts, key = { _, f -> f.label }) { index, fact ->
+                                FactCard(fact, modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, fact.label, index) })
+                            }
                         }
                     }
                 }
@@ -260,6 +264,7 @@ private fun Hero(
     buttons: List<ButtonSpec>,
     restorer: FocusRestorer,
     buttonRow: FocusRow,
+    outer: LazyListState,
     imageBase: String,
 ) {
     val scope = rememberCoroutineScope()
@@ -314,7 +319,8 @@ private fun Hero(
             }
             Spacer(Modifier.height(4.dp))
             Row(
-                modifier = with(restorer) { Modifier.restoreRowFocus(buttonRow, scope) },
+                modifier = with(restorer) { Modifier.restoreRowFocus(buttonRow, scope) }
+                    .revealHeroOnFocus(outer, scope, LocalFeedback.current.reduceMotion),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 buttons.forEachIndexed { index, b ->
