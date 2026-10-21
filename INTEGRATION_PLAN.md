@@ -47,6 +47,14 @@ with its toast. Library content starts at `padding(start = 48)`, which Lane 4 si
 Lane 1's 88 inset that puts it at x 136, the same as Settings. Check it visually only; no change at merge.
 
 ## lane2-wave2 (Detail / Person / Season)
+Re-run at **cd8b817** (9 commits past the 1e4094e dry run) on scratch `integration-dry2b` over integration
+`8d226d8`, then discarded. Conflicts: `MediaRef.kt`, `Title.kt` (add/add), `FocusMemory.kt`, `AppNav.kt` (content), as
+below. Changes since 1e4094e: the `DetailCardSurface` `tmdbImageUrl` clash is gone (Lane 2's 8916db1 dropped its copy);
+`TmdbImage.kt` / `LocalSettings.kt` are byte-identical to integration (no diff); `TmdbRepository.kt` (`season(…,
+language)`) and the debug `HttpLogging.kt` auto-merge. In `FocusMemory.kt` Lane 2 now has `entryKey(row, direction)`
+(+ a unit test) that still returns the remembered key for `Enter`; folding c864c85's rule means `entryKey` returns null
+for `Enter`, and the unit test's last assertion flips to `assertNull`.
+
 | File | Conflict | Intended resolution |
 |---|---|---|
 | `domain/MediaRef.kt` | add/add | Integration's copy (same as lane 4). |
