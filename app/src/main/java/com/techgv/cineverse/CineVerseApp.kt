@@ -3,10 +3,16 @@ package com.techgv.cineverse
 import android.app.Application
 import android.content.Context
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.room.Room
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.CredentialStore
 import com.techgv.cineverse.data.auth.AndroidKeystoreKeys
 import com.techgv.cineverse.data.auth.CredentialCipher
+import com.techgv.cineverse.data.library.AccountLibrarySource
+import com.techgv.cineverse.data.library.GuestLibrarySource
+import com.techgv.cineverse.data.library.LibraryDatabase
+import com.techgv.cineverse.data.library.LibraryImporter
+import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.ReadToken
 import com.techgv.cineverse.data.tmdb.TmdbClient
@@ -44,6 +50,14 @@ class AppContainer(context: Context) {
         store = CredentialStore(context.credentialDataStore, CredentialCipher(AndroidKeystoreKeys())),
         onAccountChanged = tmdbRepository::onAccountChanged,
     )
+
+    private val libraryDatabase = Room.databaseBuilder(context, LibraryDatabase::class.java, "library.db").build()
+    private val guestLibrary = GuestLibrarySource(libraryDatabase.libraryDao())
+    private val accountLibrary = AccountLibrarySource(tmdbRepository)
+
+    val libraryRepository = LibraryRepository(authRepository.credentials, guestLibrary, accountLibrary)
+
+    val libraryImporter = LibraryImporter(libraryDatabase.importLedgerDao(), guestLibrary, accountLibrary, libraryRepository)
 
     init {
         appScope.launch {
