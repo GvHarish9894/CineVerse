@@ -5,6 +5,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
@@ -20,6 +21,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import com.techgv.cineverse.data.settings.Settings
 
@@ -51,7 +53,10 @@ fun navigationSound(direction: FocusDirection): Int = when (direction) {
     else -> AudioManager.FX_FOCUS_NAVIGATION_DOWN
 }
 
-/** Haptics go to the remote's [Vibrator] only when it has one (most TV remotes do not). */
+/**
+ * Haptics go to the device's own [Vibrator] (the TV / box, not the remote: Android has no API for remote
+ * vibration) and only when it has one — most TVs do not.
+ */
 class AndroidFeedback(
     private val view: View,
     private val vibrator: Vibrator?,
@@ -130,6 +135,16 @@ fun Modifier.navigationFeedback(feedback: Feedback, focusManager: FocusManager):
         if (focusManager.moveFocus(direction)) feedback.focusMove(direction) else feedback.rowEdge(direction)
         true
     }
+
+/**
+ * [navigationFeedback] for a `Dialog` / `Popup`: each is its own window and focus root, so key events
+ * never reach AppNav's hook. Wrap the dialog content once (ExitDialog, Rate, Import); the main content
+ * must not use it (AppNav already hooks the main window).
+ */
+@Composable
+fun FeedbackRoot(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Box(modifier.navigationFeedback(LocalFeedback.current, LocalFocusManager.current)) { content() }
+}
 
 private val OK_KEYS = setOf(Key.DirectionCenter, Key.Enter, Key.NumPadEnter)
 private val DPAD = mapOf(
