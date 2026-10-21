@@ -3,8 +3,11 @@ package com.techgv.cineverse.data.auth
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.io.IOException
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 
@@ -24,4 +27,17 @@ class InMemoryPreferencesStore : DataStore<Preferences> {
     override val data: StateFlow<Preferences> = state
     override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences =
         transform(state.value).also { state.value = it }
+}
+
+/** [InMemoryPreferencesStore] whose writes can be held at [gate] or made to fail with [failWrites]. */
+class GatedPreferencesStore : DataStore<Preferences> {
+    private val delegate = InMemoryPreferencesStore()
+    var gate: CompletableDeferred<Unit>? = null
+    var failWrites = false
+    override val data: Flow<Preferences> = delegate.data
+    override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences {
+        gate?.await()
+        if (failWrites) throw IOException("disk full")
+        return delegate.updateData(transform)
+    }
 }

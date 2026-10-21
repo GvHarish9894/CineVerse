@@ -1,9 +1,10 @@
-# Lane 1 shell changes (for the merge integrator)
+# Shell changes (Lane 1 owner + Lane 3, merged on `integration`)
 
 Lane 1 owns the §5 shell for wave 2 (rail expand-on-focus, clock, ambient backdrop) besides Home / Browse /
 Search. These are deliberate Lane 1 deliverables, not WIP. Unchanged vs master: BACK precedence
 (`BackHandler` / `backAction`), rail visibility (`isRailScreen`: no rail on Login, Detail, Person,
-Season, Player), `FocusMemory` storage format, `HomeBackHandle`.
+Season, Player), `FocusMemory` storage format, `HomeBackHandle`. Lane 3's shell edits (below) change
+neither.
 
 ## `ui/nav/AppNav.kt`
 | Change | Why |
@@ -13,11 +14,12 @@ Season, Player), `FocusMemory` storage format, `HomeBackHandle`.
 | `NavRail(accountName = credentials?.displayName)`, collected from `authRepository.credentials`. | §5 rail account (D3). |
 | `Toaster` created here, provided as `LocalToaster`; `ToastHost(toaster, Modifier.align(BottomCenter).padding(bottom = 44.dp))` is the last child of the root `Box`, **not composed on Player** (a toast waits in the queue until the player closes). | Pinned seam (§6, §7.12): bottom area, never over the player. |
 | Routes: `Home` → `HomeScreen(container, onOpen, backHandle)`; `Browse` → `BrowseScreen(container, kind, onOpen)`; `Search` → `SearchScreen(container, onOpen)`. | Lane 1 screens (Home needs `container` now). |
+| (Lane 3) Routes: `Settings` → `SettingsScreen(onSignIn = { nav.navigate(Route.Login) })`; `Login` → `LoginScreen(onContinueAsGuest = leaveLogin, onSignedIn = leaveLogin, message = loginMessage)`. Both show their own toasts via `LocalToaster`. | §7.9, §4.1. |
+| (Lane 3) `.navigationFeedback(LocalFeedback.current, LocalFocusManager.current)` on the root `Box` (holds rail + content), once. | §9 D-pad hook. Adding it anywhere else in the main window would make OK give feedback twice. |
 
-Merge notes: Lane 2 replaces the Detail / Person / Season lines, Lane 3 Settings / Login, Lane 4 Library and
+Merge notes for the remaining lanes: Lane 2 replaces the Detail / Person / Season lines, Lane 4 Library and
 wraps `NavHost` in `LibraryActionsHost` + hosts `ImportLibraryHost` — all inside the content `Box` above.
-Lane 3's `navigationFeedback` modifier goes on the root `Box` (it was on master's `Row`). Lane 4 and
-Lane 3 each install their own toast host: keep **one** `Toaster` / `ToastHost` (this placement).
+Lane 4 installs its own toast host: keep **one** `Toaster` / `ToastHost` (this placement).
 
 Toast policy: non-essential toasts are held while the Player route is active — one waiting message is kept
 (a newer one replaces it); a toast already showing when Player opens is disposed, not replayed; Player errors
@@ -26,7 +28,8 @@ route by Lane 4 separately.
 
 ## `ui/nav/NavRail.kt`
 Public surface: `NavRail(current: RailItem?, onSelect: (RailItem) -> Unit, modifier: Modifier = Modifier,
-accountName: String? = null)` and `val RAIL_COLLAPSED_WIDTH = 88.dp`. `RailItem` unchanged.
+accountName: String? = null)` (`modifier` before `accountName`) and `val RAIL_COLLAPSED_WIDTH = 88.dp`.
+`RailItem` unchanged.
 
 | Change | Why |
 |---|---|
@@ -35,10 +38,8 @@ accountName: String? = null)` and `val RAIL_COLLAPSED_WIDTH = 88.dp`. `RailItem`
 | Items drawn with `FocusSurface` (white focus fill, accent marker for current, `contentDescription = label`, `selected`). | Prototype rail style; same focus visuals as the rest of Lane 1. |
 | Logo row on top; account row at the bottom: initials of `accountName` (via `initials()` in `PersonCard.kt`), or "G" + "Guest". | §5 / D3: initials only. |
 
-Collision: Lane 3 adds its own `accountName` + `RailAccount` / `accountInitials` to master's rail. At merge,
-**keep this NavRail** (same parameter name and position as Lane 3's, so Lane 3's call site compiles) and drop
-Lane 3's `RailAccount` / `accountInitials`; its `AccountInitialsTest` cases (two initials, null / blank → "G")
-hold for this rail's `initials(name).ifEmpty { "G" }`.
+Lane 3's own rail account footer (`RailAccount` / `accountInitials`) was dropped at merge; its
+`AccountInitialsTest` now tests `ui/components/initials`, which this rail uses.
 
 ## `ui/components/FocusMemory.kt` (`FocusRestorer`)
 | Change | Why |
@@ -49,9 +50,48 @@ hold for this rail's `initials(name).ifEmpty { "G" }`.
 No change to `FocusMemory`, `rememberFocus`, `restoreRowFocus`, `entryIndex` results, or saved keys.
 
 ## Also touched outside `ui/nav`
-- `MainActivity.kt`: provides `LocalSettings` (collected `Settings`) and wraps the app in `DesignCanvas` (§6 units).
-- `ui/components/ExitDialog.kt`: dialog content wrapped in `DesignCanvas` (a Dialog is a new composition root, §6).
-- `ui/components/Toasts.kt`: the pinned `Toaster` / `LocalToaster` / `ToastHost`, same API as Lane 4's;
-  `ToastHost` here is only as large as the toast (Lane 4's fills the screen) — keep this one.
+- `MainActivity.kt`: one `settings` `State` (`collectAsStateWithLifecycle(Settings())`, kept as `State`, not
+  `by`) feeds both `LocalSettings provides settings.value` (Lane 1) and `ProvideFeedback(settings)` (Lane 3,
+  `AndroidFeedback` reads it on every key press). Nesting:
+  `LocalSettings { DesignCanvas { CineVerseTheme { ProvideFeedback { Surface { AppNav } } } } }`.
+  `ProvideFeedback` is installed once; it also turns off the view's own sound effects while in-app sounds
+  are on (§9).
+- `ui/components/ExitDialog.kt`: dialog content wrapped as `DesignCanvas { FeedbackRoot { … } }` — a Dialog
+  is a new composition root (§6 units) and its own window, so AppNav's §9 hook never sees its keys. Rate /
+  Import dialogs must do the same.
+- `ui/components/Toasts.kt`: the pinned `class Toaster { fun show(title: String, subtitle: String? = null) }`,
+  `val LocalToaster`, `ToastHost(toaster, modifier)`: 2.4 s, queue of 1 (newest waiting replaces older),
+  polite live region. `ToastHost` here is only as large as the toast and the caller places it (Lane 3's /
+  Lane 4's copy fills the screen) — this file is the one kept.
 - Domain merge note: canonical files are `domain/MediaRef.kt`, `Title.kt`, `Person.kt`, `LibraryState.kt`,
   `LibraryActions.kt` — byte-identical across lanes (`MediaRef` and its `key` live only in `MediaRef.kt`).
+
+## Lane 3 (Login / Settings / Feedback / About): what it changed in shared files
+Shell files (`MainActivity`, `AppNav`, `NavRail`, `ExitDialog`, `Toasts`): see the sections above; nothing
+else of Lane 3's remains in them.
+
+Other shared (non-shell) changes:
+- `ui/feedback/Feedback.kt`: real §9 feedback — `ProvideFeedback(settings: State<Settings>)`, `LocalFeedback`,
+  `Modifier.navigationFeedback(feedback, focusManager)` and `FeedbackRoot { }` for Dialog/Popup content.
+- `data/auth/AuthRepository.kt`:
+  - `SignInOutcome.SignedIn` now also carries `account: AccountDto`.
+  - `signOut(onSignedOutLocally: () -> Unit = {})` calls back after the local clear and before remote
+    revocation. The default keeps existing callers unchanged.
+- `data/settings/SettingsRepository.kt`: account-defaults offers are stored per `account_object_id`:
+  - `pendingAccountDefaults` holds the open offers;
+  - `offerAccountDefaults(defaults)` adds one;
+  - `resolveAccountDefaults(accountObjectId, apply)` closes one.
+
+## Merge log
+### lane3-wave2 → integration
+| File | Conflict | Resolution |
+|---|---|---|
+| `SHELL_CHANGES.md` | add/add | This document: Lane 1's as base, Lane 3's shared-file changes appended, NavRail order fixed (`modifier` before `accountName`), applied keep/drop instructions removed. |
+| `MainActivity.kt` | content | Lane 1's `LocalSettings` + `DesignCanvas` + theme, with Lane 3's `ProvideFeedback` around `Surface`; one `settings` `State` for both. |
+| `ui/components/ExitDialog.kt` | content | `DesignCanvas { FeedbackRoot { … } }`. |
+| `ui/components/Toasts.kt` | add/add | Lane 1's file (caller-placed host, Player gating in AppNav, live region, queue of 1). Lane 3's call sites (`LoginScreen`, `SettingsScreen`) only use `LocalToaster.current.show(…)`, same shape. |
+| `ui/nav/AppNav.kt` | content | Lane 1's file; added Lane 3's Settings / Login route bodies and `navigationFeedback` on the root `Box`. Dropped Lane 3's duplicate `credentials` collection, its `Toaster`/`ToastHost` and its `Row` layout. |
+| `ui/nav/NavRail.kt` | content | Lane 1's file; Lane 3's `RailAccount` / `accountInitials` dropped. |
+| `test/.../ui/nav/AccountInitialsTest.kt` | none (follow-on) | Points at `ui/components/initials` (Lane 3's `accountInitials` no longer exists). |
+
+`docs/IMPLEMENTATION_SPEC.md` and the `domain/` files merged without change (identical on both sides).

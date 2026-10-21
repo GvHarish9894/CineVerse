@@ -17,14 +17,15 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
+import com.techgv.cineverse.ui.feedback.FeedbackRoot
 
 /** §7.11 Exit: Stay (default focus, also BACK) / Exit app. */
 @Composable
 fun ExitDialog(onStay: () -> Unit, onExit: () -> Unit) {
     val stay = remember { FocusRequester() }
     Dialog(onDismissRequest = onStay) {
-        // A Dialog window is a new composition root: re-apply the design canvas.
-        DesignCanvas {
+        // A Dialog window is a new composition root: re-apply the design canvas and the §9 key hook.
+        DesignCanvas { FeedbackRoot {
             Column(
                 Modifier.background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.large).padding(32.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -35,7 +36,7 @@ fun ExitDialog(onStay: () -> Unit, onExit: () -> Unit) {
                     OutlinedButton(onClick = onExit) { Text("Exit app") }
                 }
             }
-        }
+        } }
     }
     LaunchedEffect(Unit) { stay.requestFocus() }
 }

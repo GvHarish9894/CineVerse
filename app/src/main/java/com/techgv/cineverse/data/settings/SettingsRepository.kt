@@ -5,9 +5,12 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 enum class HapticStrength(val millis: Long) { Light(6), Medium(12), Strong(20) }
 
@@ -28,6 +31,10 @@ data class Settings(
     }
 }
 
+/** §7.9 "Use your TMDB account defaults": an account's content settings, offered until applied or dismissed. */
+@Serializable
+data class AccountDefaults(val accountObjectId: String, val language: String, val region: String, val includeAdult: Boolean)
+
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private object Keys {
         val haptics = booleanPreferencesKey("haptics")
@@ -38,6 +45,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val language = stringPreferencesKey("language")
         val region = stringPreferencesKey("region")
         val includeAdult = booleanPreferencesKey("include_adult")
+        val accountDefaultsPending = stringPreferencesKey("account_defaults_pending")
+        val accountDefaultsResolved = stringSetPreferencesKey("account_defaults_resolved")
     }
 
     val settings: Flow<Settings> = dataStore.data.map { it.toSettings() }
@@ -58,6 +67,38 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     }
 
     suspend fun current(): Settings = settings.first()
+
+    /** Unresolved offers by account_object_id (Settings shows only the signed-in account's). */
+    val pendingAccountDefaults: Flow<Map<String, AccountDefaults>> = dataStore.data.map { it.pendingAccountDefaults() }
+
+    private fun Preferences.pendingAccountDefaults(): Map<String, AccountDefaults> =
+        this[Keys.accountDefaultsPending]?.let { runCatching { Json.decodeFromString<Map<String, AccountDefaults>>(it) }.getOrNull() }.orEmpty()
+
+    /** Keeps [defaults] pending for its account until Apply / Dismiss; showing it resolves nothing. */
+    suspend fun offerAccountDefaults(defaults: AccountDefaults) {
+        dataStore.edit { p ->
+            if (defaults.accountObjectId in p[Keys.accountDefaultsResolved].orEmpty()) return@edit
+            p[Keys.accountDefaultsPending] = Json.encodeToString(p.pendingAccountDefaults() + (defaults.accountObjectId to defaults))
+        }
+    }
+
+    /**
+     * Ends [accountObjectId]'s pending offer only (never another account's); [apply] writes its
+     * language / region / include_adult (cache invalidation follows).
+     */
+    suspend fun resolveAccountDefaults(accountObjectId: String, apply: Boolean) {
+        dataStore.edit { p ->
+            val pending = p.pendingAccountDefaults()
+            val defaults = pending[accountObjectId] ?: return@edit
+            p[Keys.accountDefaultsPending] = Json.encodeToString(pending - accountObjectId)
+            p[Keys.accountDefaultsResolved] = p[Keys.accountDefaultsResolved].orEmpty() + accountObjectId
+            if (apply) {
+                p[Keys.language] = defaults.language
+                p[Keys.region] = defaults.region
+                p[Keys.includeAdult] = defaults.includeAdult
+            }
+        }
+    }
 
     /** Atomic read-modify-write of all keys. */
     suspend fun update(transform: (Settings) -> Settings) {

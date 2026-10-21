@@ -3,6 +3,7 @@ package com.techgv.cineverse.data.auth
 import android.util.Log
 import com.techgv.cineverse.data.tmdb.AccessTokenBody
 import com.techgv.cineverse.data.tmdb.AccessTokenDto
+import com.techgv.cineverse.data.tmdb.AccountDto
 import com.techgv.cineverse.data.tmdb.AccountId
 import com.techgv.cineverse.data.tmdb.AccountObjectId
 import com.techgv.cineverse.data.tmdb.ConvertSessionBody
@@ -43,7 +44,8 @@ class RequestCode(val requestToken: String) {
 }
 
 sealed interface SignInOutcome {
-    data class SignedIn(val credentials: Credentials) : SignInOutcome
+    /** [account] carries the account's content defaults (iso_639_1 / iso_3166_1 / include_adult, §7.9). */
+    data class SignedIn(val credentials: Credentials, val account: AccountDto) : SignInOutcome
     /** 33: "Code expired — press OK for a new one" → new request code. */
     data object CodeExpired : SignInOutcome
     /** 7 / 10: app-credential banner. */
@@ -136,7 +138,7 @@ class AuthRepository(
                 onAccountChanged()
                 withContext(NonCancellable) { store.save(credentials) } // one atomic edit; never torn
             }
-            return SignInOutcome.SignedIn(credentials)
+            return SignInOutcome.SignedIn(credentials, account)
         } finally {
             pollLock.unlock()
         }
@@ -185,13 +187,16 @@ class AuthRepository(
 
     /**
      * §4.2: local sign-out first (generation bump, account caches, tuple), then bounded best-effort
-     * remote revocation. Remote failures are logged without token values and ignored.
+     * remote revocation. Remote failures are logged without token values and ignored. [onSignedOutLocally]
+     * runs once the local half is done (not when it throws), before the remote half.
      */
-    suspend fun signOut(): Unit = withContext(NonCancellable) {
+    suspend fun signOut(onSignedOutLocally: () -> Unit = {}): Unit = withContext(NonCancellable) {
         val snapshot = transitionLock.withLock {
             attemptEpoch.incrementAndGet() // before the empty-store return: an in-flight sign-in must not commit later
             store.credentials.first()?.also { clearLocally() }
-        } ?: return@withContext
+        }
+        onSignedOutLocally()
+        if (snapshot == null) return@withContext
         withTimeoutOrNull(signOutTimeoutMillis) {
             coroutineScope {
                 launch {

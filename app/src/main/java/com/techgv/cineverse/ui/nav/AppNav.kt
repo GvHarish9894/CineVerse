@@ -15,6 +15,7 @@ import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.ToastHost
 import com.techgv.cineverse.ui.components.Toaster
 import com.techgv.cineverse.ui.search.SearchScreen
+import com.techgv.cineverse.ui.settings.SettingsScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
@@ -39,6 +41,8 @@ import androidx.navigation.toRoute
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.ui.components.ExitDialog
 import com.techgv.cineverse.ui.components.PlaceholderScreen
+import com.techgv.cineverse.ui.feedback.LocalFeedback
+import com.techgv.cineverse.ui.feedback.navigationFeedback
 import com.techgv.cineverse.ui.home.HomeScreen
 import com.techgv.cineverse.ui.login.LoginScreen
 import com.techgv.cineverse.ui.player.PlayerScreen
@@ -104,7 +108,8 @@ fun AppNav(container: AppContainer) {
     val railScreen = destination?.isRailScreen() == true
 
     CompositionLocalProvider(LocalToaster provides toaster) {
-        Box(Modifier.fillMaxSize()) {
+        // §9 D-pad hook, once, on the root holding both rail and content (dialogs use FeedbackRoot).
+        Box(Modifier.fillMaxSize().navigationFeedback(LocalFeedback.current, LocalFocusManager.current)) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -120,8 +125,8 @@ fun AppNav(container: AppContainer) {
                     composable<Route.Browse> { BrowseScreen(container, it.toRoute<Route.Browse>().kind, onOpen = { route -> nav.navigate(route) }) }
                     composable<Route.Search> { SearchScreen(container, onOpen = { route -> nav.navigate(route) }) }
                     composable<Route.Library> { PlaceholderScreen("My Library") }
-                    composable<Route.Settings> { PlaceholderScreen("Settings") }
-                    composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, message = loginMessage) }
+                    composable<Route.Settings> { SettingsScreen(onSignIn = { nav.navigate(Route.Login) }) }
+                    composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, onSignedIn = leaveLogin, message = loginMessage) }
                     composable<Route.Detail> {
                         val route = it.toRoute<Route.Detail>()
                         PlaceholderScreen("Detail", "${route.mediaType.path} ${route.id}")
