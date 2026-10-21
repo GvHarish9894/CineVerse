@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -104,10 +105,10 @@ fun LoginScreen(
             }
             Row(Modifier.padding(top = 30.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 // Stays enabled (and focused) while waiting; presses are ignored then (LoginAction.None).
-                Button(onClick = vm::onPrimary, modifier = Modifier.height(48.dp).focusRequester(primary)) {
+                Button(onClick = vm::onPrimary, modifier = Modifier.focusRequester(primary), contentPadding = BUTTON_PADDING) {
                     Text(state.primaryLabel, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
-                OutlinedButton(onClick = { vm.stopPolling(); onContinueAsGuest() }, modifier = Modifier.height(48.dp)) {
+                OutlinedButton(onClick = { vm.stopPolling(); onContinueAsGuest() }, contentPadding = BUTTON_PADDING) {
                     Text("Continue as guest", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -189,3 +190,6 @@ private fun QrPanel(code: RequestCode?, modifier: Modifier) {
         }
     }
 }
+
+/** Prototype `.btn`: 48 high (15-unit text + 2 × 14), 22 side padding. */
+private val BUTTON_PADDING = PaddingValues(horizontal = 22.dp, vertical = 14.dp)
