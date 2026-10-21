@@ -263,8 +263,10 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
             }
         }
     }
-    detail.reviews.firstOrNull { it.id == openReview }?.let { review -> ReviewPanel(review, avatarUrl(review), ::closeReview) }
-    BackHandler(enabled = openReview != null, onBack = ::closeReview)
+    // The saved id can outlive the review list (reload / process death): only an existing review opens the panel.
+    val activeReview = detail.reviews.firstOrNull { it.id == openReview }
+    activeReview?.let { review -> ReviewPanel(review, avatarUrl(review), ::closeReview) }
+    BackHandler(enabled = activeReview != null, onBack = ::closeReview)
     LaunchedEffect(refocusReview) {
         val id = refocusReview ?: return@LaunchedEffect
         // Focus leaving the removed panel may land elsewhere first: pin the invoking card, then restore it.
@@ -275,7 +277,7 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
 
     // §1.3: data of the current generation is composed → restore the saved focus (else the first button);
     // entered with the review panel open (process death), the panel takes focus instead.
-    LaunchedEffect(restorer) { if (openReview == null) restorer.restore(focusRows, outer) }
+    LaunchedEffect(restorer) { if (activeReview == null) restorer.restore(focusRows, outer) }
 }
 
 private class RowSpec(val key: String, val itemKeys: List<String>)
