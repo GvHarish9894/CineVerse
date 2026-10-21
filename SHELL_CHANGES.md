@@ -16,7 +16,7 @@ neither.
 | Routes: `Home` → `HomeScreen(container, onOpen, backHandle)`; `Browse` → `BrowseScreen(container, kind, onOpen)`; `Search` → `SearchScreen(container, onOpen)`. | Lane 1 screens (Home needs `container` now). |
 | (Lane 3) Routes: `Settings` → `SettingsScreen(onSignIn = { nav.navigate(Route.Login) })`; `Login` → `LoginScreen(onContinueAsGuest = leaveLogin, onSignedIn = leaveLogin, message = loginMessage)`. Both show their own toasts via `LocalToaster`. | §7.9, §4.1. |
 | (Lane 3) `.navigationFeedback(LocalFeedback.current, LocalFocusManager.current)` on the root `Box` (holds rail + content), once. | §9 D-pad hook. Adding it anywhere else in the main window would make OK give feedback twice. |
-| (Lane 4) `val onPlayer = destination?.hasRoute<Route.Player>() == true` is computed next to `railScreen`, before the root `Box`. | One Player flag feeds the toast gate, `LibraryActionsHost` and `ImportLibraryHost`. |
+| (Lane 4) `val onPlayer = …` is computed next to `railScreen`, before the root `Box`. (Final review #1) It is true while the current destination **or any of `nav.visibleEntries`** is a Player, so it also covers an outgoing Player still shown by the NavHost transition. | One Player flag feeds the clock, the toast gate, the Exit dialog, `LibraryActionsHost` and `ImportLibraryHost`. |
 | (Lane 4) `NavHost` is wrapped in `LibraryActionsHost(container.libraryRepository, container.appScope, playerActive = onPlayer)` inside the content `Box`. | Provides `LocalLibraryActions` (Home hero Watchlist etc.); the Rate dialog waits while the Player is up (§7.12). |
 | (Lane 4) Route `Library` → `LibraryScreen(container, onOpenTitle = Detail, onExplore = reset to Browse(Movies), onSignIn = Login)`. | §7.8. |
 | (Lane 4) `ImportLibraryHost(container.libraryRepository, container.libraryImporter, playerActive = onPlayer)` in the root `Box`, after `ToastHost` (under `LocalToaster`). | §8.3 guest → account import prompt; waits while the Player is up. |
@@ -182,3 +182,19 @@ Noted, not changed: Lane 2's `initialsOf` duplicates `initials`, and `DetailCard
 "Unrated"). The Library grid has no `PinToStart` (it never had one; its section headers would scroll away).
 
 `INTEGRATION_PLAN.md` (dry runs and intended resolutions for lanes 4 and 2) is folded into this log and deleted.
+
+## Final review follow-ups
+Fixed on `master`, one commit each, each with a regression test:
+
+| # | Finding | Fix | Tests |
+|---|---|---|---|
+| 1 | [HIGH] A delayed Play-trailer response opened the Player after BACK had opened the Exit dialog: Exit drawn over the playing video. | `81be6b3`: Home drops a pending trailer navigation when its window loses focus (`LocalWindowInfo.isWindowFocused` → `HomeViewModel.setWindowFocused`), not only when it leaves RESUMED. AppNav ties the Exit dialog to the back-stack entry it was opened on (`exitDialogEntry`) and closes it when another entry becomes current. Exit, Rate and Import render only while `!onPlayer` (see the AppNav table: includes an outgoing Player from `nav.visibleEntries`), checked synchronously at the render site, not only through the controllers' `shown` flows. `AppContainer(context, tmdbApi = …)` takes an optional API for tests. | JVM `HomeViewModelTest."pending trailer navigation is dropped when window focus is lost before the fetch completes"`; instrumented `ui.nav.ExitDialogOverPlayerTest` (slow fake `/videos`; both cases fail on the pre-fix code). |
+| 2 | [MEDIUM] KEYCODE_MEDIA_PLAY_PAUSE ignored during playback (TV-PP). | `883b84e`: the Player root handles MEDIA_PLAY_PAUSE / PLAY / PAUSE (the Play/Pause button's logic) and MEDIA_REWIND / FAST_FORWARD (−10 s / +10 s) whichever control is focused; one action per key-down. | `PlayerLifecycleTest.mediaKeysToggleAndSeekOncePerPressWhicheverControlIsFocused` (fake `PlayerHost`). |
+| 3 | [MEDIUM] A long "Couldn't confirm {n} items" list pushed the re-add warning and Done / Retry off the Import dialog. | `3c3f0b7`: titles in a height-bounded `ScrollableText`; the dialog's initial focus entry is pinned to its default button. | `ImportLibraryDialogTest.hundredUnconfirmedTitlesKeepWarningDoneAndRetryReachable`. |
+| 4 | [LOW] Launcher banner without the app name (TV-BN). | `8854a12`: 320×180 vector, play mark + "CineVerse" wordmark (Roboto Bold outlines) on the brand gradient; still `android:banner`. Not localised. | Build / lint only. |
+
+Remaining owner gates (not done here):
+- **D8 minSdk**: TV-PS requires minSdk ≤ 31; the app is at 36.
+- Live TMDB sign-in / account smoke (sign-in, library sync, guest import) against a real account.
+- Physical Android TV device pass.
+- YouTube policy check on device (§7.10 RMF: branding, ads, client identity).
