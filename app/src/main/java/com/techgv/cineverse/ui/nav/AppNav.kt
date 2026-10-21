@@ -28,9 +28,12 @@ import androidx.navigation.toRoute
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.ui.components.ExitDialog
 import com.techgv.cineverse.ui.components.PlaceholderScreen
+import com.techgv.cineverse.ui.detail.DetailScreen
 import com.techgv.cineverse.ui.home.HomeScreen
 import com.techgv.cineverse.ui.login.LoginScreen
+import com.techgv.cineverse.ui.person.PersonScreen
 import com.techgv.cineverse.ui.player.PlayerScreen
+import com.techgv.cineverse.ui.season.SeasonScreen
 import com.techgv.cineverse.ui.spikes.spikeDestinations
 import com.techgv.cineverse.ui.splash.SplashScreen
 
@@ -108,15 +111,9 @@ fun AppNav(container: AppContainer) {
                 composable<Route.Library> { PlaceholderScreen("My Library") }
                 composable<Route.Settings> { PlaceholderScreen("Settings") }
                 composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, message = loginMessage) }
-                composable<Route.Detail> {
-                    val route = it.toRoute<Route.Detail>()
-                    PlaceholderScreen("Detail", "${route.mediaType.path} ${route.id}")
-                }
-                composable<Route.Person> { PlaceholderScreen("Person", "${it.toRoute<Route.Person>().id}") }
-                composable<Route.Season> {
-                    val route = it.toRoute<Route.Season>()
-                    PlaceholderScreen("Season", "series ${route.seriesId} · season ${route.seasonNumber}")
-                }
+                composable<Route.Detail> { DetailScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
+                composable<Route.Person> { PersonScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
+                composable<Route.Season> { SeasonScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
                 composable<Route.Player> { PlayerScreen(it.toRoute(), onBack = { nav.popBackStack() }) }
                 spikeDestinations(nav, container)
             }
