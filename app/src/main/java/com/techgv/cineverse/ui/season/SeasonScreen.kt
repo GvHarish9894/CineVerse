@@ -27,7 +27,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +53,7 @@ import com.techgv.cineverse.ui.components.DetailCardSurface
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
+import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.Section
@@ -75,11 +75,6 @@ private const val EPISODES = "episodes"
 private const val PANEL = "episodePanel"
 private const val PANEL_ACTIONS = "actions"
 private const val PANEL_GUESTS = "guests"
-
-// Stand-in for ui/components/Toasts.kt's LocalToaster (§6 pin), not on this branch: integration deletes these
-// two declarations and imports com.techgv.cineverse.ui.components.LocalToaster (§7.12 toast host).
-private fun interface NoToaster { fun show(title: String) }
-private val LocalToaster = staticCompositionLocalOf<NoToaster?> { null }
 
 private fun seasonKey(n: Int) = "season:$n"
 private fun episodeKey(n: Int) = "episode:$n"
@@ -126,7 +121,7 @@ fun SeasonContent(state: SeasonUiState, focusMemory: FocusMemory, imageBase: Str
         val toaster = LocalToaster.current
         state.notice?.let { notice ->
             LaunchedEffect(notice) {
-                toaster?.show(notice)
+                toaster.show(notice)
                 actions.onNoticeShown()
             }
         }
