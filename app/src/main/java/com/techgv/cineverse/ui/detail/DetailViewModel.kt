@@ -62,13 +62,20 @@ class DetailViewModel(
     private suspend fun load(language: String, region: String) {
         val gen = generation.bump()
         val appGen = appGeneration.current
-        fun current() = generation.isCurrent(gen) && appGeneration.isCurrent(appGen)
+        // Superseded by a newer load: drop. Superseded only by the app generation (auth / settings change
+        // without a new settings value here): reload for the current settings, never stay on Loading.
+        fun current(): Boolean {
+            if (!generation.isCurrent(gen)) return false
+            val appCurrent = appGeneration.isCurrent(appGen)
+            if (!appCurrent) retry()
+            return appCurrent
+        }
 
         if (state.value.detail !is SectionState.Content) _state.update { it.copy(detail = SectionState.Loading) }
         var detail = try {
             when (route.mediaType) {
-                MediaType.Movie -> tmdb.movieDetail(route.id).toDetail(region)
-                MediaType.Tv -> tmdb.tvDetail(route.id).toDetail(region)
+                MediaType.Movie -> tmdb.movieDetail(route.id, language).toDetail(region)
+                MediaType.Tv -> tmdb.tvDetail(route.id, language).toDetail(region)
             }
         } catch (e: TmdbException) {
             if (current()) _state.update { it.copy(detail = SectionState.Error(e.toSectionErrorKind())) }

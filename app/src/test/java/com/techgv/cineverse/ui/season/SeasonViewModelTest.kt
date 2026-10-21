@@ -112,6 +112,19 @@ class SeasonViewModelTest {
     }
 
     @Test
+    fun `app generation bump without a settings emission - dropped episodes reload, never stuck Loading`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>().also { seasonGates[1] = it }
+        val vm = viewModel(1)
+        advanceUntilIdle()
+        assertEquals(SectionState.Loading, vm.state.value.episodes)
+        generation.bump()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(1, (vm.state.value.episodes as SectionState.Content).value.seasonNumber)
+        assertEquals(listOf("tv/7", "season/1", "season/1"), calls)
+    }
+
+    @Test
     fun `selection and open panel survive process death via saved state`() = runTest(dispatcher) {
         val handle = SavedStateHandle()
         val vm = viewModel(1, handle)

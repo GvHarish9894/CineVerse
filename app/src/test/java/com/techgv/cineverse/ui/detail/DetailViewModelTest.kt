@@ -12,6 +12,7 @@ import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.nav.Route
 import com.techgv.cineverse.util.GenerationCounter
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,10 +35,12 @@ class DetailViewModelTest {
     private val calls = mutableListOf<String>()
     private val settings = MutableStateFlow(Settings())
     private val generation = GenerationCounter()
+    private var movieGate: CompletableDeferred<Unit>? = null
 
     private val api = object : TmdbApi by unusedTmdbApi {
         override suspend fun movieDetail(id: Int, language: String, append: String, sessionId: String?): MovieDetailDto {
             calls += "movie/$language"
+            movieGate?.await()
             return if (language == ENGLISH) {
                 MovieDetailDto(id, title = "Title", tagline = "English tagline", overview = "English overview")
             } else {
@@ -80,6 +83,18 @@ class DetailViewModelTest {
         assertEquals("स्थानीय", detail.overview)
         assertEquals(listOf("yt1"), detail.videos.map { it.key })
         assertEquals(listOf("movie/hi-IN", "movie/en-US", "videos/en-US"), calls)
+    }
+
+    @Test
+    fun `app generation bump without a settings emission - the dropped result reloads, never stuck Loading`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>().also { movieGate = it }
+        val vm = viewModel()
+        assertEquals(SectionState.Loading, vm.state.value.detail)
+        generation.bump() // sign-in / sign-out: no new settings value reaches the screen
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(vm.state.value.detail is SectionState.Content)
+        assertEquals(listOf("movie/en-US", "movie/en-US"), calls)
     }
 
     @Test

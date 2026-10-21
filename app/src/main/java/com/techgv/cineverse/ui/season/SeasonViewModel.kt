@@ -56,6 +56,9 @@ class SeasonViewModel(
     private val showGeneration = GenerationCounter()
     private val episodesGeneration = GenerationCounter()
     private var episodesJob: Job? = null
+
+    /** Language of the current show load; episode loads use the same one. */
+    private var language: String? = null
     private val retries = MutableStateFlow(0)
     private val _state = MutableStateFlow(SeasonUiState(openEpisode = handle[OPEN_EPISODE]))
     val state: StateFlow<SeasonUiState> = _state.asStateFlow()
@@ -63,7 +66,7 @@ class SeasonViewModel(
     init {
         viewModelScope.launch {
             combine(settings.map { it.language to it.region }.distinctUntilChanged(), retries) { content, _ -> content }
-                .collectLatest { (_, region) -> loadShow(region) }
+                .collectLatest { (language, region) -> loadShow(language, region) }
         }
     }
 
@@ -92,14 +95,21 @@ class SeasonViewModel(
         _state.update { it.copy(openEpisode = episodeNumber) }
     }
 
-    private suspend fun loadShow(region: String) {
+    private suspend fun loadShow(language: String, region: String) {
+        this.language = language
         val gen = showGeneration.bump()
         val appGen = appGeneration.current
-        fun current() = showGeneration.isCurrent(gen) && appGeneration.isCurrent(appGen)
+        // As DetailViewModel: an app-generation-only supersession reloads for the current settings.
+        fun current(): Boolean {
+            if (!showGeneration.isCurrent(gen)) return false
+            val appCurrent = appGeneration.isCurrent(appGen)
+            if (!appCurrent) retry()
+            return appCurrent
+        }
 
         if (state.value.show !is SectionState.Content) _state.update { it.copy(show = SectionState.Loading) }
         val show = try {
-            tmdb.tvDetail(route.seriesId).toDetail(region)
+            tmdb.tvDetail(route.seriesId, language).toDetail(region)
         } catch (e: TmdbException) {
             if (current()) _state.update { it.copy(show = SectionState.Error(e.toSectionErrorKind())) }
             return
@@ -124,15 +134,18 @@ class SeasonViewModel(
         episodesJob?.cancel()
         val gen = episodesGeneration.bump()
         val appGen = appGeneration.current
-        fun current() = episodesGeneration.isCurrent(gen) && appGeneration.isCurrent(appGen)
+        val lang = language
         _state.update { it.copy(episodes = SectionState.Loading) }
         episodesJob = viewModelScope.launch {
             val result = try {
-                SectionState.Content(tmdb.season(route.seriesId, seasonNumber).toSeason(route.seriesId))
+                SectionState.Content(tmdb.season(route.seriesId, seasonNumber, lang).toSeason(route.seriesId))
             } catch (e: TmdbException) {
                 SectionState.Error(e.toSectionErrorKind())
             }
-            if (current()) _state.update { it.copy(episodes = result) }
+            if (!episodesGeneration.isCurrent(gen)) return@launch
+            // Missed only a newer app generation: load this season again rather than stay on Loading.
+            if (!appGeneration.isCurrent(appGen)) return@launch loadEpisodes(seasonNumber)
+            _state.update { it.copy(episodes = result) }
         }
     }
 

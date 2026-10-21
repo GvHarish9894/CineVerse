@@ -60,11 +60,17 @@ class PersonViewModel(
     private suspend fun load(language: String) {
         val gen = generation.bump()
         val appGen = appGeneration.current
-        fun current() = generation.isCurrent(gen) && appGeneration.isCurrent(appGen)
+        // As DetailViewModel: an app-generation-only supersession reloads for the current settings.
+        fun current(): Boolean {
+            if (!generation.isCurrent(gen)) return false
+            val appCurrent = appGeneration.isCurrent(appGen)
+            if (!appCurrent) retry()
+            return appCurrent
+        }
 
         if (person.value !is SectionState.Content) _person.value = SectionState.Loading
         val person = try {
-            tmdb.person(route.id).toPersonDetail()
+            tmdb.person(route.id, language).toPersonDetail()
         } catch (e: TmdbException) {
             if (current()) _person.value = SectionState.Error(e.toSectionErrorKind())
             return

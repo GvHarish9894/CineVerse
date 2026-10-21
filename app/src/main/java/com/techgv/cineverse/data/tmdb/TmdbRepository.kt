@@ -120,10 +120,11 @@ class TmdbRepository(
         return cached(titleKey("videos", media, id, lang), TmdbCache.DETAIL_TTL) { api.videos(media, id, lang) }
     }
 
-    suspend fun season(seriesId: Int, seasonNumber: Int): SeasonDto {
-        val s = settings()
-        val key = CacheKey("tv/season", ids = "tv:$seriesId:$seasonNumber", language = s.language)
-        return cached(key, TmdbCache.DETAIL_TTL) { api.season(seriesId, seasonNumber, s.language) }
+    /** [language] overrides Settings for this request only (the caller's load language). */
+    suspend fun season(seriesId: Int, seasonNumber: Int, language: String? = null): SeasonDto {
+        val lang = language ?: settings().language
+        val key = CacheKey("tv/season", ids = "tv:$seriesId:$seasonNumber", language = lang)
+        return cached(key, TmdbCache.DETAIL_TTL) { api.season(seriesId, seasonNumber, lang) }
     }
 
     /** [language] overrides Settings for this request only (D7 `en-US` fallback). */
