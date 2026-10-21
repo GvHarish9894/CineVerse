@@ -11,9 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +41,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.techgv.cineverse.AppContainer
+import com.techgv.cineverse.data.library.LibraryEntry
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.ui.components.FocusMemory
@@ -90,8 +90,10 @@ fun LibraryContent(
     val gridState = rememberSavedLazyGridState(memory, "grid:${state.tab.name}")
     val tabFocus = remember { LibraryTab.entries.associateWith { FocusRequester() } }
     val groups = listOf(MediaType.Movie to state.movies, MediaType.Tv to state.tv)
-    val entries = groups.flatMap { (_, g) -> (g.section as? SectionState.Content)?.value.orEmpty() }
-    val gridRow = FocusRow(GRID, state.tab.name, entries.map { it.title.ref.key }, gridState = gridState)
+    val gridItems = libraryGridItems(state)
+    // Restore scrolls by lazy-item index: headers and status rows sit between the cards.
+    val cards = gridItems.withIndex().filter { it.value is LibraryGridItem.Card }
+    val gridRow = FocusRow(GRID, state.tab.name, cards.map { it.value.key }, gridState = gridState, lazyIndices = cards.map { it.index })
     val tabsRow = FocusRow(TABS, TABS, LibraryTab.entries.map { it.name })
     val ready = groups.none { it.second.section == SectionState.Loading }
     val empty = ready && groups.all { it.second.section == SectionState.Empty }
@@ -156,43 +158,38 @@ fun LibraryContent(
                 contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp),
                 modifier = with(restorer) { Modifier.restoreRowFocus(gridRow, scope) }.testTag(GRID),
             ) {
-                var offset = 0
-                var firstGroup = true
-                for ((media, group) in groups) {
-                    if (group.section == SectionState.Empty) continue
-                    val topUp = if (firstGroup) upToTab else Modifier
-                    firstGroup = false
-                    fullWidth("header:$media") {
-                        Text(
-                            if (media == MediaType.Movie) "Movies" else "TV Shows",
+                items(gridItems, key = { it.key }, span = { if (it is LibraryGridItem.Card) GridItemSpan(1) else GridItemSpan(maxLineSpan) }) { item ->
+                    val topUp = if (item.topRow) upToTab else Modifier
+                    when (item) {
+                        is LibraryGridItem.Header -> Text(
+                            if (item.media == MediaType.Movie) "Movies" else "TV Shows",
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
-                    }
-                    when (val section = group.section) {
-                        SectionState.Loading, SectionState.Empty -> fullWidth("loading:$media") { Message("Loading…") }
-                        is SectionState.Error ->
-                            fullWidth("error:$media") { ErrorBlock(section.kind, { onRetry(media) }, rememberBody("retry:$media").then(topUp)) }
-                        is SectionState.Content -> {
-                            val start = offset
-                            val items = section.value
-                            itemsIndexed(items, key = { _, e -> e.title.ref.key }) { i, entry ->
-                                if (i == items.lastIndex && group.hasMore) LaunchedEffect(items.size) { onLoadMore(media) }
-                                LibraryPosterCard(
-                                    title = entry.title,
-                                    // Only Rated cards carry the badge; v4 watchlist / favourite items may also have account_rating.
-                                    badge = entry.rating?.takeIf { state.tab == LibraryTab.Rated }?.let { "★ ${formatRating(it)}" },
-                                    imageBaseUrl = state.imageBaseUrl,
-                                    onClick = { onOpenTitle(entry.title.ref) },
-                                    modifier = with(restorer) { Modifier.rememberFocus(GRID, state.tab.name, entry.title.ref.key, start + i) }
-                                        .then(if (i < COLUMNS) topUp else Modifier)
-                                        .testTag(entry.title.ref.key),
-                                )
-                            }
-                            offset += items.size
-                            if (group.loadingMore) fullWidth("more:$media") { Message("Loading more…") }
-                            group.moreError?.let { kind -> fullWidth("moreError:$media") { ErrorBlock(kind, { onRetry(media) }, rememberBody("more:$media")) } }
+                        is LibraryGridItem.Loading -> Message("Loading…")
+                        is LibraryGridItem.Error ->
+                            ErrorBlock(item.kind.message, item.kind.retryable, { onRetry(item.media) }, rememberBody("retry:${item.media}").then(topUp))
+                        is LibraryGridItem.RefreshError -> ErrorBlock(
+                            "Couldn't refresh — ${item.kind.message}", item.kind.retryable, { onRetry(item.media) },
+                            rememberBody("refresh:${item.media}").then(topUp),
+                        )
+                        is LibraryGridItem.Card -> {
+                            if (item.loadsMore) LaunchedEffect(item.focusIndex) { onLoadMore(item.media) }
+                            val entry = item.entry
+                            LibraryPosterCard(
+                                title = entry.title,
+                                // Only Rated cards carry the badge; v4 watchlist / favourite items may also have account_rating.
+                                badge = entry.rating?.takeIf { state.tab == LibraryTab.Rated }?.let { "★ ${formatRating(it)}" },
+                                imageBaseUrl = state.imageBaseUrl,
+                                onClick = { onOpenTitle(entry.title.ref) },
+                                modifier = with(restorer) { Modifier.rememberFocus(GRID, state.tab.name, item.key, item.focusIndex) }
+                                    .then(topUp)
+                                    .testTag(item.key),
+                            )
                         }
+                        is LibraryGridItem.LoadingMore -> Message("Loading more…")
+                        is LibraryGridItem.MoreError ->
+                            ErrorBlock(item.kind.message, item.kind.retryable, { onRetry(item.media) }, rememberBody("more:${item.media}"))
                     }
                 }
             }
@@ -200,8 +197,68 @@ fun LibraryContent(
     }
 }
 
-private fun LazyGridScope.fullWidth(key: String, content: @Composable () -> Unit) =
-    item(key = key, span = { GridItemSpan(maxLineSpan) }) { content() }
+/** One lazy grid item in display order; [key] is its lazy key, [topRow]: UP goes to the selected tab. */
+internal sealed interface LibraryGridItem {
+    val key: String
+    val topRow: Boolean get() = false
+
+    data class Header(val media: MediaType) : LibraryGridItem {
+        override val key get() = "header:$media"
+    }
+
+    data class Loading(val media: MediaType) : LibraryGridItem {
+        override val key get() = "loading:$media"
+    }
+
+    data class Error(val media: MediaType, val kind: SectionErrorKind, override val topRow: Boolean) : LibraryGridItem {
+        override val key get() = "error:$media"
+    }
+
+    /** Above the (possibly stale) cards of a group whose revalidation failed. */
+    data class RefreshError(val media: MediaType, val kind: SectionErrorKind, override val topRow: Boolean) : LibraryGridItem {
+        override val key get() = "refreshError:$media"
+    }
+
+    /** [focusIndex]: position among all cards (focus memory); [loadsMore]: last loaded card of a group with more pages. */
+    data class Card(val media: MediaType, val entry: LibraryEntry, val focusIndex: Int, override val topRow: Boolean, val loadsMore: Boolean) :
+        LibraryGridItem {
+        override val key get() = entry.title.ref.key
+    }
+
+    data class LoadingMore(val media: MediaType) : LibraryGridItem {
+        override val key get() = "more:$media"
+    }
+
+    data class MoreError(val media: MediaType, val kind: SectionErrorKind) : LibraryGridItem {
+        override val key get() = "moreError:$media"
+    }
+}
+
+/** The grid's items: per non-empty group a header, then its loading / error row or its cards and footer rows. */
+internal fun libraryGridItems(state: LibraryUiState): List<LibraryGridItem> = buildList {
+    var cards = 0
+    var firstGroup = true
+    for (media in MediaType.entries) {
+        val group = state.group(media)
+        if (group.section == SectionState.Empty) continue
+        val top = firstGroup
+        firstGroup = false
+        add(LibraryGridItem.Header(media))
+        when (val section = group.section) {
+            SectionState.Loading, SectionState.Empty -> add(LibraryGridItem.Loading(media))
+            is SectionState.Error -> add(LibraryGridItem.Error(media, section.kind, top))
+            is SectionState.Content -> {
+                group.refreshError?.let { add(LibraryGridItem.RefreshError(media, it, top)) }
+                val cardsTop = top && group.refreshError == null
+                section.value.forEachIndexed { i, entry ->
+                    add(LibraryGridItem.Card(media, entry, cards++, cardsTop && i < COLUMNS, i == section.value.lastIndex && group.hasMore))
+                }
+                if (group.loadingMore) add(LibraryGridItem.LoadingMore(media))
+                group.moreError?.let { add(LibraryGridItem.MoreError(media, it)) }
+            }
+        }
+    }
+}
 
 /** Lane-local §6 Chip (h 44); the shared chip replaces it at merge. */
 @Composable
@@ -242,10 +299,10 @@ private fun EmptyLibrary(state: LibraryUiState, focusKey: (String) -> Modifier, 
 }
 
 @Composable
-private fun ErrorBlock(kind: SectionErrorKind, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+private fun ErrorBlock(message: String, retryable: Boolean, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Message(kind.message)
-        if (kind.retryable) Button(onClick = onRetry, modifier = modifier) { Text("Try again") }
+        Message(message)
+        if (retryable) Button(onClick = onRetry, modifier = modifier) { Text("Try again") }
     }
 }
 
@@ -259,6 +316,7 @@ private fun bodyKeys(state: LibraryUiState, empty: Boolean): List<String> = buil
     for (media in MediaType.entries) {
         val group = state.group(media)
         if ((group.section as? SectionState.Error)?.kind?.retryable == true) add("retry:$media")
+        if (group.section is SectionState.Content && group.refreshError?.retryable == true) add("refresh:$media")
         if (group.moreError?.retryable == true) add("more:$media")
     }
 }

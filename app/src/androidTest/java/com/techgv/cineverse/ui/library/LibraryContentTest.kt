@@ -17,6 +17,7 @@ import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.domain.Title
 import com.techgv.cineverse.ui.components.FocusMemory
+import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.SectionState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -30,8 +31,8 @@ class LibraryContentTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun entry(id: Int) = LibraryEntry(
-        Title(MediaRef(MediaType.Movie, id), "Movie $id", "", null, null, "2020-01-01", 7.0, 3, emptyList(), MediaType.Movie),
+    private fun entry(id: Int, media: MediaType = MediaType.Movie) = LibraryEntry(
+        Title(MediaRef(media, id), "Title $id", "", null, null, "2020-01-01", 7.0, 3, emptyList(), media),
         rating = null,
     )
 
@@ -97,5 +98,25 @@ class LibraryContentTest {
         compose.waitForIdle()
         compose.onNodeWithTag(SIGN_IN_TAG).assertIsFocused().performKeyInput { pressKey(Key.DirectionUp) }
         compose.onNodeWithTag("tab:Rated").assertIsFocused()
+    }
+
+    /**
+     * Re-entry to an off-screen TV card with the Movies group's "Loading more…" row and both headers in between:
+     * the restore scrolls by lazy-item index and focuses that card. (TV's pivot bring-into-view then positions it,
+     * so the index mapping itself is pinned by LibraryGridItemsTest.)
+     */
+    @Test
+    fun offScreenTvCardReEntryWithLoadingRowRestoresTheCard() {
+        val state = watchlist.copy(
+            movies = LibraryGroup(SectionState.Content((1..28).map { entry(it) }), hasMore = true, loadingMore = true),
+            tv = LibraryGroup(SectionState.Content((1..3).map { entry(it, MediaType.Tv) })),
+        )
+        val memory = FocusMemory(SavedStateHandle())
+        memory.save(SavedFocus("grid", LibraryTab.Watchlist.name, "tv:2", index = 29))
+        compose.setContent {
+            LibraryContent(state, memory, onTab = {}, onLoadMore = {}, onRetry = {}, onOpenTitle = {}, onExplore = {}, onSignIn = {})
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("tv:2").assertIsFocused()
     }
 }

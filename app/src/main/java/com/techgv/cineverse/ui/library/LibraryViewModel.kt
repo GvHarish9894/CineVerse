@@ -38,6 +38,8 @@ data class LibraryGroup(
     val loadingMore: Boolean = false,
     /** A next-page load failed; the loaded items stay. */
     val moreError: SectionErrorKind? = null,
+    /** A revalidation failed: the shown items may be stale; "Try again" reloads. */
+    val refreshError: SectionErrorKind? = null,
 )
 
 data class LibraryUiState(
@@ -98,10 +100,19 @@ class LibraryViewModel(
         tab.value = t
     }
 
-    /** "Revalidate on entry". */
-    fun revalidate() = MediaType.entries.filter { _state.value.group(it).section != SectionState.Loading }.forEach(::reload)
+    /**
+     * "Revalidate on entry": past the 10-min list cache, so remote changes show. A load already in flight is
+     * replaced (its generation is dropped); before the first load the invalidation alone is enough.
+     */
+    fun revalidate() {
+        repository.invalidateAccountLists()
+        MediaType.entries.forEach(::reload)
+    }
 
-    fun retry(media: MediaType) = if (_state.value.group(media).section is SectionState.Content) loadMore(media) else reload(media)
+    fun retry(media: MediaType) {
+        val group = _state.value.group(media)
+        if (group.section is SectionState.Content && group.refreshError == null) loadMore(media) else reload(media)
+    }
 
     fun loadMore(media: MediaType) {
         val (c, t) = scope ?: return
@@ -119,7 +130,10 @@ class LibraryViewModel(
                     val shown = (it.section as? SectionState.Content)?.value.orEmpty()
                     val known = shown.mapTo(HashSet()) { e -> e.title.ref }
                     // Items shift between pages when the list changes remotely: never show a title twice.
-                    LibraryGroup(SectionState.Content(shown + page.entries.filter { e -> e.title.ref !in known }), page.hasMore)
+                    it.copy(
+                        section = SectionState.Content(shown + page.entries.filter { e -> e.title.ref !in known }),
+                        hasMore = page.hasMore, loadingMore = false, moreError = null,
+                    )
                 }
             } catch (e: TmdbException) {
                 if (generations.getValue(media).isCurrent(generation)) {
@@ -147,8 +161,11 @@ class LibraryViewModel(
                 setGroup(media) { LibraryGroup(pages.flatMap { it.entries }.distinctBy { it.title.ref }.toSection(), pages.last().hasMore) }
             } catch (e: TmdbException) {
                 if (!generations.getValue(media).isCurrent(generation)) return@launch
-                // A failed revalidation keeps the items already shown.
-                setGroup(media) { if (it.section is SectionState.Content) it.copy(loadingMore = false) else LibraryGroup(SectionState.Error(e.toSectionErrorKind())) }
+                // A failed revalidation keeps the items already shown, marked stale with the error and a retry.
+                setGroup(media) {
+                    if (it.section is SectionState.Content) it.copy(loadingMore = false, refreshError = e.toSectionErrorKind())
+                    else LibraryGroup(SectionState.Error(e.toSectionErrorKind()))
+                }
             }
         }
     }
