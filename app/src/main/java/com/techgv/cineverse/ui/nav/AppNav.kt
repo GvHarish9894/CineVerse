@@ -3,6 +3,7 @@ package com.techgv.cineverse.ui.nav
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -121,7 +122,10 @@ fun AppNav(container: AppContainer) {
                     .fillMaxSize()
                     .padding(start = if (railScreen) RAIL_COLLAPSED_WIDTH else 0.dp)
                     .focusRequester(contentFocus)
-                    .focusRestorer(),
+                    // The restorer owns one group (the screen): without it its onEnter acts on every top-level
+                    // group inside and redirects programmatic requestFocus calls (e.g. the Season episode panel).
+                    .focusRestorer()
+                    .focusGroup(),
             ) {
                 // §7.12: the Rate dialog waits while the Player is up.
                 LibraryActionsHost(container.libraryRepository, container.appScope, playerActive = onPlayer) {

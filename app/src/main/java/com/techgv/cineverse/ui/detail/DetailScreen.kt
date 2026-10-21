@@ -73,7 +73,6 @@ import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
-import com.techgv.cineverse.ui.components.screenFocusRoot
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.nav.Route
@@ -120,7 +119,7 @@ fun DetailContent(
     imageBase: String,
     actions: DetailActions,
 ) {
-    Box(Modifier.screenFocusRoot().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val section = state.detail) {
             is SectionState.Content -> DetailBody(section.value, libraryState, focusMemory, imageBase, actions)
             else -> Section(section, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}

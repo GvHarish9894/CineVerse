@@ -60,7 +60,6 @@ import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.SectionState
-import com.techgv.cineverse.ui.components.screenFocusRoot
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
@@ -112,8 +111,7 @@ class SeasonActions(
 
 @Composable
 fun SeasonContent(state: SeasonUiState, focusMemory: FocusMemory, imageBase: String, actions: SeasonActions) {
-    // ScreenFocusRoot: AppNav's focusRestorer must not act as onEnter of the panel / lists inside.
-    Box(Modifier.screenFocusRoot().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val show = state.show) {
             is SectionState.Content -> SeasonBody(show.value, state, focusMemory, imageBase, actions)
             else -> Section(show, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}

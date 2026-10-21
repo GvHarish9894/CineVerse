@@ -45,7 +45,6 @@ import com.techgv.cineverse.ui.components.PosterCard
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.SectionState
-import com.techgv.cineverse.ui.components.screenFocusRoot
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.detail.DetailChip
@@ -82,7 +81,7 @@ internal fun PersonContent(
     onRetry: () -> Unit,
     onNavigate: (Route) -> Unit,
 ) {
-    Box(Modifier.screenFocusRoot().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (person) {
             is SectionState.Content -> PersonBody(person.value, bioExpanded, memory, imageBase, onToggleBio, onNavigate)
             else -> Section(person, onRetry = onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}

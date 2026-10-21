@@ -2,6 +2,7 @@ package com.techgv.cineverse.ui.season
 
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,8 +59,8 @@ class SeasonScreenDpadTest {
             onNoticeShown = {}, onNavigate = {},
         )
         val memory = FocusMemory(SavedStateHandle())
-        // AppNav wraps every screen in a focusRestorer(); it must not hijack focus entering the panel.
-        compose.setContent { Box(Modifier.focusRestorer()) { SeasonContent(state, memory, imageBase = "", actions) } }
+        // Mirrors AppNav's content container: focusRestorer() owning one focusGroup must not hijack focus entering the panel.
+        compose.setContent { Box(Modifier.focusRestorer().focusGroup()) { SeasonContent(state, memory, imageBase = "", actions) } }
         compose.waitForIdle()
 
         compose.onNodeWithText("Season 1").assertIsFocused().performKeyInput { pressKey(Key.DirectionRight) }

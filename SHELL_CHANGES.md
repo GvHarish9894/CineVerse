@@ -1,4 +1,4 @@
-# Shell changes (Lane 1 owner + Lanes 3 and 4, merged on `integration`)
+# Shell changes (Lane 1 owner + Lanes 2, 3 and 4, merged on `integration`)
 
 Lane 1 owns the §5 shell for wave 2 (rail expand-on-focus, clock, ambient backdrop) besides Home / Browse /
 Search. These are deliberate Lane 1 deliverables, not WIP. Unchanged vs master: BACK precedence
@@ -20,6 +20,8 @@ neither.
 | (Lane 4) `NavHost` is wrapped in `LibraryActionsHost(container.libraryRepository, container.appScope, playerActive = onPlayer)` inside the content `Box`. | Provides `LocalLibraryActions` (Home hero Watchlist etc.); the Rate dialog waits while the Player is up (§7.12). |
 | (Lane 4) Route `Library` → `LibraryScreen(container, onOpenTitle = Detail, onExplore = reset to Browse(Movies), onSignIn = Login)`. | §7.8. |
 | (Lane 4) `ImportLibraryHost(container.libraryRepository, container.libraryImporter, playerActive = onPlayer)` in the root `Box`, after `ToastHost` (under `LocalToaster`). | §8.3 guest → account import prompt; waits while the Player is up. |
+| (Lane 2) Routes `Detail` / `Person` / `Season` → `DetailScreen` / `PersonScreen` / `SeasonScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) })`. `isRailScreen` unchanged: no rail on them. | §7.4–§7.6. |
+| (Integration) The content `Box` is `.focusRequester(contentFocus).focusRestorer().focusGroup()`: the restorer owns **one** explicit focus group, the screen. | See "Focus root" below. |
 
 Merge notes for the remaining lanes: Lane 2 replaces the Detail / Person / Season lines inside
 `LibraryActionsHost { NavHost { … } }`. If a lane rewrites the AppNav scaffold, keep all three `onPlayer` gates
@@ -51,9 +53,26 @@ Lane 3's own rail account footer (`RailAccount` / `accountInitials`) was dropped
 | `savedAtEntry`: the screen's `SavedFocus` (row, item key, index) captured when the restorer is created; the **first** `restore()` targets it, then clears it so later restores read the memory again. | After a pop the window regains focus and default focus lands on (e.g.) item 0 of the saved row, overwriting the memory before `restore()` runs; the screen then restored to the wrong item (review finding 5). |
 | `focusIn(row, index)` is public (was private). | Search moves focus to the first result after Clear (§7.7). |
 | (Lane 4) `FocusRow.lazyIndices` (optional, default null): the lazy-item index of each item key; `focusIn` scrolls by it. | The Library grid has header items, so item index ≠ lazy index; it restores by lazy index. |
+| (Lane 2, folded with the fix below) `FocusRestorer.entryKey(row, direction)`: a D-pad entry into a row lands on its remembered item, else its **first** item (prototype `rowMem`), not the geometrically nearest one; `Enter` (programmatic) → null, the request keeps its target. | Prototype row entry; changes Lane 1's rows (Home / Browse / Search), Settings and Library too. Covered by `FocusMemoryTest` and `FocusRestorerRowEntryTest`. |
 | (Integration fix after the Lane 4 merge) `restoreRowFocus`'s `onEnter` redirects only D-pad entries to the row's remembered item; a programmatic `requestFocus` (`requestedFocusDirection == FocusDirection.Enter`) keeps its own target. A screen that wants row memory on a programmatic entry calls `restorer.restore(…)`. | §7.7: Search's after-Clear `focusIn(first result)` was redirected to the remembered trending item (and `SearchDpadTest.everyClearMovesFocusToTheFirstResult` failed because its `requestFocus` on the `x` key was redirected to the remembered `Clear` key). Covered by `SearchDpadTest.clearFocusesTheFirstResultEvenWhenAnotherTrendingResultIsRemembered`. |
 
 No change to `FocusMemory`, `rememberFocus`, `restoreRowFocus`, `entryIndex` results, or saved keys.
+
+## Focus root (AppNav `focusRestorer`)
+`Modifier.focusRestorer()` has no focus target of its own, so on AppNav's content `Box` its `onEnter` redirect
+applied to every top-level focus group inside the screen: a programmatic `requestFocus()` into an inner group was
+sent to the last focused item elsewhere (device: opening the Season episode panel sent focus from Close back to
+the last focused season). Lane 2 worked around it with `Modifier.screenFocusRoot()` (`fillMaxSize().focusGroup()`)
+on its three screens and left the integrator a choice (FOCUS_NOTES.md): put that root on every screen under AppNav,
+or let AppNav's restorer own an explicit group.
+
+**Chosen: AppNav's content is `.focusRestorer().focusGroup()`.** One line covers every screen under AppNav
+(including the spikes and future screens) instead of nine call sites that each must remember it. Rail ↔
+content and `contentFocus.requestFocus()` now enter that group, so the restorer still restores the last focused
+item on re-entry; focus moves inside the screen are left alone. `ScreenFocusRoot.kt` is deleted and Detail /
+Person / Season roots are plain `fillMaxSize()`. `SeasonScreenDpadTest` wraps the screen in
+`focusRestorer().focusGroup()` as AppNav does; with a bare `focusRestorer()` wrapper and no screen root it
+fails (checked on emulator-5554), so it guards the regression. All 34 `ui.*` instrumented tests pass.
 
 ## Also touched outside `ui/nav`
 - `MainActivity.kt`: one `settings` `State` (`collectAsStateWithLifecycle(Settings())`, kept as `State`, not
