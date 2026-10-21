@@ -19,9 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +57,7 @@ import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.SavedFocus
+import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
@@ -354,8 +353,7 @@ private fun EpisodePanel(episode: Episode, restorer: FocusRestorer, imageBase: S
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
             .focusProperties { onExit = { cancelFocusChange() } }
             .focusGroup()
-            .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -372,10 +370,10 @@ private fun EpisodePanel(episode: Episode, restorer: FocusRestorer, imageBase: S
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            episode.overview.ifBlank { "No overview available" },
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
+        // Takes the room left by the rest; UP from Close enters it, DOWN pages through it back to Close.
+        ScrollableText(
+            episode.overview.ifBlank { "No overview available" }, MaterialTheme.typography.bodyLarge, MaterialTheme.colorScheme.onSurface,
+            Modifier.weight(1f, fill = false),
         )
         DetailActionButton(
             "✕", "Close", onClose,

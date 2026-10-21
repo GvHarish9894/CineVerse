@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,6 +39,7 @@ import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.Section
+import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
@@ -146,13 +148,21 @@ private fun PersonBody(
                             if (person.biographyInEnglish) {
                                 Text("(English)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Text(
-                                person.biography,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = if (bioExpanded) Int.MAX_VALUE else 4,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            if (bioExpanded) {
+                                // UP from "Show less" enters the text; DOWN pages through it, then returns to the button.
+                                ScrollableText(
+                                    person.biography, MaterialTheme.typography.bodyLarge, MaterialTheme.colorScheme.onSurface,
+                                    Modifier.heightIn(max = 240.dp),
+                                )
+                            } else {
+                                Text(
+                                    person.biography,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 4,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             Row(with(restorer) { Modifier.restoreRowFocus(focusRows[0], scope) }.revealHeroOnFocus(outer, scope, LocalFeedback.current.reduceMotion)) {
                                 DetailActionButton(
                                     "ⓘ", if (bioExpanded) "Show less" else "Read full biography", onToggleBio,

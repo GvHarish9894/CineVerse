@@ -21,7 +21,11 @@ import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.nav.Route
+import com.techgv.cineverse.ui.components.focusedScrollableText
+import com.techgv.cineverse.ui.components.longText
+import com.techgv.cineverse.ui.components.readFocusedScrollableTextByDpad
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -65,5 +69,22 @@ class PersonScreenDpadTest {
         compose.onNodeWithText("Acting credits").assertExists()
         compose.onNodeWithText("as Hero", substring = true).assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
         assertEquals(Route.Detail(MediaType.Movie, 10), navigated.single())
+    }
+
+    @Test
+    fun expandedLongBiography_readFullyByDpad_thenBackToShowLess() {
+        val longBio = person.copy(biography = longText("Bio"))
+        compose.setContent {
+            PersonContent(
+                SectionState.Content(longBio), bioExpanded = true, FocusMemory(SavedStateHandle()), imageBase = "",
+                onToggleBio = {}, onRetry = {}, onNavigate = {},
+            )
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Show less", substring = true).assertIsFocused().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.waitForIdle()
+        compose.onNode(focusedScrollableText).assertExists()
+        assertTrue("several pages", compose.readFocusedScrollableTextByDpad() >= 2)
+        compose.onNodeWithText("Show less", substring = true).assertIsFocused()
     }
 }

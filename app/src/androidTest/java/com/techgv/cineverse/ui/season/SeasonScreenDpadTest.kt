@@ -28,6 +28,9 @@ import com.techgv.cineverse.data.tmdb.toDetail
 import com.techgv.cineverse.data.tmdb.toSeason
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.ui.components.longText
+import com.techgv.cineverse.ui.components.readFocusedScrollableTextByDpad
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,7 +45,7 @@ class SeasonScreenDpadTest {
     private val show = TvDetailDto(7, name = "Show", seasons = listOf(SeasonSummaryDto(11, 1, episodeCount = 2), SeasonSummaryDto(12, 2))).toDetail("IN")
     private val season1 = SeasonDto(
         11, 1,
-        episodes = listOf(EpisodeDto(1, episodeNumber = 1, name = "Pilot"), EpisodeDto(2, episodeNumber = 2, name = "Second", overview = "Full overview")),
+        episodes = listOf(EpisodeDto(1, episodeNumber = 1, name = "Pilot"), EpisodeDto(2, episodeNumber = 2, name = "Second", overview = "Full overview. " + longText("Episode"))),
     ).toSeason(7)
 
     @Test
@@ -67,9 +70,15 @@ class SeasonScreenDpadTest {
         compose.waitForIdle()
 
         // Panel: full overview, focus inside on Close; LEFT cannot leave it.
-        compose.onAllNodesWithText("Full overview").assertCountEquals(2) // card excerpt + panel
+        compose.onAllNodesWithText("Full overview", substring = true).assertCountEquals(2) // card excerpt + panel
         compose.onNodeWithText("Close").assertIsFocused().performKeyInput { pressKey(Key.DirectionLeft) }
         compose.waitForIdle()
+        compose.onNodeWithText("Close").assertIsFocused()
+
+        // The long overview is read by D-pad alone: UP into it, DOWN page by page, then back on Close.
+        compose.onNodeWithText("Close").performKeyInput { pressKey(Key.DirectionUp) }
+        compose.waitForIdle()
+        assertTrue("several pages", compose.readFocusedScrollableTextByDpad() >= 2)
         compose.onNodeWithText("Close").assertIsFocused()
 
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
