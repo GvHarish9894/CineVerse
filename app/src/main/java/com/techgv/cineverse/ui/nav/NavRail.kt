@@ -66,8 +66,9 @@ private val RAIL_EXPANDED_WIDTH = 268.dp
 fun NavRail(
     current: RailItem?,
     onSelect: (RailItem) -> Unit,
-    accountName: String?,
     modifier: Modifier = Modifier,
+    /** Signed-in display name; null = guest. Initials are derived here (D3: no photo). */
+    accountName: String? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val reduceMotion = LocalSettings.current.motion
@@ -107,9 +108,9 @@ fun NavRail(
             }
         }
         Row(Modifier.height(44.dp).padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            val name = accountName ?: "Guest"
+            val name = accountName?.takeIf { it.isNotBlank() } ?: "Guest"
             Box(Modifier.size(40.dp).background(Color(0x33FFFFFF), CircleShape), contentAlignment = Alignment.Center) {
-                Text(if (accountName != null) initials(accountName) else "G", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(initials(accountName.orEmpty()).ifEmpty { "G" }, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
             if (expanded) {
                 Spacer(Modifier.width(14.dp))
