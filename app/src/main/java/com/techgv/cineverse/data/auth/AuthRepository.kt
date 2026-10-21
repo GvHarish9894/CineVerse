@@ -187,13 +187,16 @@ class AuthRepository(
 
     /**
      * §4.2: local sign-out first (generation bump, account caches, tuple), then bounded best-effort
-     * remote revocation. Remote failures are logged without token values and ignored.
+     * remote revocation. Remote failures are logged without token values and ignored. [onSignedOutLocally]
+     * runs once the local half is done (not when it throws), before the remote half.
      */
-    suspend fun signOut(): Unit = withContext(NonCancellable) {
+    suspend fun signOut(onSignedOutLocally: () -> Unit = {}): Unit = withContext(NonCancellable) {
         val snapshot = transitionLock.withLock {
             attemptEpoch.incrementAndGet() // before the empty-store return: an in-flight sign-in must not commit later
             store.credentials.first()?.also { clearLocally() }
-        } ?: return@withContext
+        }
+        onSignedOutLocally()
+        if (snapshot == null) return@withContext
         withTimeoutOrNull(signOutTimeoutMillis) {
             coroutineScope {
                 launch {

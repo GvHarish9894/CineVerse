@@ -54,15 +54,24 @@ import com.techgv.cineverse.ui.about.APP_VERSION
 import com.techgv.cineverse.ui.about.AboutPane
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
+import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.feedback.Feedback
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 
-private const val PANEL = "settings"
-private const val ROW = "rows"
-private const val DEFAULTS_APPLY = "accountDefaults.apply"
-private const val DEFAULTS_DISMISS = "accountDefaults.dismiss"
+internal const val PANEL = "settings"
+internal const val DEFAULTS_ROW = "accountDefaults"
+internal const val DEFAULTS_APPLY = "accountDefaults.apply"
+internal const val DEFAULTS_DISMISS = "accountDefaults.dismiss"
 private const val ABOUT = "about"
+
+/**
+ * One focus row per LazyColumn item, so a focus row's index is its lazy-item index (§1.3 restore scrolls
+ * the list by it): the defaults offer (Apply, Dismiss) when shown, then one row per setting.
+ */
+internal fun settingsFocusRows(offerShown: Boolean, rowKeys: List<String>): List<FocusRow> =
+    listOfNotNull(FocusRow(PANEL, DEFAULTS_ROW, listOf(DEFAULTS_APPLY, DEFAULTS_DISMISS)).takeIf { offerShown }) +
+        rowKeys.map { FocusRow(PANEL, it, listOf(it)) }
 
 private sealed interface RowValue {
     data class Toggle(val on: Boolean) : RowValue
@@ -85,7 +94,6 @@ private fun settingRows(
     state: SettingsUiState,
     vm: SettingsViewModel,
     onSignIn: () -> Unit,
-    onSignedOut: () -> Unit,
 ): List<SettingRow> {
     val s = state.settings
     fun toggle(key: String, glyph: String, label: String, description: String, on: Boolean, toggle: Toggle) =
@@ -133,10 +141,7 @@ private fun settingRows(
             s.includeAdult, Toggle.Adult,
         ),
         if (state.accountName != null) {
-            SettingRow("account", "◉", "Sign out", "Ends your TMDB session on this TV. Your library stays on this TV.", RowValue.Label(state.accountName)) {
-                vm.signOut()
-                onSignedOut()
-            }
+            SettingRow("account", "◉", "Sign out", "Ends your TMDB session on this TV. Your library stays on this TV.", RowValue.Label(state.accountName), vm::signOut)
         } else {
             SettingRow(
                 "account", "◉", "Sign in with TMDB",
@@ -152,20 +157,24 @@ private fun settingRows(
 @Composable
 fun SettingsScreen(
     onSignIn: () -> Unit,
-    onSignedOut: () -> Unit,
     vm: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(LocalContext.current.appContainer)),
 ) {
     val state = vm.state.collectAsStateWithLifecycle().value ?: return
     val feedback = LocalFeedback.current
     val restorer = remember(vm) { FocusRestorer(vm.focusMemory) }
     val listState = rememberSavedLazyListState(vm.focusMemory, PANEL)
-    val rows = settingRows(state, vm, onSignIn, onSignedOut)
+    val toaster = LocalToaster.current
+    LaunchedEffect(vm) {
+        vm.signOutResults.collect { signedOut ->
+            if (signedOut) toaster.show("Signed out", "Your library stays on this TV") else toaster.show("Couldn't sign out — try again")
+        }
+    }
+    val rows = settingRows(state, vm, onSignIn)
     val defaults = state.accountDefaults
-    val keys = (if (defaults != null) listOf(DEFAULTS_APPLY, DEFAULTS_DISMISS) else emptyList()) + rows.map { it.key }
-    var focusedKey by rememberSaveable { mutableStateOf(keys.first()) }
+    var focusedKey by rememberSaveable { mutableStateOf(if (defaults != null) DEFAULTS_APPLY else rows.first().key) }
 
     // First data, and again when the defaults row appears / goes (its buttons vanish while focused).
-    LaunchedEffect(keys) { restorer.restore(listOf(FocusRow(PANEL, ROW, keys, listState))) }
+    LaunchedEffect(defaults != null) { restorer.restore(settingsFocusRows(defaults != null, rows.map { it.key }), listState) }
 
     // Prototype geometry in 1280×720 design units (§6); the content starts after the 72-unit rail.
     Row(Modifier.fillMaxSize().padding(start = 48.dp, top = 44.dp)) {
@@ -190,12 +199,12 @@ fun SettingsScreen(
                 contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 44.dp),
             ) {
                 if (defaults != null) {
-                    item(key = "accountDefaults") {
+                    item(key = DEFAULTS_ROW) {
                         AccountDefaultsRow(
                             text = defaultsLabel(defaults.language, defaults.region),
-                            focusModifier = { key -> with(restorer) { Modifier.rememberFocus(PANEL, ROW, key, keys.indexOf(key)) } },
+                            focusModifier = { key, index -> with(restorer) { Modifier.rememberFocus(PANEL, DEFAULTS_ROW, key, index) } },
                             onFocused = { focusedKey = it },
-                            onResolve = vm::resolveAccountDefaults,
+                            onResolve = { apply -> vm.resolveAccountDefaults(defaults, apply) },
                         )
                     }
                 }
@@ -203,7 +212,7 @@ fun SettingsScreen(
                     SettingRowItem(
                         row,
                         feedback,
-                        with(restorer) { Modifier.rememberFocus(PANEL, ROW, row.key, keys.indexOf(row.key)) }
+                        with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.key, 0) }
                             .onFocusChanged { if (it.isFocused) focusedKey = row.key },
                     )
                 }
@@ -282,7 +291,7 @@ private fun RowValue.spoken() = when (this) {
 @Composable
 private fun AccountDefaultsRow(
     text: String,
-    focusModifier: (String) -> Modifier,
+    focusModifier: (key: String, index: Int) -> Modifier,
     onFocused: (String) -> Unit,
     onResolve: (apply: Boolean) -> Unit,
 ) {
@@ -291,11 +300,11 @@ private fun AccountDefaultsRow(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
                 onClick = { onResolve(true) },
-                modifier = focusModifier(DEFAULTS_APPLY).onFocusChanged { if (it.isFocused) onFocused(DEFAULTS_APPLY) },
+                modifier = focusModifier(DEFAULTS_APPLY, 0).onFocusChanged { if (it.isFocused) onFocused(DEFAULTS_APPLY) },
             ) { Text("Apply") }
             OutlinedButton(
                 onClick = { onResolve(false) },
-                modifier = focusModifier(DEFAULTS_DISMISS).onFocusChanged { if (it.isFocused) onFocused(DEFAULTS_DISMISS) },
+                modifier = focusModifier(DEFAULTS_DISMISS, 1).onFocusChanged { if (it.isFocused) onFocused(DEFAULTS_DISMISS) },
             ) { Text("Dismiss") }
         }
     }

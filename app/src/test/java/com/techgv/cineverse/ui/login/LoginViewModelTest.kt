@@ -3,7 +3,7 @@ package com.techgv.cineverse.ui.login
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
 import com.techgv.cineverse.data.auth.CredentialStore
-import com.techgv.cineverse.data.auth.InMemoryPreferencesStore
+import com.techgv.cineverse.data.auth.GatedPreferencesStore
 import com.techgv.cineverse.data.auth.RequestCode
 import com.techgv.cineverse.data.auth.SignInOutcome
 import com.techgv.cineverse.data.auth.SoftwareKeys
@@ -22,7 +22,9 @@ import com.techgv.cineverse.data.tmdb.unusedTmdbApi
 import com.techgv.cineverse.ui.components.SectionErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -59,8 +61,10 @@ class LoginViewModelTest {
         override suspend fun account(sessionId: String) = AccountDto(548, "harish", "Harish", language = "ta", region = "IN")
     }
 
-    private val settings = SettingsRepository(InMemoryPreferencesStore())
-    private val auth = AuthRepository(api, CredentialStore(InMemoryPreferencesStore(), CredentialCipher(SoftwareKeys())), onAccountChanged = {})
+    private val settingsData = GatedPreferencesStore()
+    private val settings = SettingsRepository(settingsData)
+    private val credentialData = GatedPreferencesStore()
+    private val auth = AuthRepository(api, CredentialStore(credentialData, CredentialCipher(SoftwareKeys())), onAccountChanged = {})
 
     /** TMDB "not approved yet": HTTP 422, status_code 41. */
     private fun pending(): HttpException {
@@ -78,12 +82,13 @@ class LoginViewModelTest {
 
     @Test
     fun `code arrives, pending keeps the spinner, approval signs in and offers account defaults`() = runTest(dispatcher) {
-        val vm = LoginViewModel(auth, settings)
+        val vm = LoginViewModel(auth, settings, this)
+        val names = mutableListOf<String>()
+        backgroundScope.launch { vm.signedIn.toList(names) }
         runCurrent()
         assertEquals(LoginUiState.ready(RequestCode("request-token")).primaryAction, vm.state.value.primaryAction)
         assertEquals("request-token", vm.state.value.code?.requestToken)
 
-        val name = async { vm.signedIn.first() }
         vm.onPrimary()
         runCurrent()
         assertTrue(vm.state.value.polling)
@@ -91,13 +96,66 @@ class LoginViewModelTest {
 
         approved = true
         advanceTimeBy(3_001)
-        assertEquals("Harish", name.await())
-        assertEquals(AccountDefaults("aoid", "ta-IN", "IN", false), settings.accountDefaults.first())
+        assertEquals(listOf("Harish"), names)
+        assertEquals(mapOf("aoid" to AccountDefaults("aoid", "ta-IN", "IN", false)), settings.pendingAccountDefaults.first())
+    }
+
+    @Test
+    fun `stopPolling after the credential commit cannot cancel the sign-in or re-offer the consumed code`() = runTest(dispatcher) {
+        val vm = LoginViewModel(auth, settings, this)
+        val names = mutableListOf<String>()
+        backgroundScope.launch { vm.signedIn.toList(names) }
+        runCurrent()
+        vm.onPrimary()
+        runCurrent()
+        val offerWrite = CompletableDeferred<Unit>().also { settingsData.gate = it }
+        approved = true
+        advanceTimeBy(3_001) // credentials committed; the account-defaults offer write is held
+
+        vm.stopPolling() // background / focus loss after the commit
+        assertEquals(listOf("Harish"), names)
+        assertEquals(LoginAction.None, vm.state.value.primaryAction)
+        assertNull(vm.state.value.code)
+        val calls = exchangeCalls
+        vm.onPrimary()
+        advanceTimeBy(30_000)
+        assertEquals(calls, exchangeCalls)
+
+        offerWrite.complete(Unit) // the offer was not cancelled with the poll
+        runCurrent()
+        assertEquals(setOf("aoid"), settings.pendingAccountDefaults.first().keys)
+        assertEquals(listOf("Harish"), names)
+    }
+
+    @Test
+    fun `stopPolling during the credential commit still leaves Login exactly once`() = runTest(dispatcher) {
+        val vm = LoginViewModel(auth, settings, this)
+        val names = mutableListOf<String>()
+        backgroundScope.launch { vm.signedIn.toList(names) }
+        runCurrent()
+        vm.onPrimary()
+        runCurrent()
+        val commit = CompletableDeferred<Unit>().also { credentialData.gate = it }
+        approved = true
+        advanceTimeBy(3_001) // the credential write is held mid-commit
+        assertTrue(vm.state.value.polling)
+
+        vm.stopPolling() // the poll is cancelled; the non-cancellable write still lands
+        commit.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("Harish"), names)
+        assertNull(vm.state.value.code)
+        val calls = exchangeCalls
+        vm.onPrimary()
+        vm.stopPolling()
+        advanceTimeBy(30_000)
+        assertEquals(calls, exchangeCalls)
+        assertEquals(listOf("Harish"), names)
     }
 
     @Test
     fun `stopPolling cancels the poll and keeps the code`() = runTest(dispatcher) {
-        val vm = LoginViewModel(auth, settings)
+        val vm = LoginViewModel(auth, settings, this)
         runCurrent()
         vm.onPrimary()
         runCurrent()

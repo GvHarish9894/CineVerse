@@ -14,6 +14,7 @@ import com.techgv.cineverse.ui.components.SectionErrorKind
 import com.techgv.cineverse.ui.components.toSectionErrorKind
 import com.techgv.cineverse.ui.settings.accountDefaultsOffer
 import com.techgv.cineverse.util.GenerationCounter
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
@@ -21,6 +22,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
@@ -44,6 +47,9 @@ data class LoginUiState(
         const val CHECK_AGAIN_LABEL = "Check again"
 
         val requestingCode = LoginUiState(message = "Getting a sign-in code…", waiting = true)
+
+        /** Terminal: credentials are committed, the request code is consumed and never offered again. */
+        val signedIn = LoginUiState(message = "Signing you in…")
         fun ready(code: RequestCode) = LoginUiState(code, primaryAction = LoginAction.Poll)
         fun polling(code: RequestCode) =
             LoginUiState(code, "Waiting for TMDB to confirm your approval…", "Checking…", waiting = true)
@@ -80,9 +86,15 @@ fun SignInOutcome.toLoginState(code: RequestCode): LoginUiState? = when (this) {
 /**
  * One request code per screen; polling only on "I've approved it" and only while the screen is started,
  * window-focused and composed (the screen calls [stopPolling]). Results commit only for the current
- * generation (§1.1); a newer press or [stopPolling] bumps it.
+ * generation (§1.1); a newer press or [stopPolling] bumps it — except the credential commit, which is
+ * the terminal success however the poll ends.
  */
-class LoginViewModel(private val auth: AuthRepository, private val settings: SettingsRepository) : ViewModel() {
+class LoginViewModel(
+    private val auth: AuthRepository,
+    private val settings: SettingsRepository,
+    /** Outlives this screen: post-commit work must not be cancelled by [stopPolling] or dispose. */
+    private val appScope: CoroutineScope,
+) : ViewModel() {
     private val _state = MutableStateFlow(LoginUiState.requestingCode)
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
 
@@ -96,6 +108,14 @@ class LoginViewModel(private val auth: AuthRepository, private val settings: Set
 
     init {
         requestCode()
+        // Committed credentials (even when [stopPolling] cancelled the poll right after the commit, or
+        // they exist on resume) leave Login exactly once and never re-offer the consumed code.
+        viewModelScope.launch {
+            val credentials = auth.credentials.filterNotNull().first()
+            generation.bump()
+            _state.value = LoginUiState.signedIn
+            signedInEvents.send(credentials.displayName)
+        }
     }
 
     fun onPrimary() = when (_state.value.primaryAction) {
@@ -126,15 +146,16 @@ class LoginViewModel(private val auth: AuthRepository, private val settings: Set
         val code = _state.value.code ?: return
         start(LoginUiState.polling(code)) { generation ->
             val outcome = auth.awaitApproval(code)
-            if (!this.generation.isCurrent(generation)) return@start
-            when (outcome) {
-                is SignInOutcome.SignedIn -> {
+            when {
+                // Committed: the credentials observer (init) leaves Login; the optional offer outlives this job.
+                // shortcut: a cancel landing inside the commit itself loses the offer (sign-in still completes).
+                outcome is SignInOutcome.SignedIn -> appScope.launch {
                     accountDefaultsOffer(outcome.credentials, outcome.account, settings.current())
                         ?.let { settings.offerAccountDefaults(it) }
-                    signedInEvents.send(outcome.credentials.displayName)
                 }
+                !this.generation.isCurrent(generation) -> Unit
                 // A sign-out / expiry raced the commit: nothing was saved and the code is consumed; start over quietly.
-                SignInOutcome.Superseded -> requestCode()
+                outcome == SignInOutcome.Superseded -> requestCode()
                 else -> outcome.toLoginState(code)?.let { _state.value = it }
             }
         }
@@ -157,7 +178,7 @@ class LoginViewModel(private val auth: AuthRepository, private val settings: Set
 
     companion object {
         fun factory(container: AppContainer) = viewModelFactory {
-            initializer { LoginViewModel(container.authRepository, container.settingsRepository) }
+            initializer { LoginViewModel(container.authRepository, container.settingsRepository, container.appScope) }
         }
     }
 }

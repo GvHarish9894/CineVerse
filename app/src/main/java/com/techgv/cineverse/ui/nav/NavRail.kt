@@ -45,9 +45,9 @@ enum class RailItem(val label: String, val glyph: String, val route: Route) {
 fun NavRail(
     current: RailItem?,
     onSelect: (RailItem) -> Unit,
-    modifier: Modifier = Modifier,
     /** Signed-in display name; null = guest (§5, D3: initials only, no photo). */
-    accountName: String? = null,
+    accountName: String?,
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Column(
@@ -60,7 +60,6 @@ fun NavRail(
             .selectableGroup(),
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
     ) {
-        Spacer(Modifier.weight(1f))
         RailItem.entries.forEach { item ->
             Surface(
                 onClick = { onSelect(item) },
@@ -79,7 +78,6 @@ fun NavRail(
                 }
             }
         }
-        Spacer(Modifier.weight(1f))
         RailAccount(accountName, expanded)
     }
 }

@@ -51,6 +51,7 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.techgv.cineverse.appContainer
 import com.techgv.cineverse.data.auth.RequestCode
+import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.QrCode
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 
@@ -62,12 +63,19 @@ import com.techgv.cineverse.ui.feedback.LocalFeedback
 fun LoginScreen(
     message: String?,
     onContinueAsGuest: () -> Unit,
-    onSignedIn: (displayName: String) -> Unit,
+    /** Credentials are committed; called once. */
+    onSignedIn: () -> Unit,
     vm: LoginViewModel = viewModel(factory = LoginViewModel.factory(LocalContext.current.appContainer)),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val toaster = LocalToaster.current
     val signedIn by rememberUpdatedState(onSignedIn)
-    LaunchedEffect(vm) { vm.signedIn.collect { signedIn(it) } }
+    LaunchedEffect(vm) {
+        vm.signedIn.collect { name ->
+            toaster.show("Signed in as $name", "Watchlist, favourites and ratings will sync")
+            signedIn()
+        }
+    }
 
     // §4.1 polling stops on background / dispose (a BACK pop disposes) and when the Exit dialog
     // (BACK on a cold-start Login) takes window focus.
@@ -108,7 +116,14 @@ fun LoginScreen(
                 Button(onClick = vm::onPrimary, modifier = Modifier.focusRequester(primary), contentPadding = BUTTON_PADDING) {
                     Text(state.primaryLabel, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
-                OutlinedButton(onClick = { vm.stopPolling(); onContinueAsGuest() }, contentPadding = BUTTON_PADDING) {
+                OutlinedButton(
+                    onClick = {
+                        vm.stopPolling()
+                        toaster.show("Browsing as a guest", "Sign in from Settings whenever you like")
+                        onContinueAsGuest()
+                    },
+                    contentPadding = BUTTON_PADDING,
+                ) {
                     Text("Continue as guest", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
             }

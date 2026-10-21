@@ -31,7 +31,7 @@ data class Settings(
     }
 }
 
-/** §7.9 "Use your TMDB account defaults": the signed-in account's content settings, offered until applied or dismissed. */
+/** §7.9 "Use your TMDB account defaults": an account's content settings, offered until applied or dismissed. */
 @Serializable
 data class AccountDefaults(val accountObjectId: String, val language: String, val region: String, val includeAdult: Boolean)
 
@@ -45,8 +45,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val language = stringPreferencesKey("language")
         val region = stringPreferencesKey("region")
         val includeAdult = booleanPreferencesKey("include_adult")
-        val accountDefaults = stringPreferencesKey("account_defaults")
-        val accountDefaultsOffered = stringSetPreferencesKey("account_defaults_offered")
+        val accountDefaultsPending = stringPreferencesKey("account_defaults_pending")
+        val accountDefaultsResolved = stringSetPreferencesKey("account_defaults_resolved")
     }
 
     val settings: Flow<Settings> = dataStore.data.map { it.toSettings() }
@@ -68,28 +68,31 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun current(): Settings = settings.first()
 
-    /** The pending account-defaults offer, if any (Settings shows it only for that signed-in account). */
-    val accountDefaults: Flow<AccountDefaults?> = dataStore.data.map { it.pendingAccountDefaults() }
+    /** Unresolved offers by account_object_id (Settings shows only the signed-in account's). */
+    val pendingAccountDefaults: Flow<Map<String, AccountDefaults>> = dataStore.data.map { it.pendingAccountDefaults() }
 
-    private fun Preferences.pendingAccountDefaults(): AccountDefaults? =
-        this[Keys.accountDefaults]?.let { runCatching { Json.decodeFromString<AccountDefaults>(it) }.getOrNull() }
+    private fun Preferences.pendingAccountDefaults(): Map<String, AccountDefaults> =
+        this[Keys.accountDefaultsPending]?.let { runCatching { Json.decodeFromString<Map<String, AccountDefaults>>(it) }.getOrNull() }.orEmpty()
 
-    /** Offers [defaults] on the account's first sign-in on this TV only; later sign-ins never re-offer. */
+    /** Keeps [defaults] pending for its account until Apply / Dismiss; showing it resolves nothing. */
     suspend fun offerAccountDefaults(defaults: AccountDefaults) {
         dataStore.edit { p ->
-            val offered = p[Keys.accountDefaultsOffered].orEmpty()
-            if (defaults.accountObjectId in offered) return@edit
-            p[Keys.accountDefaultsOffered] = offered + defaults.accountObjectId
-            p[Keys.accountDefaults] = Json.encodeToString(defaults)
+            if (defaults.accountObjectId in p[Keys.accountDefaultsResolved].orEmpty()) return@edit
+            p[Keys.accountDefaultsPending] = Json.encodeToString(p.pendingAccountDefaults() + (defaults.accountObjectId to defaults))
         }
     }
 
-    /** Ends the pending offer; [apply] writes its language / region / include_adult (cache invalidation follows). */
-    suspend fun resolveAccountDefaults(apply: Boolean) {
+    /**
+     * Ends [accountObjectId]'s pending offer only (never another account's); [apply] writes its
+     * language / region / include_adult (cache invalidation follows).
+     */
+    suspend fun resolveAccountDefaults(accountObjectId: String, apply: Boolean) {
         dataStore.edit { p ->
-            val defaults = p.pendingAccountDefaults()
-            p.remove(Keys.accountDefaults)
-            if (apply && defaults != null) {
+            val pending = p.pendingAccountDefaults()
+            val defaults = pending[accountObjectId] ?: return@edit
+            p[Keys.accountDefaultsPending] = Json.encodeToString(pending - accountObjectId)
+            p[Keys.accountDefaultsResolved] = p[Keys.accountDefaultsResolved].orEmpty() + accountObjectId
+            if (apply) {
                 p[Keys.language] = defaults.language
                 p[Keys.region] = defaults.region
                 p[Keys.includeAdult] = defaults.includeAdult

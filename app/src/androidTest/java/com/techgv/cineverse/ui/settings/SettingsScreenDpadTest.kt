@@ -29,6 +29,8 @@ import com.techgv.cineverse.data.tmdb.AccountObjectId
 import com.techgv.cineverse.data.tmdb.SessionId
 import com.techgv.cineverse.data.tmdb.TmdbApi
 import com.techgv.cineverse.data.tmdb.UserAccessToken
+import com.techgv.cineverse.ui.components.FocusMemory
+import com.techgv.cineverse.ui.components.SavedFocus
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -56,7 +58,7 @@ class SettingsScreenDpadTest {
 
     @Test
     fun leftRightCycleHapticStrength_focusStaysOnTheRow() {
-        compose.setContent { SettingsScreen(onSignIn = {}, onSignedOut = {}) }
+        compose.setContent { SettingsScreen(onSignIn = {}) }
         compose.waitUntil(5_000) { compose.onAllNodes(isFocused() and hasContentDescription("Haptic feedback, on")).fetchSemanticsNodes().isNotEmpty() }
 
         compose.onNodeWithContentDescription("Haptic feedback, on").performKeyInput { pressKey(Key.DirectionDown) }
@@ -71,9 +73,8 @@ class SettingsScreenDpadTest {
         compose.onNodeWithContentDescription("Haptic strength, Medium").assertIsFocused()
     }
 
-    @Test
-    fun accountDefaultsRow_dismissWithDpad_focusFallsBackIntoTheList() {
-        // A local signed-in account (no network: the API is never called) with a pending offer.
+    /** A local signed-in account (no network: the API is never called) with a pending offer. */
+    private fun viewModelWithPendingOffer(handle: SavedStateHandle = SavedStateHandle()): SettingsViewModel {
         fun store(name: String) = PreferenceDataStoreFactory.create { File(context.cacheDir, "$name-${System.nanoTime()}.preferences_pb") }
         val api = Proxy.newProxyInstance(TmdbApi::class.java.classLoader, arrayOf(TmdbApi::class.java)) { _, m, _ ->
             throw UnsupportedOperationException(m.name)
@@ -84,8 +85,13 @@ class SettingsScreenDpadTest {
             credentialStore.save(Credentials(UserAccessToken("t"), AccountObjectId("aoid"), SessionId("s"), AccountId(1), "harish", "Harish Gv"))
             localSettings.offerAccountDefaults(AccountDefaults("aoid", "hi-IN", "US", includeAdult = false))
         }
-        val vm = SettingsViewModel(SavedStateHandle(), localSettings, AuthRepository(api, credentialStore, onAccountChanged = {}))
-        compose.setContent { SettingsScreen(onSignIn = {}, onSignedOut = {}, vm = vm) }
+        return SettingsViewModel(handle, localSettings, AuthRepository(api, credentialStore, onAccountChanged = {}))
+    }
+
+    @Test
+    fun accountDefaultsRow_dismissWithDpad_focusFallsBackIntoTheList() {
+        val vm = viewModelWithPendingOffer()
+        compose.setContent { SettingsScreen(onSignIn = {}, vm = vm) }
 
         compose.waitUntil(5_000) { compose.onAllNodes(isFocused() and hasText("Apply")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Use your TMDB account defaults (हिन्दी · Hindi, United States)").assertExists()
@@ -96,5 +102,17 @@ class SettingsScreenDpadTest {
         // Focus never gets lost with the vanished buttons: it lands on the first settings row.
         compose.waitUntil(5_000) { compose.onAllNodes(isFocused() and hasContentDescription("Haptic feedback, on")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("Content language, English").assertExists()
+    }
+
+    @Test
+    fun savedDismissFocus_withPendingOffer_isRestored() {
+        // Saved state as left by a previous visit (or process death) with Dismiss focused.
+        val handle = SavedStateHandle()
+        FocusMemory(handle).save(SavedFocus(PANEL, DEFAULTS_ROW, DEFAULTS_DISMISS, 1))
+        val vm = viewModelWithPendingOffer(handle)
+        compose.setContent { SettingsScreen(onSignIn = {}, vm = vm) }
+
+        compose.waitUntil(5_000) { compose.onAllNodes(isFocused() and hasText("Dismiss")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Apply").assertExists()
     }
 }

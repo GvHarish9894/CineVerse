@@ -13,11 +13,16 @@ import com.techgv.cineverse.data.settings.HapticStrength
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.ui.components.FocusMemory
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 /** [accountDefaults] is the pending offer of the signed-in account only. */
 data class SettingsUiState(
@@ -38,11 +43,11 @@ class SettingsViewModel(
 
     /** Null until the first DataStore read: the screen restores focus only once real values show. */
     val state: StateFlow<SettingsUiState?> =
-        combine(settings.settings, auth.credentials, settings.accountDefaults) { s, credentials, defaults ->
+        combine(settings.settings, auth.credentials, settings.pendingAccountDefaults) { s, credentials, pending ->
             SettingsUiState(
                 settings = s,
                 accountName = credentials?.displayName,
-                accountDefaults = defaults?.takeIf { it.accountObjectId == credentials?.accountObjectId?.value },
+                accountDefaults = credentials?.let { pending[it.accountObjectId.value] },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -65,13 +70,39 @@ class SettingsViewModel(
         }
     }
 
-    fun resolveAccountDefaults(apply: Boolean) {
-        viewModelScope.launch { settings.resolveAccountDefaults(apply) }
+    /** Resolves [offer] only while its account is still the signed-in one (a stale screen's click does nothing). */
+    fun resolveAccountDefaults(offer: AccountDefaults, apply: Boolean) {
+        viewModelScope.launch {
+            if (auth.credentials.first()?.accountObjectId?.value == offer.accountObjectId) {
+                settings.resolveAccountDefaults(offer.accountObjectId, apply)
+            }
+        }
     }
+
+    private val signOutEvents = Channel<Boolean>(Channel.BUFFERED)
+
+    /** true once the local sign-out is done (remote revocation may still run), false if it failed. */
+    val signOutResults: Flow<Boolean> = signOutEvents.receiveAsFlow()
+
+    private var signingOut = false
 
     /** §4.2: local sign-out first (non-cancellable in the repository), remote revocation best-effort. */
     fun signOut() {
-        viewModelScope.launch { auth.signOut() }
+        if (signingOut) return
+        signingOut = true
+        viewModelScope.launch {
+            var signedOut = false
+            try {
+                auth.signOut {
+                    signedOut = true
+                    signOutEvents.trySend(true)
+                }
+            } catch (e: IOException) {
+                if (!signedOut) signOutEvents.trySend(false)
+            } finally {
+                signingOut = false
+            }
+        }
     }
 
     private fun edit(transform: (Settings) -> Settings) {

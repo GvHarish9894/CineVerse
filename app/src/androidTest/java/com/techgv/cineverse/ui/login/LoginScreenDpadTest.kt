@@ -23,6 +23,8 @@ import com.techgv.cineverse.data.tmdb.RequestTokenBody
 import com.techgv.cineverse.data.tmdb.RequestTokenDto
 import com.techgv.cineverse.data.tmdb.TmdbApi
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -59,7 +61,7 @@ class LoginScreenDpadTest {
     @Test
     fun okStartsWaiting_rightThenOkContinuesAsGuest() {
         val auth = AuthRepository(api, CredentialStore(store("login-test-credentials"), CredentialCipher(AndroidKeystoreKeys("login_test"))), onAccountChanged = {})
-        val vm = LoginViewModel(auth, SettingsRepository(store("login-test-settings")))
+        val vm = LoginViewModel(auth, SettingsRepository(store("login-test-settings")), CoroutineScope(Dispatchers.Default))
         var guest = 0
         compose.setContent { LoginScreen(message = null, onContinueAsGuest = { guest++ }, onSignedIn = {}, vm = vm) }
         compose.waitUntil(5_000) { compose.onAllNodes(isFocused() and hasText("I've approved it")).fetchSemanticsNodes().isNotEmpty() }
