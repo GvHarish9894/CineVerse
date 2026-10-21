@@ -270,6 +270,18 @@ Release: no HTTP logging. Debug: redact `Authorization`, request/response bodies
 
 ## 6. Shared components
 
+**Units.** All dp values in this document are **1280×720 design units** taken from the prototype canvas.
+A 1080p TV at 320 dpi is only 960 dp wide, so `ui/components/DesignCanvas.kt` overrides `LocalDensity`
+once in `MainActivity` with `density = windowWidthPx / 1280f` (user `fontScale` preserved, real window
+width so 720p and 4K scale too). Code uses spec numbers verbatim. Every Compose `Dialog`/`Popup` starts a
+new composition root and must wrap its content in `DesignCanvas { }`.
+
+**Cross-lane contracts (pinned):** `domain/MediaRef(mediaType, id)`; `domain/LibraryActions`
+(`state(ref): Flow<LibraryState>`, `toggleWatchlist(title)`, `toggleFavourite(title)`, `openRate(title)`)
+exposed via `LocalLibraryActions`; `LibraryState(known, watchlist, favourite, rating?, pending: Set<LibraryKind>)`
+with `Unknown` (buttons disabled while `known == false`); `ui/components/Toasts.kt` (`Toaster.show(title, subtitle?)`,
+`LocalToaster`, `ToastHost` installed in `AppNav`); the import-library dialog is hosted in `AppNav` by the Library lane.
+
 | Component | Size dp (step) | Content |
 |---|---|---|
 | PosterCard | 140×210 (156) | poster, title, "year · ★ 7.8" / "Coming {date}" / "Unrated", TV tag, badge |
