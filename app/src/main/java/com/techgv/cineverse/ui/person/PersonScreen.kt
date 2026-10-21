@@ -41,6 +41,7 @@ import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.ui.components.screenFocusRoot
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.detail.DetailActionButton
@@ -51,7 +52,6 @@ import com.techgv.cineverse.ui.detail.ROW_TOP_INSET
 import com.techgv.cineverse.ui.detail.RevealVertically
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
 import com.techgv.cineverse.ui.detail.revealHeroOnFocus
-import com.techgv.cineverse.ui.detail.screenFocusRoot
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.nav.Route
 

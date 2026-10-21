@@ -60,13 +60,13 @@ import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.ui.components.screenFocusRoot
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.detail.DetailActionButton
 import com.techgv.cineverse.ui.detail.Lane2PersonCard
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
 import com.techgv.cineverse.ui.detail.oneDecimal
-import com.techgv.cineverse.ui.detail.screenFocusRoot
 import com.techgv.cineverse.ui.nav.Route
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

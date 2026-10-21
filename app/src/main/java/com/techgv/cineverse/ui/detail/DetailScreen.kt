@@ -67,6 +67,7 @@ import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
+import com.techgv.cineverse.ui.components.screenFocusRoot
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.nav.Route

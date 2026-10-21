@@ -1,5 +1,6 @@
 package com.techgv.cineverse.ui.components
 
+import androidx.compose.ui.focus.FocusDirection
 import androidx.lifecycle.SavedStateHandle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
@@ -20,6 +21,16 @@ class FocusMemoryTest {
         assertEquals(4, restorer.entryIndex(rowA))
         assertEquals(0, restorer.entryIndex(rowB))
         assertEquals(1 to 0, restorer.restoreTarget(listOf(rowA, rowB))) // last focus wins on screen restore
+    }
+
+    @Test
+    fun `no memory - a D-pad entry into a row targets its first card, a programmatic one keeps its own target`() {
+        assertEquals("movie:0", restorer.entryKey(rowA, FocusDirection.Down))
+        assertEquals("movie:0", restorer.entryKey(rowA, FocusDirection.Up))
+        assertNull(restorer.entryKey(rowA, FocusDirection.Enter))
+        memory.save(SavedFocus("rows", "A", "movie:4", 4))
+        assertEquals("movie:4", restorer.entryKey(rowA, FocusDirection.Down))
+        assertEquals("movie:4", restorer.entryKey(rowA, FocusDirection.Enter))
     }
 
     @Test

@@ -5,7 +5,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -279,12 +278,5 @@ internal fun RevealVertically(topInset: Dp, content: @Composable () -> Unit) {
 /** Focus entering the hero (outer item 0) shows all of it; the TV pivot alone would cut the title off. */
 internal fun Modifier.revealHeroOnFocus(outer: LazyListState, scope: CoroutineScope, reduceMotion: Boolean): Modifier =
     onFocusChanged { if (it.hasFocus) scope.launch { if (reduceMotion) outer.scrollToItem(0) else outer.animateScrollToItem(0) } }
-
-/**
- * Full-screen root that is one focus group. AppNav's content `focusRestorer()` has no focus target of its
- * own, so its onEnter otherwise applies to every top-level group inside the screen: focusing the Season
- * episode panel's Close was redirected to the last focused season.
- */
-internal fun Modifier.screenFocusRoot(): Modifier = fillMaxSize().focusGroup()
 
 internal fun oneDecimal(value: Double): String = String.format(Locale.US, "%.1f", value)
