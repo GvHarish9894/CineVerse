@@ -28,6 +28,12 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Constraints
@@ -154,7 +160,9 @@ fun PlayerScreen(route: Route.Player, onBack: () -> Unit, hostFactory: (Context)
 
     PlayerLayout(
         modifier = Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()
-            .padding(horizontal = 48.dp, vertical = 27.dp),
+            .padding(horizontal = 48.dp, vertical = 27.dp)
+            // Remote media keys act whichever strip control has focus (TV-PP).
+            .onPreviewKeyEvent { strip.onMediaKey(it, session?.player) },
         player = {
             AndroidView(
                 // Created AND initialized here: runs once per Player route composition, never on recomposition.
@@ -270,22 +278,9 @@ private fun ControlStrip(
         } else {
             ProgressBar(strip.position, strip.duration)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                fun seekBy(delta: Float) {
-                    val p = player() ?: return
-                    val target = (strip.position + delta).coerceIn(0f, strip.duration)
-                    p.seekTo(target)
-                    strip.position = target // onCurrentSecond does not fire while paused; repeated presses accumulate
-                }
-                OutlinedButton(onClick = { seekBy(-10f) }, enabled = strip.controlsEnabled) { Text("−10 s") }
+                OutlinedButton(onClick = { player()?.let { strip.seekBy(it, -10f) } }, enabled = strip.controlsEnabled) { Text("−10 s") }
                 Button(
-                    onClick = {
-                        val p = player() ?: return@Button
-                        when (strip.playerState) {
-                            PlayerState.PLAYING, PlayerState.BUFFERING -> p.pause()
-                            PlayerState.ENDED -> { p.seekTo(0f); p.play() }
-                            else -> p.play()
-                        }
-                    },
+                    onClick = { player()?.let(strip::togglePlayPause) },
                     enabled = strip.controlsEnabled,
                     modifier = Modifier.focusRequester(primary),
                 ) {
@@ -297,7 +292,7 @@ private fun ControlStrip(
                         },
                     )
                 }
-                OutlinedButton(onClick = { seekBy(10f) }, enabled = strip.controlsEnabled) { Text("+10 s") }
+                OutlinedButton(onClick = { player()?.let { strip.seekBy(it, 10f) } }, enabled = strip.controlsEnabled) { Text("+10 s") }
                 OutlinedButton(onClick = onOpenInYouTube, modifier = Modifier.focusRequester(openInYouTube)) { Text("Open in YouTube") }
             }
             LaunchedEffect(strip.controlsEnabled) {
@@ -308,6 +303,36 @@ private fun ControlStrip(
             Text("YouTube isn't available on this TV.", style = MaterialTheme.typography.bodyMedium, color = Color.White)
         }
     }
+}
+
+private val StripState.playing get() = playerState == PlayerState.PLAYING || playerState == PlayerState.BUFFERING
+
+/** The Play / Pause / Play again button. */
+private fun StripState.togglePlayPause(p: YouTubePlayer) = when {
+    playing -> p.pause()
+    playerState == PlayerState.ENDED -> { p.seekTo(0f); p.play() }
+    else -> p.play()
+}
+
+private fun StripState.seekBy(p: YouTubePlayer, delta: Float) {
+    val target = (position + delta).coerceIn(0f, duration)
+    p.seekTo(target)
+    position = target // onCurrentSecond does not fire while paused; repeated presses accumulate
+}
+
+/** MEDIA_PLAY_PAUSE / PLAY / PAUSE / REWIND / FAST_FORWARD: consumed; one action per press (repeats ignored). */
+private fun StripState.onMediaKey(event: KeyEvent, player: YouTubePlayer?): Boolean {
+    val action: (YouTubePlayer) -> Unit = when (event.key) {
+        Key.MediaPlayPause -> ::togglePlayPause
+        Key.MediaPlay -> { p -> if (!playing) togglePlayPause(p) }
+        Key.MediaPause -> { p -> if (playing) togglePlayPause(p) }
+        Key.MediaRewind -> { p -> seekBy(p, -10f) }
+        Key.MediaFastForward -> { p -> seekBy(p, 10f) }
+        else -> return false
+    }
+    val press = event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0
+    if (press && controlsEnabled && error == null) player?.let(action)
+    return true
 }
 
 @Composable
