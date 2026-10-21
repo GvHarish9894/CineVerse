@@ -118,4 +118,21 @@ class SearchDpadTest {
             compose.waitUntil(5_000) { isShown(firstTrending) }
         }
     }
+
+    /** The results grid remembers trend-4; Clear's programmatic focus must still land on the first result. */
+    @Test
+    fun clearFocusesTheFirstResultEvenWhenAnotherTrendingResultIsRemembered() {
+        setUpSearch()
+        compose.onNodeWithContentDescription("trend-4", substring = true).requestFocus()
+        compose.waitForIdle()
+        pressOnFocused(Key.DirectionLeft)
+        assertTrue("LEFT from results column 0 must land on the keyboard", isShown(keyboardKeyFocused))
+
+        compose.onNodeWithContentDescription("x").requestFocus()
+        pressOnFocused(Key.DirectionCenter)
+        compose.waitUntil(5_000) { isShown(hasContentDescription("x-0", substring = true)) }
+        compose.onNodeWithContentDescription("Clear").requestFocus()
+        pressOnFocused(Key.DirectionCenter)
+        compose.waitUntil(5_000) { isShown(isFocused() and hasContentDescription("trend-0", substring = true)) }
+    }
 }

@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -165,7 +166,8 @@ class FocusRestorer(private val memory: FocusMemory) {
         return onFocusChanged { if (it.hasFocus) focusedRows += rowId else focusedRows -= rowId }
             .focusProperties {
                 onEnter = {
-                    val saved = memory.savedIn(row.panelKey, row.rowKey)
+                    // A programmatic requestFocus (direction Enter) keeps its own target; only D-pad entries are redirected.
+                    val saved = memory.savedIn(row.panelKey, row.rowKey)?.takeIf { requestedFocusDirection != FocusDirection.Enter }
                     val target = saved?.let { attachedRequester(row.panelKey, row.rowKey, it.itemKey) }
                     when {
                         target != null -> target.tryFocus() // false: the default target keeps focus
