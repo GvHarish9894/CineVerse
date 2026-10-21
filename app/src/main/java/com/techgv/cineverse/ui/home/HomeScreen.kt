@@ -31,6 +31,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -110,6 +111,9 @@ fun HomeScreen(
         vm.setActive(true)
         onPauseOrDispose { vm.setActive(false) }
     }
+    // A Dialog over Home (Exit, Rate, Import) keeps Home RESUMED but takes the window focus.
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(vm, windowFocused) { vm.setWindowFocused(windowFocused) }
     LaunchedEffect(vm, lifecycle) {
         vm.events.flowWithLifecycle(lifecycle).collect { event ->
             when (event) {

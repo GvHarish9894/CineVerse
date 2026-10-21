@@ -131,6 +131,25 @@ class HomeViewModelTest {
         assertEquals(emptyList<HomeEvent>(), events)
     }
 
+    @Test fun `pending trailer navigation is dropped when window focus is lost before the fetch completes`() = runTest {
+        api.videos = listOf(VideoDto(key = "yt1", name = "Trailer", site = "YouTube", type = "Trailer"))
+        val gate = api.gate("videos/7/en-US")
+        val vm = viewModel()
+        val events = events(vm)
+        vm.setActive(true)
+        vm.playTrailer(dune)
+        advanceUntilIdle()
+        vm.setWindowFocused(false) // BACK opened the Exit dialog over Home (Home stays RESUMED)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(emptyList<HomeEvent>(), events)
+        assertNull(vm.uiState.value.trailerLoading)
+        vm.setWindowFocused(true) // Stay: a new press plays again
+        vm.playTrailer(dune)
+        advanceUntilIdle()
+        assertEquals(listOf(HomeEvent.Open(Route.Player("yt1", title = "Dune", kicker = "Trailer"))), events)
+    }
+
     @Test fun `trailer fetch completing after Home paused emits no navigation while events are still collected`() = runTest {
         api.videos = listOf(VideoDto(key = "yt1", name = "Trailer", site = "YouTube", type = "Trailer"))
         val gate = api.gate("videos/7/en-US")

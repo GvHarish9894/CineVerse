@@ -86,9 +86,11 @@ class HomeViewModel(
     private var genresJob: Job? = null
     private val genresGeneration = GenerationCounter()
 
-    /** Bumped when a pending trailer fetch must not navigate any more (settings reload, screen paused). */
+    /** Bumped when a pending trailer fetch must not navigate any more (settings reload, screen paused, window focus lost). */
     private val trailerGeneration = GenerationCounter()
-    private var active = false
+    private var resumed = false
+    private var windowFocused = true
+    private val active get() = resumed && windowFocused
 
     private val mutableEvents = MutableSharedFlow<HomeEvent>(extraBufferCapacity = 1)
 
@@ -134,8 +136,14 @@ class HomeViewModel(
 
     /** Home's lifecycle is RESUMED; a trailer fetch outliving it never navigates (on top of the next screen or on a later return). */
     fun setActive(active: Boolean) {
-        this.active = active
+        resumed = active
         if (!active) cancelTrailer()
+    }
+
+    /** A Dialog (Exit, Rate, Import) took the window focus: a trailer fetch never opens the Player under it. */
+    fun setWindowFocused(focused: Boolean) {
+        windowFocused = focused
+        if (!focused) cancelTrailer()
     }
 
     private fun cancelTrailer() {

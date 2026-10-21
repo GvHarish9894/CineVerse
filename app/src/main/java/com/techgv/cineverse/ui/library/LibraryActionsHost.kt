@@ -41,7 +41,8 @@ fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, pla
     CompositionLocalProvider(LocalLibraryActions provides controller, content = content)
 
     val request by controller.shown.collectAsState(initial = null)
-    request?.let {
+    // Checked here too: `shown` follows playerActive a frame late.
+    request?.takeUnless { playerActive }?.let {
         RateDialog(
             titleName = it.title.title,
             initial = it.initial,

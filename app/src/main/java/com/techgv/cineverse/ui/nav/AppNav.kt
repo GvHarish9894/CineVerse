@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -92,7 +93,8 @@ fun AppNav(container: AppContainer) {
     val contentFocus = remember { FocusRequester() }
     val homeBack = remember { HomeBackHandle() }
     var railFocused by remember { mutableStateOf(false) }
-    var exitDialog by rememberSaveable { mutableStateOf(false) }
+    /** Id of the back-stack entry the Exit dialog was opened on; null when closed. */
+    var exitDialogEntry by rememberSaveable { mutableStateOf<String?>(null) }
     var loginMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val activity = LocalActivity.current
     val leaveLogin: () -> Unit = {
@@ -112,7 +114,13 @@ fun AppNav(container: AppContainer) {
     val accountName = credentials?.displayName
     val toaster = remember { Toaster() }
     val railScreen = destination?.isRailScreen() == true
-    val onPlayer = destination?.hasRoute<Route.Player>() == true
+    val visibleEntries by nav.visibleEntries.collectAsState()
+    // Includes a Player NavHost still shows while it transitions out: no modal, toast or clock over the video.
+    val onPlayer = destination?.hasRoute<Route.Player>() == true ||
+        visibleEntries.any { it.destination.hasRoute<Route.Player>() }
+    // Another destination became current (e.g. a delayed trailer opened the Player): the Exit dialog closes.
+    val entryId = entry?.id
+    LaunchedEffect(entryId) { if (entryId != null && entryId != exitDialogEntry) exitDialogEntry = null }
 
     CompositionLocalProvider(LocalToaster provides toaster) {
         // §9 D-pad hook, once, on the root holding both rail and content (dialogs use FeedbackRoot).
@@ -188,7 +196,7 @@ fun AppNav(container: AppContainer) {
             homeAtOrigin = homeBack.atOrigin(),
         )
         when (backAction(context)) {
-            BackAction.ShowExitDialog -> exitDialog = true
+            BackAction.ShowExitDialog -> exitDialogEntry = entryId
             BackAction.Pop -> nav.popBackStack()
             BackAction.FocusContent -> contentFocus.requestFocus()
             BackAction.ResetToHome -> nav.reset(Route.Home)
@@ -196,7 +204,9 @@ fun AppNav(container: AppContainer) {
         }
     }
 
-    if (exitDialog) ExitDialog(onStay = { exitDialog = false }, onExit = { activity?.finish() })
+    if (exitDialogEntry != null && exitDialogEntry == entryId && !onPlayer) {
+        ExitDialog(onStay = { exitDialogEntry = null }, onExit = { activity?.finish() })
+    }
 }
 
 private fun NavBackStackEntry.railItem(): RailItem? = when {

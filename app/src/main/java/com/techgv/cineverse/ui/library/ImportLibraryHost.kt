@@ -39,7 +39,8 @@ fun ImportLibraryHost(repository: LibraryRepository, importer: LibraryImporter, 
     LaunchedEffect(controller, credentials) { controller.onAccount(credentials) }
     SideEffect { controller.setPlayerActive(playerActive) }
     val state by controller.shown.collectAsState(initial = null)
-    state?.let {
+    // Checked here too: `shown` follows playerActive a frame late.
+    state?.takeUnless { playerActive }?.let {
         ImportLibraryDialog(
             state = it,
             onKeepSeparate = controller::keepSeparate,

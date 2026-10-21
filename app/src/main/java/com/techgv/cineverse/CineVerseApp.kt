@@ -15,6 +15,7 @@ import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.ReadToken
+import com.techgv.cineverse.data.tmdb.TmdbApi
 import com.techgv.cineverse.data.tmdb.TmdbClient
 import com.techgv.cineverse.data.tmdb.TmdbRepository
 import com.techgv.cineverse.util.GenerationCounter
@@ -30,15 +31,16 @@ private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 private val Context.credentialDataStore by preferencesDataStore(name = CredentialStore.FILE_NAME)
 
 /** Manual DI (§1). Coil uses its own default OkHttpClient, which never carries the TMDB bearer (§1.5). */
-class AppContainer(context: Context) {
+class AppContainer(
+    context: Context,
+    private val tmdbApi: TmdbApi = TmdbClient.create(ReadToken(BuildConfig.TMDB_READ_ACCESS_TOKEN)),
+) {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** App-wide generation (§1.1): bumped on auth and content-settings changes. */
     val appGeneration = GenerationCounter()
 
     val settingsRepository = SettingsRepository(context.settingsDataStore)
-
-    private val tmdbApi = TmdbClient.create(ReadToken(BuildConfig.TMDB_READ_ACCESS_TOKEN))
 
     val tmdbRepository: TmdbRepository = TmdbRepository(
         tmdbApi, appGeneration, settings = settingsRepository::current,
