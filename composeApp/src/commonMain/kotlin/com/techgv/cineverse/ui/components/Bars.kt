@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.ui.design.Tokens
 import com.techgv.cineverse.ui.haptics.HapticKind
 import com.techgv.cineverse.ui.theme.LocalAmbientGlowEnabled
+import com.techgv.cineverse.ui.theme.LocalReduceMotion
 import com.techgv.cineverse.ui.theme.bodyStyle
 
 /** Frosted fill of the solid top bar (`.bar.solid`: rgba(12,10,24,.8); Compose has no backdrop blur). */
@@ -90,6 +92,7 @@ fun GlassTopBar(
 ) {
     val fill by animateColorAsState(if (solid) BarSolid else BarSolid.copy(alpha = 0f), tween(300), label = "barFill")
     val solidness by animateFloatAsState(if (solid) 1f else 0f, tween(250), label = "barTitle")
+    val reduceMotion = LocalReduceMotion.current
     Box(modifier.fillMaxWidth()) {
         // Transparent state: .bar::before gradient, 30dp taller than the bar.
         Box(
@@ -98,26 +101,48 @@ fun GlassTopBar(
         )
         Column(Modifier.fillMaxWidth().background(fill)) {
             Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).heightIn(min = 52.dp).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    navigation()
-                    Box(Modifier.weight(1f))
-                    actions()
-                }
-                if (title != null) {
-                    Text(
-                        title,
-                        style = bodyStyle(16.sp, FontWeight.Bold),
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 54.dp).graphicsLayer {
-                            alpha = solidness
-                            translationY = (1f - solidness) * 6.dp.toPx()
-                        }.semantics { heading() },
-                    )
-                }
+                TopBarSlots(
+                    navigation = { Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically, content = navigation) },
+                    title = {
+                        if (title != null) {
+                            Text(
+                                title,
+                                style = bodyStyle(16.sp, FontWeight.Bold),
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.graphicsLayer {
+                                    alpha = solidness
+                                    if (!reduceMotion) translationY = (1f - solidness) * 6.dp.toPx()
+                                }.semantics { heading() },
+                            )
+                        }
+                    },
+                    actions = { Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically, content = actions) },
+                )
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.07f * solidness)))
+        }
+    }
+}
+
+/**
+ * Navigation at the start, actions at the end, the title centred between them: it gets the width left after reserving
+ * the wider slot (+ 10dp gap) on both sides, so it stays centred and never runs under a button.
+ */
+@Composable
+private fun TopBarSlots(navigation: @Composable () -> Unit, title: @Composable () -> Unit, actions: @Composable () -> Unit) {
+    Layout(contents = listOf(navigation, title, actions), modifier = Modifier.fillMaxWidth()) { (nav, text, act), constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val navPlaceable = nav.single().measure(loose)
+        val actPlaceable = act.single().measure(loose.copy(maxWidth = (loose.maxWidth - navPlaceable.width).coerceAtLeast(0)))
+        val side = maxOf(navPlaceable.width, actPlaceable.width) + 10.dp.roundToPx()
+        val textPlaceables = text.map { it.measure(loose.copy(maxWidth = (constraints.maxWidth - 2 * side).coerceAtLeast(0))) }
+        val height = maxOf(constraints.minHeight, navPlaceable.height, actPlaceable.height, textPlaceables.maxOfOrNull { it.height } ?: 0)
+        layout(constraints.maxWidth, height) {
+            navPlaceable.place(0, (height - navPlaceable.height) / 2)
+            textPlaceables.forEach { it.place((constraints.maxWidth - it.width) / 2, (height - it.height) / 2) }
+            actPlaceable.place(constraints.maxWidth - actPlaceable.width, (height - actPlaceable.height) / 2)
         }
     }
 }

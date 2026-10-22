@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,7 +45,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.ui.adaptive.LocalShellStyle
+import com.techgv.cineverse.ui.adaptive.LocalWindowClass
 import com.techgv.cineverse.ui.adaptive.ShellStyle
+import com.techgv.cineverse.ui.adaptive.WindowClass
 import com.techgv.cineverse.ui.design.Tokens
 import com.techgv.cineverse.ui.haptics.HapticKind
 import com.techgv.cineverse.ui.theme.LocalReduceMotion
@@ -220,7 +223,11 @@ fun VideoCard(
     }
 }
 
-/** Episode row: still with play glyph, "S1 · E3", name, "date · runtime · ★", 2-line overview (mobile `.ep` / web `.ep`). */
+/**
+ * Episode row: still with play glyph, "S1 · E3", name, "date · runtime · ★", 2-line overview (mobile `.ep` / web `.ep`).
+ * Web wraps like the kit's `.ep` flex-wrap: the 240dp still sits above the body when the 300dp body basis no longer
+ * fits beside it, and spans the full width under the ≤ 640 breakpoint (`.ep-art{width:100%}`).
+ */
 @Composable
 fun EpisodeCard(
     code: String,
@@ -234,27 +241,42 @@ fun EpisodeCard(
 ) {
     val web = LocalShellStyle.current == ShellStyle.Web
     val shape = RoundedCornerShape(if (web) 20.dp else 18.dp)
-    Row(
-        modifier.fillMaxWidth()
+    val phone = LocalWindowClass.current == WindowClass.Phone
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val stacked = web && (phone || maxWidth < 16.dp * 2 + 240.dp + 22.dp + 300.dp)
+        val container = Modifier.fillMaxWidth()
             .cvClickable(onClick, haptic = HapticKind.Select, onClickLabel = "Play $name", focusShape = shape)
             .clip(shape).background(Color.White.copy(alpha = 0.05f))
             .then(if (web) Modifier.border(1.dp, Color.White.copy(alpha = 0.06f), shape) else Modifier)
-            .padding(if (web) 16.dp else 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(if (web) 22.dp else 14.dp),
-    ) {
-        Box(Modifier.width(if (web) 240.dp else 132.dp).aspectRatio(if (web) 16f / 9f else 132f / 74f)) {
-            FilledArt(imageUrl, palette, ArtStyle.Backdrop, RoundedCornerShape(if (web) 14.dp else 12.dp))
-            PlayDisc(34.dp, 16.dp, Modifier.align(Alignment.Center))
+            .padding(if (web) 16.dp else 10.dp)
+        val art = @Composable { artModifier: Modifier ->
+            Box(artModifier.aspectRatio(if (web) 16f / 9f else 132f / 74f)) {
+                FilledArt(imageUrl, palette, ArtStyle.Backdrop, RoundedCornerShape(if (web) 14.dp else 12.dp))
+                PlayDisc(34.dp, 16.dp, Modifier.align(Alignment.Center))
+            }
         }
-        Column(Modifier.weight(1f)) {
-            Text(code, style = if (web) displayStyle(22.sp) else bodyStyle(11.sp, FontWeight.Bold, trackingEm = 0.08f), color = Tokens.Colors.TextPrimary.copy(alpha = if (web) 0.5f else 0.64f))
-            Text(name, style = bodyStyle(if (web) 18.sp else 14.5.sp, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-            Text(meta, style = bodyStyle(if (web) 13.5.sp else 12.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.66f), modifier = Modifier.padding(top = 3.dp))
-            if (overview != null) {
-                Text(
-                    overview, style = bodyStyle(if (web) 15.sp else 12.5.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.78f),
-                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp),
-                )
+        val body = @Composable { bodyModifier: Modifier ->
+            Column(bodyModifier) {
+                Text(code, style = if (web) displayStyle(22.sp) else bodyStyle(11.sp, FontWeight.Bold, trackingEm = 0.08f), color = Tokens.Colors.TextPrimary.copy(alpha = if (web) 0.5f else 0.64f))
+                Text(name, style = bodyStyle(if (web) 18.sp else 14.5.sp, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                Text(meta, style = bodyStyle(if (web) 13.5.sp else 12.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.66f), modifier = Modifier.padding(top = 3.dp))
+                if (overview != null) {
+                    Text(
+                        overview, style = bodyStyle(if (web) 15.sp else 12.5.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.78f),
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        }
+        if (stacked) {
+            Column(container, verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                art(if (phone) Modifier.fillMaxWidth() else Modifier.width(240.dp))
+                body(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(container, horizontalArrangement = Arrangement.spacedBy(if (web) 22.dp else 14.dp)) {
+                art(Modifier.width(if (web) 240.dp else 132.dp))
+                body(Modifier.weight(1f))
             }
         }
     }
