@@ -1,5 +1,8 @@
+// Copy of shared/src/nonWebTest/.../data/library/LibraryFakes.kt for the TV VM tests (tvApp tests can't see shared test
+// sources); keep both in step. A shared test-fixtures module is deferred (plan K9 / build-logic).
 package com.techgv.cineverse.data.library
 
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.auth.Credentials
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.tmdb.AccountId
@@ -124,6 +127,21 @@ class FakeAccountApi : TmdbApi by unusedTmdbApi {
 
 fun tmdbRepository(api: TmdbApi) = TmdbRepository(api, GenerationCounter(), settings = { Settings() })
 
+/** Stand-in for NativeAuthRepository's sessions: one [AuthSession] per credentials tuple (= one sign-in). */
+object TestSessions {
+    private val sessions = mutableMapOf<Credentials, AuthSession>()
+
+    fun of(c: Credentials): AuthSession = sessions.getOrPut(c) { AuthSession(c.accountObjectId, c.displayName, sessions.size + 1L) }
+
+    fun credentialsFor(session: AuthSession): Credentials = sessions.entries.first { it.value == session }.key
+}
+
+fun Credentials.session(): AuthSession = TestSessions.of(this)
+
+fun guestSource(dao: LibraryDao = FakeLibraryDao(), now: () -> Long = { 0L }) = GuestLibrarySource(RoomGuestLibraryStore(dao), now)
+
+fun accountSource(api: TmdbApi) = TmdbAccountLibrarySource(tmdbRepository(api), TestSessions::credentialsFor)
+
 class FakeLibraryDao : LibraryDao {
     val rows = MutableStateFlow(listOf<LibraryItemEntity>())
 
@@ -164,5 +182,5 @@ class FakeImportLedgerDao : ImportLedgerDao {
     }
 }
 
-/** Decodes like Retrofit does. */
+/** Decodes like KtorTmdbApi does. */
 inline fun <reified T> tmdbJson(json: String): T = TmdbJson.decodeFromString(json)

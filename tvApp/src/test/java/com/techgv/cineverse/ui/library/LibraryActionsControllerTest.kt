@@ -1,14 +1,14 @@
 package com.techgv.cineverse.ui.library
 
-import com.techgv.cineverse.data.auth.Credentials
-import com.techgv.cineverse.data.library.AccountLibrarySource
+import com.techgv.cineverse.data.auth.AuthSession
+import com.techgv.cineverse.data.library.accountSource
 import com.techgv.cineverse.data.library.FakeAccountApi
 import com.techgv.cineverse.data.library.FakeLibraryDao
-import com.techgv.cineverse.data.library.GuestLibrarySource
+import com.techgv.cineverse.data.library.guestSource
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.library.credentials
+import com.techgv.cineverse.data.library.session
 import com.techgv.cineverse.data.library.title
-import com.techgv.cineverse.data.library.tmdbRepository
 import com.techgv.cineverse.ui.components.Toast
 import com.techgv.cineverse.ui.components.Toaster
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,10 +24,10 @@ import org.junit.Test
 
 class LibraryActionsControllerTest {
     private val api = FakeAccountApi()
-    private val a = credentials()
-    private val b = credentials(aoid = "b", session = "sb")
-    private val identity = MutableStateFlow<Credentials?>(a)
-    private val repository = LibraryRepository(identity, GuestLibrarySource(FakeLibraryDao()) { 0L }, AccountLibrarySource(tmdbRepository(api)))
+    private val a = credentials().session()
+    private val b = credentials(aoid = "b", session = "sb").session()
+    private val identity = MutableStateFlow<AuthSession?>(a)
+    private val repository = LibraryRepository(identity, guestSource(FakeLibraryDao()), accountSource(api))
     private val toaster = Toaster()
     private val movie = title(1)
 
@@ -36,7 +36,7 @@ class LibraryActionsControllerTest {
 
     private fun TestScope.toasts(): List<Toast> = mutableListOf<Toast>().also { list -> backgroundScope.launch { toaster.toasts.collect { list += it } } }
 
-    private fun LibraryActionsController.switchTo(c: Credentials?) {
+    private fun LibraryActionsController.switchTo(c: AuthSession?) {
         identity.value = c
         onIdentity(c)
     }

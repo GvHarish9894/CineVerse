@@ -1,6 +1,6 @@
 package com.techgv.cineverse.ui.settings
 
-import com.techgv.cineverse.data.auth.Credentials
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.settings.AccountDefaults
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.tmdb.AccountDto
@@ -23,9 +23,9 @@ fun <T> List<T>.cycle(current: T, delta: Int): T = this[Math.floorMod(indexOf(cu
  * The account's TMDB defaults mapped onto supported values (`en` → `en-US`; unsupported language / region
  * keep the current one), or null when they would change nothing.
  */
-fun accountDefaultsOffer(credentials: Credentials, account: AccountDto, current: Settings): AccountDefaults? {
+fun accountDefaultsOffer(session: AuthSession, account: AccountDto, current: Settings): AccountDefaults? {
     val language = Settings.LANGUAGES.firstOrNull { it.substringBefore('-') == account.language } ?: current.language
     val region = account.region?.takeIf { it in Settings.REGIONS } ?: current.region
     if (language == current.language && region == current.region && account.includeAdult == current.includeAdult) return null
-    return AccountDefaults(credentials.accountObjectId.value, language, region, account.includeAdult)
+    return AccountDefaults(session.accountObjectId.value, language, region, account.includeAdult)
 }

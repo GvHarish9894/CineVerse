@@ -1,13 +1,14 @@
 package com.techgv.cineverse.ui.login
 
-import com.techgv.cineverse.data.auth.AuthRepository
+import com.techgv.cineverse.data.auth.NativeAuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
-import com.techgv.cineverse.data.auth.CredentialStore
+import com.techgv.cineverse.data.auth.DataStoreCredentialStore
 import com.techgv.cineverse.data.auth.GatedPreferencesStore
 import com.techgv.cineverse.data.auth.RequestCode
 import com.techgv.cineverse.data.auth.SignInOutcome
 import com.techgv.cineverse.data.auth.SoftwareKeys
 import com.techgv.cineverse.data.settings.AccountDefaults
+import com.techgv.cineverse.data.settings.DataStoreSettingsStore
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.AccessTokenBody
 import com.techgv.cineverse.data.tmdb.AccessTokenDto
@@ -17,6 +18,7 @@ import com.techgv.cineverse.data.tmdb.RequestTokenBody
 import com.techgv.cineverse.data.tmdb.RequestTokenDto
 import com.techgv.cineverse.data.tmdb.SessionDto
 import com.techgv.cineverse.data.tmdb.TmdbApi
+import com.techgv.cineverse.data.tmdb.TmdbHttpException
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.unusedTmdbApi
 import com.techgv.cineverse.ui.components.SectionErrorKind
@@ -32,17 +34,12 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import okhttp3.Protocol
-import okhttp3.Request
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import retrofit2.HttpException
-import retrofit2.Response
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoginViewModelTest {
@@ -62,17 +59,12 @@ class LoginViewModelTest {
     }
 
     private val settingsData = GatedPreferencesStore()
-    private val settings = SettingsRepository(settingsData)
+    private val settings = SettingsRepository(DataStoreSettingsStore(settingsData))
     private val credentialData = GatedPreferencesStore()
-    private val auth = AuthRepository(api, CredentialStore(credentialData, CredentialCipher(SoftwareKeys())), onAccountChanged = {})
+    private val auth = NativeAuthRepository(api, DataStoreCredentialStore(credentialData, CredentialCipher(SoftwareKeys())), onAccountChanged = {})
 
     /** TMDB "not approved yet": HTTP 422, status_code 41. */
-    private fun pending(): HttpException {
-        val raw = okhttp3.Response.Builder()
-            .request(Request.Builder().url("https://api.themoviedb.org/4/auth/access_token").build())
-            .protocol(Protocol.HTTP_1_1).code(422).message("error").build()
-        return HttpException(Response.error<Any>("""{"success":false,"status_code":41}""".toResponseBody(), raw))
-    }
+    private fun pending() = TmdbHttpException(422, statusCode = 41, retryAfterSeconds = null)
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)

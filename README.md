@@ -4,7 +4,7 @@ A D-pad-first Android TV client for [TMDB](https://www.themoviedb.org): browse t
 top-rated movies, TV shows and people; read details, cast, reviews and episodes; play trailers; keep a
 watchlist, favourites and ratings — as a guest on the TV or synced to your TMDB account.
 
-Built with Jetpack Compose + `androidx.tv.material3`, Kotlin, Retrofit/OkHttp, Room, DataStore, Coil
+Built with Jetpack Compose + `androidx.tv.material3`, Kotlin, Ktor (OkHttp engine), Room, DataStore, Coil
 and the YouTube IFrame player.
 
 > This product uses the TMDB API but is not endorsed or certified by TMDB.

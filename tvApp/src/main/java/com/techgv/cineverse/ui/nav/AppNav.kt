@@ -110,8 +110,8 @@ fun AppNav(container: AppContainer) {
         }
     }
 
-    val credentials by container.authRepository.credentials.collectAsStateWithLifecycle(null)
-    val accountName = credentials?.displayName
+    val session by container.authRepository.session.collectAsStateWithLifecycle(null)
+    val accountName = session?.displayName
     val toaster = remember { Toaster() }
     val railScreen = destination?.isRailScreen() == true
     val visibleEntries by nav.visibleEntries.collectAsState()

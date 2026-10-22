@@ -8,7 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.techgv.cineverse.data.auth.Credentials
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.ImportOffer
 import com.techgv.cineverse.data.library.ImportResult
 import com.techgv.cineverse.data.library.ImportStep
@@ -32,11 +32,11 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ImportLibraryHost(repository: LibraryRepository, importer: LibraryImporter, playerActive: Boolean) {
-    val credentials by repository.credentials.collectAsStateWithLifecycle(initialValue = null)
+    val session by repository.session.collectAsStateWithLifecycle(initialValue = null)
     val toaster = LocalToaster.current
     val scope = rememberCoroutineScope()
     val controller = remember(importer, toaster, scope) { ImportLibraryController(importer, toaster, scope) }
-    LaunchedEffect(controller, credentials) { controller.onAccount(credentials) }
+    LaunchedEffect(controller, session) { controller.onAccount(session) }
     SideEffect { controller.setPlayerActive(playerActive) }
     val state by controller.shown.collectAsState(initial = null)
     // Checked here too: `shown` follows playerActive a frame late.
@@ -56,7 +56,7 @@ fun ImportLibraryHost(repository: LibraryRepository, importer: LibraryImporter, 
 class ImportLibraryController(private val importer: LibraryImporter, private val toaster: Toaster, private val scope: CoroutineScope) {
     private val dialog = MutableStateFlow<ImportDialogState?>(null)
     private val playerActive = MutableStateFlow(false)
-    private var account: Credentials? = null
+    private var account: AuthSession? = null
     private var unconfirmed = emptySet<ImportStep>()
     private var job: Job? = null
 
@@ -67,7 +67,7 @@ class ImportLibraryController(private val importer: LibraryImporter, private val
     }
 
     /** The signed-in account changed: the previous account's import stops; offer or resume for [c]. */
-    suspend fun onAccount(c: Credentials?) {
+    suspend fun onAccount(c: AuthSession?) {
         job?.cancel()
         dialog.value = null
         account = c

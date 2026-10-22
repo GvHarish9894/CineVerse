@@ -21,7 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import com.techgv.cineverse.data.auth.AuthRepository
+import com.techgv.cineverse.data.auth.NativeAuthRepository
 import com.techgv.cineverse.data.auth.RequestCode
 import com.techgv.cineverse.data.auth.SignInOutcome
 import com.techgv.cineverse.data.tmdb.TmdbException
@@ -33,7 +33,7 @@ private const val TAG = "AuthSpike"
 
 /** Spike a: request token → QR → poll → convert → /3/account → persist → username. */
 @Composable
-fun AuthSpikeScreen(auth: AuthRepository) {
+fun AuthSpikeScreen(auth: NativeAuthRepository) {
     val credentials by auth.credentials.collectAsStateWithLifecycle(initialValue = null)
     val scope = rememberCoroutineScope()
     var code by remember { mutableStateOf<RequestCode?>(null) }
@@ -51,7 +51,7 @@ fun AuthSpikeScreen(auth: AuthRepository) {
             Log.i(TAG, "outcome=" + if (outcome is SignInOutcome.SignedIn) "SignedIn" else outcome.toString())
             polling = false
             status = when (outcome) {
-                is SignInOutcome.SignedIn -> "Signed in as ${outcome.credentials.displayName}".also { code = null }
+                is SignInOutcome.SignedIn -> "Signed in as ${outcome.session.displayName}".also { code = null }
                 SignInOutcome.CodeExpired -> "Code expired — press OK for a new one".also { code = null }
                 is SignInOutcome.Rejected -> "TMDB didn't approve this sign-in".also { code = null }
                 SignInOutcome.AppCredentialError -> "App credential problem (TMDB key)"

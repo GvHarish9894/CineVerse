@@ -44,6 +44,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.data.tmdb.formatDate
+import com.techgv.cineverse.data.tmdb.today
 import com.techgv.cineverse.data.tmdb.formatRuntime
 import com.techgv.cineverse.domain.Detail
 import com.techgv.cineverse.domain.Episode
@@ -66,7 +67,7 @@ import com.techgv.cineverse.ui.detail.SCREEN_INSET
 import com.techgv.cineverse.ui.detail.oneDecimal
 import com.techgv.cineverse.ui.nav.Route
 import kotlinx.coroutines.launch
-import java.time.LocalDate
+import kotlinx.datetime.LocalDate
 
 private const val SEASONS = "seasons"
 private const val SEASON_LIST = "list"
@@ -299,7 +300,7 @@ private fun EpisodeCard(episode: Episode, stillUrl: String?, onClick: () -> Unit
                     if (episode.isFinale) FinaleBadge()
                 }
                 Text(
-                    episodeMeta(episode, LocalDate.now()).joinToString("   "),
+                    episodeMeta(episode, today()).joinToString("   "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -352,7 +353,7 @@ private fun EpisodePanel(episode: Episode, restorer: FocusRestorer, imageBase: S
             if (episode.isFinale) FinaleBadge()
         }
         Text(
-            episodeMeta(episode, LocalDate.now()).joinToString("   "),
+            episodeMeta(episode, today()).joinToString("   "),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

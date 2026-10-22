@@ -1,3 +1,5 @@
+// Copy of shared/src/nonWebTest/.../data/auth/TestCredentialStores.kt for the TV VM tests (tvApp tests can't see shared
+// test sources); keep both in step. A shared test-fixtures module is deferred (plan K9 / build-logic).
 package com.techgv.cineverse.data.auth
 
 import androidx.datastore.core.DataStore

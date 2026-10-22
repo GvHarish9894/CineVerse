@@ -8,7 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import com.techgv.cineverse.data.auth.Credentials
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.library.LibraryWriteResult
 import com.techgv.cineverse.domain.LibraryActions
@@ -36,7 +36,7 @@ fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, pla
     val toaster = LocalToaster.current
     val uiScope = rememberCoroutineScope()
     val controller = remember(repository, scope, toaster, uiScope) { LibraryActionsController(repository, toaster, scope, uiScope) }
-    LaunchedEffect(controller) { repository.credentials.collect(controller::onIdentity) }
+    LaunchedEffect(controller) { repository.session.collect(controller::onIdentity) }
     SideEffect { controller.setPlayerActive(playerActive) }
     CompositionLocalProvider(LocalLibraryActions provides controller, content = content)
 
@@ -54,7 +54,7 @@ fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, pla
 }
 
 /** A Rate dialog for [title], bound to the [identity] it was opened under. */
-class RateRequest(val title: Title, val initial: Double?, val identity: Credentials?)
+class RateRequest(val title: Title, val initial: Double?, val identity: AuthSession?)
 
 /**
  * [LibraryActions] bound to the identity signed in at click time: each action captures [identity] synchronously
@@ -66,7 +66,7 @@ class LibraryActionsController(
     private val appScope: CoroutineScope,
     private val uiScope: CoroutineScope,
 ) : LibraryActions {
-    private var identity: Credentials? = null
+    private var identity: AuthSession? = null
     private val request = MutableStateFlow<RateRequest?>(null)
     private val playerActive = MutableStateFlow(false)
 
@@ -74,7 +74,7 @@ class LibraryActionsController(
     val shown: Flow<RateRequest?> = combine(request, playerActive) { r, player -> r.takeUnless { player } }
 
     /** The collected sign-in changed: a dialog of another identity closes without writing. */
-    fun onIdentity(c: Credentials?) {
+    fun onIdentity(c: AuthSession?) {
         identity = c
         if (request.value?.identity != c) request.value = null
     }

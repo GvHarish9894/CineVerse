@@ -3,7 +3,7 @@ package com.techgv.cineverse.ui.library
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.techgv.cineverse.data.auth.Credentials
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryEntry
 import com.techgv.cineverse.data.library.LibraryPage
 import com.techgv.cineverse.data.library.LibraryRepository
@@ -71,11 +71,11 @@ class LibraryViewModel(
     private val loadedPages = MediaType.entries.associateWith { 0 }.toMutableMap()
 
     /** The signed-in scope the account groups load for; null for a guest. */
-    private var scope: Pair<Credentials, LibraryTab>? = null
+    private var scope: Pair<AuthSession, LibraryTab>? = null
 
     init {
         viewModelScope.launch {
-            combine(repository.credentials.distinctUntilChanged(), tab) { c, t -> c to t }.collectLatest { (c, t) ->
+            combine(repository.session.distinctUntilChanged(), tab) { c, t -> c to t }.collectLatest { (c, t) ->
                 generations.values.forEach { it.bump() }
                 MediaType.entries.forEach { loadedPages[it] = 0 }
                 scope = c?.let { it to t }

@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
 }
 
 // secrets.properties is git-ignored; a missing file or key builds with an empty token.
@@ -22,7 +21,7 @@ android {
 
     defaultConfig {
         applicationId = "com.techgv.cineverse"
-        minSdk = 36
+        minSdk = 28
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
@@ -61,6 +60,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":shared"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
@@ -77,13 +77,11 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.palette.ktx)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.converter.kotlinx.serialization)
+    implementation(libs.ktor.client.okhttp)
+    // Keeps the OkHttp pin for Coil's image client and the Ktor engine.
     implementation(libs.okhttp)
-    debugImplementation(libs.okhttp.logging.interceptor)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidyoutubeplayer.core)
