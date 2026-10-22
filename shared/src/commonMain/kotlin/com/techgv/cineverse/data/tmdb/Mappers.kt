@@ -5,6 +5,8 @@ import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.domain.Person
 import com.techgv.cineverse.domain.Title
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /** §3.2: paged lists stop at `min(total_pages, 500)`. */
 const val MAX_PAGES = 500
@@ -65,3 +67,21 @@ fun List<VideoDto>.youTubeInTrailerOrder(): List<VideoDto> =
                 else -> 3
             }
         }
+
+/**
+ * Genre id → name from the cached movie and TV genre lists (§13: lists carry ids only). A failed list
+ * contributes nothing: callers omit genre chips until it loads (§7.1).
+ */
+suspend fun CatalogRepository.genreNames(): Map<Int, String> = coroutineScope {
+    val lists = MediaType.entries.map { media ->
+        async {
+            try {
+                genres(media).genres
+            } catch (_: TmdbException) {
+                emptyList()
+            }
+        }
+    }
+    // TMDB returns blank names for untranslated genres (e.g. hi-IN); drop them so the hero shows no empty chips.
+    lists.flatMap { it.await() }.filter { it.name.isNotBlank() }.associate { it.id to it.name }
+}

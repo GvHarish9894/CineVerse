@@ -1,5 +1,10 @@
 package com.techgv.cineverse.data.tmdb
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.io.IOException
+import kotlinx.serialization.SerializationException
+
 /** Which row of the §3.3 table applies: classification is by operation + TMDB `status_code`. */
 enum class TmdbOperation {
     /** Read-token calls without session (catalog, request token, convert). */
@@ -70,5 +75,35 @@ fun classifyTmdbError(
         httpCode >= 500 -> TmdbError.Server(httpCode)
         httpCode == 401 && statusCode == null -> TmdbError.AppCredential
         else -> TmdbError.Http(httpCode, statusCode)
+    }
+}
+
+fun Throwable.toTmdbError(operation: TmdbOperation): TmdbError = when (this) {
+    is TmdbException -> error
+    is TmdbHttpException -> classifyTmdbError(operation, httpCode, statusCode, retryAfterSeconds)
+    // java.io.IOException on JVM / Android (OkHttp), the engines' IOException subclasses elsewhere (incl. timeouts)
+    is IOException -> TmdbError.Network
+    is SerializationException -> TmdbError.Malformed
+    else -> throw this
+}
+
+/**
+ * Runs one TMDB call and rethrows failures as [TmdbException]. Outside the exchange, a 429 gets one
+ * retry after `Retry-After` (§3.3); a second 429 surfaces as [TmdbError.RateLimited].
+ */
+suspend fun <T> tmdbCall(operation: TmdbOperation, block: suspend () -> T): T {
+    suspend fun once(): T = try {
+        block()
+    } catch (e: Exception) {
+        if (e is CancellationException) throw e
+        throw TmdbException(e.toTmdbError(operation), e)
+    }
+    return try {
+        once()
+    } catch (e: TmdbException) {
+        val limited = e.error as? TmdbError.RateLimited
+        if (limited == null || operation == TmdbOperation.AccessTokenExchange) throw e
+        delay(limited.retryAfterMillis)
+        once()
     }
 }

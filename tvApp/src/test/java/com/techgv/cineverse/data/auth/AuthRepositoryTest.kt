@@ -11,6 +11,7 @@ import com.techgv.cineverse.data.tmdb.RequestTokenDto
 import com.techgv.cineverse.data.tmdb.SessionDto
 import com.techgv.cineverse.data.tmdb.StatusDto
 import com.techgv.cineverse.data.tmdb.TmdbApi
+import com.techgv.cineverse.data.tmdb.TmdbHttpException
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.UserBearer
 import com.techgv.cineverse.data.tmdb.unusedTmdbApi
@@ -25,16 +26,11 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import okhttp3.Protocol
-import okhttp3.Request
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import retrofit2.HttpException
-import retrofit2.Response
 import java.io.IOException
 
 class AuthRepositoryTest {
@@ -84,14 +80,9 @@ class AuthRepositoryTest {
     private val code = RequestCode("request-token")
     private val approved = { AccessTokenDto(accessToken = "user-access-token", accountId = "aoid") }
 
+    /** What KtorTmdbApi throws for a non-2xx response (null [statusCode]: an unparsable body). */
     private fun tmdbError(http: Int, statusCode: Int?, retryAfter: Long? = null): () -> Nothing = {
-        val body = (statusCode?.let { """{"success":false,"status_code":$it}""" } ?: "not json").toResponseBody()
-        val raw = okhttp3.Response.Builder()
-            .request(Request.Builder().url("https://api.themoviedb.org/4/auth/access_token").build())
-            .protocol(Protocol.HTTP_1_1).code(http).message("error")
-            .apply { retryAfter?.let { header("Retry-After", it.toString()) } }
-            .build()
-        throw HttpException(Response.error<Any>(body, raw))
+        throw TmdbHttpException(http, statusCode, retryAfter)
     }
 
     private fun authTest(block: suspend TestScope.() -> Unit) = runTest {

@@ -79,10 +79,9 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.palette.ktx)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.converter.kotlinx.serialization)
+    implementation(libs.ktor.client.okhttp)
+    // Keeps the OkHttp pin for Coil's image client and the Ktor engine.
     implementation(libs.okhttp)
-    debugImplementation(libs.okhttp.logging.interceptor)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidyoutubeplayer.core)

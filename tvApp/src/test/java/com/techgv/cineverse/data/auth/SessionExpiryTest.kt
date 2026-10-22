@@ -11,6 +11,7 @@ import com.techgv.cineverse.data.tmdb.AccountObjectId
 import com.techgv.cineverse.data.tmdb.AccountStatesDto
 import com.techgv.cineverse.data.tmdb.SessionId
 import com.techgv.cineverse.data.tmdb.TmdbApi
+import com.techgv.cineverse.data.tmdb.TmdbHttpException
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.TmdbException
 import com.techgv.cineverse.data.tmdb.TmdbRepository
@@ -26,25 +27,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import okhttp3.Protocol
-import okhttp3.Request
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import retrofit2.HttpException
-import retrofit2.Response
 
 /** §3.3 "Sign-in expired": the TmdbRepository account-call boundary → AuthRepository.expireSession. */
 class SessionExpiryTest {
     private val api = object : TmdbApi by unusedTmdbApi {
         override suspend fun accountStates(media: MediaType, id: Int, sessionId: String): AccountStatesDto {
-            val body = """{"success":false,"status_code":3}""".toResponseBody() // session denied
-            val raw = okhttp3.Response.Builder()
-                .request(Request.Builder().url("https://api.themoviedb.org/3/movie/$id/account_states").build())
-                .protocol(Protocol.HTTP_1_1).code(401).message("error").build()
-            throw HttpException(Response.error<Any>(body, raw))
+            throw TmdbHttpException(401, statusCode = 3, retryAfterSeconds = null) // session denied
         }
         override suspend fun createAccessToken(body: AccessTokenBody) = AccessTokenDto(accessToken = "u-s2", accountId = "aoid")
         override suspend fun convertToSession(body: ConvertSessionBody) = SessionDto("s2")

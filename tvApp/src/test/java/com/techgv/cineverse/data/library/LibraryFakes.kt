@@ -164,5 +164,5 @@ class FakeImportLedgerDao : ImportLedgerDao {
     }
 }
 
-/** Decodes like Retrofit does. */
+/** Decodes like KtorTmdbApi does. */
 inline fun <reified T> tmdbJson(json: String): T = TmdbJson.decodeFromString(json)

@@ -53,6 +53,10 @@ Gradle resolves the higher Android versions `tvApp` already uses (lifecycle 2.11
 adds Ktor 3.6.0 / kotlinx-datetime / atomicfu / Koin (declared, unused until P5; R8 strips it). No catalog version
 changed and nothing was downgraded.
 
+**P2:** `tvApp`'s TMDB client is Ktor 3.6.0 on the OkHttp engine (`ktor-client-okhttp`, from the tuple) via `:shared`;
+Retrofit 3.0.0 and `okhttp` `logging-interceptor` are removed from `tvApp` and the catalog. `okhttp` 5.5.0 stays
+declared in `tvApp` (Coil's image client and the Ktor engine resolve it).
+
 ## Decisions and fallbacks (recorded)
 
 - **DataStore 1.3.0 → 1.2.1 (supervisor-approved).** `:shared:compileKotlinIosSimulatorArm64` with 1.3.0 failed:

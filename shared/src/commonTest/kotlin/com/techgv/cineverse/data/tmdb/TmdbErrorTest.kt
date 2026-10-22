@@ -4,8 +4,14 @@ import com.techgv.cineverse.data.tmdb.TmdbOperation.AccessTokenExchange
 import com.techgv.cineverse.data.tmdb.TmdbOperation.Catalog
 import com.techgv.cineverse.data.tmdb.TmdbOperation.Session
 import com.techgv.cineverse.data.tmdb.TmdbOperation.UserToken
-import kotlin.test.assertEquals
+import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.runTest
+import kotlinx.io.IOException
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.fail
 
 class TmdbErrorTest {
     private data class Row(val op: TmdbOperation, val http: Int, val status: Int?, val expected: TmdbError, val retryAfter: Long? = null)
@@ -50,5 +56,43 @@ class TmdbErrorTest {
         table.forEach { row ->
             assertEquals(row.expected, classifyTmdbError(row.op, row.http, row.status, row.retryAfter), row.toString())
         }
+    }
+
+    // --- from real Ktor responses: TMDB `status_code` body, `Retry-After`, bare 401, network, malformed 2xx ---
+
+    private suspend fun errorOf(operation: TmdbOperation, tmdb: MockTmdb): TmdbError = try {
+        tmdbCall(operation) { tmdb.api.createAccessToken(AccessTokenBody("rt")) }
+        fail("expected a TmdbException")
+    } catch (e: TmdbException) {
+        e.error
+    }
+
+    @Test
+    fun statusCodeBodyBareUnauthorizedNetworkAndMalformedAreClassified() = runTest {
+        val pending = MockTmdb { ok("""{"success":false,"status_code":41,"status_message":"x"}""", HttpStatusCode.UnprocessableEntity) }
+        assertEquals(TmdbError.ApprovalPending, errorOf(AccessTokenExchange, pending))
+        val bare401 = MockTmdb { ok("<html>", HttpStatusCode.Unauthorized) }
+        assertEquals(TmdbError.AppCredential, errorOf(Catalog, bare401))
+        assertEquals(TmdbError.ExchangeRejected(401, null), errorOf(AccessTokenExchange, bare401))
+        val offline = MockTmdb { throw IOException("offline") }
+        assertEquals(TmdbError.Network, errorOf(Catalog, offline))
+        val malformed = MockTmdb { ok("""{"unexpected":true}""") } // access_token / account_id missing
+        assertEquals(TmdbError.Malformed, errorOf(AccessTokenExchange, malformed))
+        val notFound = MockTmdb { ok("""{"status_code":34}""", HttpStatusCode.NotFound) }
+        assertEquals(TmdbError.NotFound, errorOf(Catalog, notFound))
+    }
+
+    @Test
+    fun oneRetryAfterRetryAfterOutsideTheExchangeThenTheErrorSurfaces() = runTest(StandardTestDispatcher()) {
+        val limited = MockTmdb(dispatcher = StandardTestDispatcher(testScheduler)) {
+            ok("""{"status_code":25}""", HttpStatusCode.TooManyRequests, "Retry-After" to "4")
+        }
+        assertEquals(TmdbError.RateLimited(4_000), errorOf(Catalog, limited))
+        assertEquals(2, limited.requests.size)
+        assertEquals(4_000, currentTime)
+
+        limited.requests.clear()
+        assertEquals(TmdbError.RateLimited(4_000), errorOf(AccessTokenExchange, limited))
+        assertEquals(1, limited.requests.size) // the polling loop owns the exchange's waiting
     }
 }
