@@ -194,7 +194,7 @@ Fixed on `master`, one commit each, each with a regression test:
 | 4 | [LOW] Launcher banner without the app name (TV-BN). | `8854a12`: 320×180 vector, play mark + "CineVerse" wordmark (Roboto Bold outlines) on the brand gradient; still `android:banner`. Not localised. | Build / lint only. |
 
 Remaining owner gates (not done here):
-- **D8 minSdk**: TV-PS requires minSdk ≤ 31; the app is at 36.
+- **D8 minSdk**: RESOLVED in KMP L1/P3 — tvApp minSdk is 28 (band 26–31; TV-PS ≤ 31). API-28 runtime acceptance on a real TV still pending.
 - Live TMDB sign-in / account smoke (sign-in, library sync, guest import) against a real account.
 - Physical Android TV device pass.
 - YouTube policy check on device (§7.10 RMF: branding, ads, client identity).
