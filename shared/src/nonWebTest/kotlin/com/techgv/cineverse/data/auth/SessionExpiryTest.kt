@@ -16,7 +16,7 @@ import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.TmdbException
 import com.techgv.cineverse.data.tmdb.TmdbRepository
 import com.techgv.cineverse.data.tmdb.UserAccessToken
-import com.techgv.cineverse.data.tmdb.unusedTmdbApi
+import com.techgv.cineverse.data.tmdb.UnusedTmdbApi
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.async
@@ -27,14 +27,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 /** §3.3 "Sign-in expired": the TmdbRepository account-call boundary → AuthRepository.expireSession. */
 class SessionExpiryTest {
-    private val api = object : TmdbApi by unusedTmdbApi {
+    private val api = object : UnusedTmdbApi() {
         override suspend fun accountStates(media: MediaType, id: Int, sessionId: String): AccountStatesDto {
             throw TmdbHttpException(401, statusCode = 3, retryAfterSeconds = null) // session denied
         }
@@ -43,8 +43,8 @@ class SessionExpiryTest {
         override suspend fun account(sessionId: String) = AccountDto(id = 1, username = "user")
     }
     private var accountChanges = 0
-    private val store = DataStoreCredentialStore(InMemoryPreferencesStore(), CredentialCipher(SoftwareKeys()))
-    private val auth = AuthRepository(api, store, onAccountChanged = { accountChanges++ })
+    private val store = DataStoreCredentialStore(InMemoryPreferencesStore(), testTokenCipher())
+    private val auth = NativeAuthRepository(api, store, onAccountChanged = { accountChanges++ })
     private val tmdb = TmdbRepository(
         api, GenerationCounter(), settings = { Settings() }, onSessionExpired = { auth.expireSession(it) },
     )

@@ -3,6 +3,7 @@ package com.techgv.cineverse.data.auth
 import com.techgv.cineverse.data.tmdb.AccessTokenBody
 import com.techgv.cineverse.data.tmdb.AccessTokenDto
 import com.techgv.cineverse.data.tmdb.AccountDto
+import com.techgv.cineverse.data.tmdb.AccountObjectId
 import com.techgv.cineverse.data.tmdb.ConvertSessionBody
 import com.techgv.cineverse.data.tmdb.DeleteAccessTokenBody
 import com.techgv.cineverse.data.tmdb.DeleteSessionBody
@@ -14,7 +15,7 @@ import com.techgv.cineverse.data.tmdb.TmdbApi
 import com.techgv.cineverse.data.tmdb.TmdbHttpException
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.UserBearer
-import com.techgv.cineverse.data.tmdb.unusedTmdbApi
+import com.techgv.cineverse.data.tmdb.UnusedTmdbApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -26,14 +27,14 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
-import java.io.IOException
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.Test
+import kotlinx.io.IOException
 
-class AuthRepositoryTest {
+class NativeAuthRepositoryTest {
     /** Scripted exchange responses; the last one repeats. */
     private val exchange = ArrayDeque<() -> AccessTokenDto>()
     private var exchangeCalls = 0
@@ -48,7 +49,7 @@ class AuthRepositoryTest {
     private var accountChanges = 0
     private lateinit var clock: TestScope
 
-    private val api = object : TmdbApi by unusedTmdbApi {
+    private val api = object : UnusedTmdbApi() {
         override suspend fun createRequestToken(body: RequestTokenBody) = RequestTokenDto("request-token")
         override suspend fun createAccessToken(body: AccessTokenBody): AccessTokenDto {
             exchangeCalls++
@@ -75,8 +76,8 @@ class AuthRepositoryTest {
         }
     }
 
-    private val store = DataStoreCredentialStore(InMemoryPreferencesStore(), CredentialCipher(SoftwareKeys()))
-    private val repo = AuthRepository(api, store, onAccountChanged = { accountChanges++ })
+    private val store = DataStoreCredentialStore(InMemoryPreferencesStore(), testTokenCipher())
+    private val repo = NativeAuthRepository(api, store, onAccountChanged = { accountChanges++ })
     private val code = RequestCode("request-token")
     private val approved = { AccessTokenDto(accessToken = "user-access-token", accountId = "aoid") }
 
@@ -91,7 +92,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `pending then approved converts, reads account and commits the tuple`() = authTest {
+    fun `pending then approved converts reads account and commits the tuple`() = authTest {
         exchange += listOf(tmdbError(422, 41), tmdbError(422, 41), approved)
         val outcome = repo.awaitApproval(code)
         assertTrue(outcome is SignInOutcome.SignedIn)
@@ -103,6 +104,29 @@ class AuthRepositoryTest {
         assertEquals(548, saved.accountId.value)
         assertEquals("Harish", saved.displayName)
         assertEquals(1, accountChanges)
+    }
+
+    /** Plan §3: common code sees only AuthSession; one sign-in = one session, each newer than the last. */
+    @Test
+    fun `each sign-in is a new AuthSession and the guest is null`() = authTest {
+        exchange += approved
+        assertNull(repo.session.first())
+        val first = (repo.awaitApproval(code) as SignInOutcome.SignedIn).session
+        assertEquals(AuthSession(AccountObjectId("aoid"), "Harish", first.sessionGeneration), first)
+        assertEquals(first, repo.session.first())
+        val firstCredentials = repo.credentialsFor(first)
+        assertEquals(store.credentials.first(), firstCredentials)
+
+        repo.signOut()
+        assertNull(repo.session.first())
+        convert += { SessionDto("session-2") } // the same account signs in again: a new session
+        val second = (repo.awaitApproval(code) as SignInOutcome.SignedIn).session
+        assertTrue(second.sessionGeneration > first.sessionGeneration)
+        assertTrue(second != first)
+        assertEquals(second, repo.session.first())
+        // An earlier session keeps its own credentials (its calls fail on TMDB, never switch to the new sign-in).
+        assertEquals(firstCredentials, repo.credentialsFor(first))
+        assertEquals("session-2", repo.credentialsFor(second).sessionId.value)
     }
 
     @Test
@@ -135,7 +159,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `429 waits Retry-After (min 3 s) and keeps polling`() = authTest {
+    fun `429 waits Retry-After min 3 s and keeps polling`() = authTest {
         exchange += listOf(tmdbError(429, null, retryAfter = 7), tmdbError(429, null, retryAfter = 1), approved)
         assertTrue(repo.awaitApproval(code) is SignInOutcome.SignedIn)
         assertEquals(listOf(0L, 7_000L, 10_000L), exchangeTimes)
@@ -202,7 +226,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `second 429 on a post-approval step waits max(poll interval, Retry-After)`() = authTest {
+    fun `second 429 on a post-approval step waits maxpoll interval Retry-After`() = authTest {
         exchange += approved
         // tmdbCall retries once after Retry-After; the step retry must not undercut the second Retry-After.
         convert += listOf(tmdbError(429, null, retryAfter = 7), tmdbError(429, null, retryAfter = 7), { SessionDto("session") })
@@ -239,7 +263,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `sign-out is local first, remote bounded and failures ignored`() = authTest {
+    fun `sign-out is local first remote bounded and failures ignored`() = authTest {
         exchange += approved
         repo.awaitApproval(code)
         remoteSignOut = { awaitCancellation() } // TMDB never answers

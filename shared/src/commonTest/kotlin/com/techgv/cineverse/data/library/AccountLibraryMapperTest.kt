@@ -2,11 +2,12 @@ package com.techgv.cineverse.data.library
 
 import com.techgv.cineverse.data.tmdb.MediaItemDto
 import com.techgv.cineverse.data.tmdb.PageDto
+import com.techgv.cineverse.data.tmdb.TmdbJson
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.Test
 
 class AccountLibraryMapperTest {
     /** Shape of `GET /4/account/{id}/tv/rated` (trimmed): no media_type, account_rating per item, blank date. */
@@ -24,7 +25,7 @@ class AccountLibraryMapperTest {
 
     @Test
     fun `account_rating value becomes the Rated badge and the list decides the media type`() {
-        val page = tmdbJson<PageDto<MediaItemDto>>(ratedTv)
+        val page = TmdbJson.decodeFromString<PageDto<MediaItemDto>>(ratedTv)
         val (first, second) = page.results.map { it.toLibraryEntry(MediaType.Tv) }
 
         assertEquals(MediaRef(MediaType.Tv, 1396), first.title.ref)
@@ -35,14 +36,14 @@ class AccountLibraryMapperTest {
         assertEquals(9.5, first.rating)
 
         assertEquals(5.0, second.rating)
-        assertNull("blank date → null", second.title.releaseDate)
+        assertNull(second.title.releaseDate, "blank date → null")
         assertNull(second.title.posterPath)
         assertEquals(0, second.title.voteCount)
     }
 
     @Test
     fun `movie watchlist item without account_rating has no badge`() {
-        val item = tmdbJson<MediaItemDto>("""{"id":550,"title":"Fight Club","release_date":"1999-10-15","vote_average":8.4,"vote_count":30000}""")
+        val item = TmdbJson.decodeFromString<MediaItemDto>("""{"id":550,"title":"Fight Club","release_date":"1999-10-15","vote_average":8.4,"vote_count":30000}""")
         val entry = item.toLibraryEntry(MediaType.Movie)
         assertEquals("Fight Club", entry.title.title)
         assertEquals("1999-10-15", entry.title.releaseDate)

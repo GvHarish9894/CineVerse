@@ -1,6 +1,5 @@
 package com.techgv.cineverse.data.auth
 
-import android.util.Log
 import com.techgv.cineverse.data.tmdb.AccessTokenBody
 import com.techgv.cineverse.data.tmdb.AccessTokenDto
 import com.techgv.cineverse.data.tmdb.AccountDto
@@ -18,6 +17,9 @@ import com.techgv.cineverse.data.tmdb.TmdbOperation
 import com.techgv.cineverse.data.tmdb.UserAccessToken
 import com.techgv.cineverse.data.tmdb.UserBearer
 import com.techgv.cineverse.data.tmdb.tmdbCall
+import kotlinx.atomicfu.atomic
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -25,6 +27,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -34,35 +37,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.atomic.AtomicLong
+import com.techgv.cineverse.util.logWarning
 import kotlin.math.max
 
-/** Short-lived v4 request token: the only credential ever rendered on screen; never logged. */
-class RequestCode(val requestToken: String) {
-    val approvalUrl: String get() = "https://www.themoviedb.org/auth/access?request_token=$requestToken"
-    override fun toString() = "RequestCode(<redacted>)"
-}
-
-sealed interface SignInOutcome {
-    /** [account] carries the account's content defaults (iso_639_1 / iso_3166_1 / include_adult, §7.9). */
-    data class SignedIn(val credentials: Credentials, val account: AccountDto) : SignInOutcome
-    /** 33: "Code expired — press OK for a new one" → new request code. */
-    data object CodeExpired : SignInOutcome
-    /** 7 / 10: app-credential banner. */
-    data object AppCredentialError : SignInOutcome
-    /** Other 4xx: "TMDB didn't approve this sign-in" → "Get a new code". */
-    data class Rejected(val error: TmdbError) : SignInOutcome
-    /** 2-min deadline: "Still waiting — press OK to check again" (same code). */
-    data object TimedOut : SignInOutcome
-    /** A poll for this repository is already running (single-flight); ignore the press. */
-    data object AlreadyPolling : SignInOutcome
-    /** Approved, but convert / account kept failing: nothing persisted, restart login. */
-    data class Failed(val error: TmdbError) : SignInOutcome
-    /** A sign-out or session expiry happened while this attempt ran: nothing persisted. */
-    data object Superseded : SignInOutcome
-}
-
-class AuthRepository(
+/**
+ * §4 auth on the native transport: v4 request token → approval polling → access token → session convert →
+ * `/3/account`, credentials committed atomically to the encrypted [store]. Common code sees only [session];
+ * native account calls resolve their [Credentials] through [credentialsFor].
+ */
+class NativeAuthRepository(
     private val api: TmdbApi,
     private val store: CredentialStore,
     /** Bumps the app generation and clears account caches (§3.4, §4.2). */
@@ -71,8 +54,31 @@ class AuthRepository(
     private val pollDeadlineMillis: Long = 120_000,
     private val stepAttempts: Int = 3,
     private val signOutTimeoutMillis: Long = 5_000,
-) {
+) : AuthRepository {
+    /** The signed-in tuple (native consumers only: account calls, the debug auth spike). */
     val credentials: Flow<Credentials?> = store.credentials
+
+    private val sessionLock = SynchronizedObject()
+    private var lastGeneration = 0L
+
+    // shortcut: keeps every sign-in of this process (a handful) so a write bound to an older session still uses its own
+    // credentials, exactly like the captured Credentials tuple did; prune if sign-ins per process ever grow large.
+    private val sessions = HashMap<Credentials, AuthSession>()
+    private val credentialsBySession = HashMap<AuthSession, Credentials>()
+
+    override val session: Flow<AuthSession?> = store.credentials.map { it?.let(::sessionOf) }.distinctUntilChanged()
+
+    /** One [AuthSession] per credentials tuple (= one sign-in), with a generation larger than every earlier one. */
+    internal fun sessionOf(credentials: Credentials): AuthSession = synchronized(sessionLock) {
+        sessions.getOrPut(credentials) {
+            AuthSession(credentials.accountObjectId, credentials.displayName, ++lastGeneration)
+                .also { credentialsBySession[it] = credentials }
+        }
+    }
+
+    /** The credentials [session] was signed in with (also after it ended: its calls fail on TMDB, never switch account). */
+    fun credentialsFor(session: AuthSession): Credentials =
+        synchronized(sessionLock) { credentialsBySession[session] } ?: error("Unknown session ${session.sessionGeneration}")
     private val pollLock = Mutex()
 
     /** Serializes credential transitions: sign-in commit, sign-out, session expiry. */
@@ -82,20 +88,16 @@ class AuthRepository(
      * Bumped by every auth transition (sign-in commit, sign-out, expiry): a sign-in attempt started under an
      * older epoch never commits, and a buffered expiry event from an older epoch is dropped.
      */
-    private val attemptEpoch = AtomicLong()
+    private val attemptEpoch = atomic(0L)
 
     /** Carries the epoch the expiry produced. */
     private val expiryEvents = Channel<Long>(Channel.CONFLATED)
 
-    /**
-     * One event per expired sign-in (§3.3 "Sign-in expired"), emitted after the local sign-out. Buffered
-     * until collected (AppNav resets to Login with the message); dropped at collection when a newer
-     * transition (e.g. a new sign-in) superseded the expiry, so it never bounces a fresh session to Login.
-     */
-    val sessionExpired: Flow<Unit> = expiryEvents.receiveAsFlow().filter { it == attemptEpoch.get() }.map { }
+    /** Buffered until collected (AppNav resets to Login with the message); see [AuthRepository.sessionExpired]. */
+    override val sessionExpired: Flow<Unit> = expiryEvents.receiveAsFlow().filter { it == attemptEpoch.value }.map { }
 
     /** §4.1 step 1. Throws [TmdbException]. */
-    suspend fun createRequestCode(): RequestCode = tmdbCall(TmdbOperation.Catalog) {
+    override suspend fun createRequestCode(): RequestCode = tmdbCall(TmdbOperation.Catalog) {
         api.createRequestToken(RequestTokenBody(redirectTo = "https://www.themoviedb.org/"))
     }.let { RequestCode(it.requestToken) }
 
@@ -103,9 +105,9 @@ class AuthRepository(
      * §4.1 steps 3–5: polls every 3 s for up to 2 min, then converts, reads the account and commits the
      * tuple. Cancelling the caller (BACK, guest, dispose, background) stops it; nothing partial is saved.
      */
-    suspend fun awaitApproval(code: RequestCode): SignInOutcome {
+    override suspend fun awaitApproval(code: RequestCode): SignInOutcome {
         if (!pollLock.tryLock()) return SignInOutcome.AlreadyPolling
-        val epoch = attemptEpoch.get()
+        val epoch = attemptEpoch.value
         try {
             val access = when (val poll = pollAccessToken(code)) {
                 is Poll.Approved -> poll.access
@@ -133,12 +135,12 @@ class AuthRepository(
             transitionLock.withLock {
                 // Last check before the commit: BACK / dispose cancelled the caller, or sign-out ran meanwhile.
                 currentCoroutineContext().ensureActive()
-                if (attemptEpoch.get() != epoch) return SignInOutcome.Superseded
+                if (attemptEpoch.value != epoch) return SignInOutcome.Superseded
                 attemptEpoch.incrementAndGet()
                 onAccountChanged()
                 withContext(NonCancellable) { store.save(credentials) } // one atomic edit; never torn
             }
-            return SignInOutcome.SignedIn(credentials, account)
+            return SignInOutcome.SignedIn(sessionOf(credentials), account)
         } finally {
             pollLock.unlock()
         }
@@ -190,7 +192,7 @@ class AuthRepository(
      * remote revocation. Remote failures are logged without token values and ignored. [onSignedOutLocally]
      * runs once the local half is done (not when it throws), before the remote half.
      */
-    suspend fun signOut(onSignedOutLocally: () -> Unit = {}): Unit = withContext(NonCancellable) {
+    override suspend fun signOut(onSignedOutLocally: () -> Unit): Unit = withContext(NonCancellable) {
         val snapshot = transitionLock.withLock {
             attemptEpoch.incrementAndGet() // before the empty-store return: an in-flight sign-in must not commit later
             store.credentials.first()?.also { clearLocally() }
@@ -211,8 +213,10 @@ class AuthRepository(
                     remoteSignOutStep("delete session") { api.deleteSession(DeleteSessionBody(snapshot.sessionId.value)) }
                 }
             }
-        } ?: Log.w(TAG, "Remote sign-out timed out")
+        } ?: logWarning(TAG, "Remote sign-out timed out")
     }
+
+    override suspend fun expireSession(failed: AuthSession) = expireSession(credentialsFor(failed))
 
     /**
      * §3.3 session / user token invalid: local sign-out of [failed] only. Identity-bound and deduplicated:
@@ -238,7 +242,7 @@ class AuthRepository(
         try {
             tmdbCall(TmdbOperation.UserToken, block)
         } catch (e: TmdbException) {
-            Log.w(TAG, "Remote sign-out: $name failed (${e.error})")
+            logWarning(TAG, "Remote sign-out: $name failed (${e.error})")
         }
     }
 

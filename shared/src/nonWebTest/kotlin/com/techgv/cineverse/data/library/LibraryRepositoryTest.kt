@@ -1,6 +1,6 @@
 package com.techgv.cineverse.data.library
 
-import com.techgv.cineverse.data.auth.Credentials
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.domain.LibraryKind
 import com.techgv.cineverse.domain.LibraryState
@@ -13,17 +13,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 class LibraryRepositoryTest {
     private val api = FakeAccountApi()
     private val dao = FakeLibraryDao()
-    private val identity = MutableStateFlow<Credentials?>(credentials())
+    private val identity = MutableStateFlow<AuthSession?>(credentials().session())
     private var clock = 0L
-    private val repo = LibraryRepository(identity, GuestLibrarySource(dao) { ++clock }, AccountLibrarySource(tmdbRepository(api)))
+    private val repo = LibraryRepository(identity, guestSource(dao) { ++clock }, accountSource(api))
     private val movie = title(1)
 
     /** Latest emitted state of [movie], collected for the whole test; [history] gets every emission. */
@@ -34,7 +34,7 @@ class LibraryRepositoryTest {
     }
 
     @Test
-    fun `guest writes go to Room, newest first, and need no network`() = runTest {
+    fun `guest writes go to Room newest first and need no network`() = runTest {
         identity.value = null
         val state = watchState()
         repo.toggleWatchlist(movie, identity.value)
@@ -101,7 +101,7 @@ class LibraryRepositoryTest {
         api.writeGate!!.complete(Unit)
         assertTrue(write.await() is LibraryWriteResult.Failed)
         runCurrent()
-        assertTrue("rolled back to the newer confirmed value, not the pre-write one", state().watchlist)
+        assertTrue(state().watchlist, "rolled back to the newer confirmed value, not the pre-write one")
         assertTrue(state().pending.isEmpty())
     }
 
@@ -115,7 +115,7 @@ class LibraryRepositoryTest {
         assertTrue(state().watchlist)
         staleGate.complete(Unit)
         runCurrent()
-        assertTrue("the stale read is dropped by the generation check", state().watchlist)
+        assertTrue(state().watchlist, "the stale read is dropped by the generation check")
         assertTrue(state().pending.isEmpty())
     }
 
@@ -144,12 +144,12 @@ class LibraryRepositoryTest {
         api.writeGate = CompletableDeferred()
         val write = async { repo.toggleWatchlist(movie, identity.value) }
         runCurrent()
-        identity.value = credentials(aoid = "other", session = "s2")
+        identity.value = credentials(aoid = "other", session = "s2").session()
         runCurrent() // the new identity reads its own states: not on its watchlist
         api.writeGate!!.complete(Unit)
         write.await()
         runCurrent()
-        assertFalse("the old identity's success and post-write read are dropped", state().watchlist)
+        assertFalse(state().watchlist, "the old identity's success and post-write read are dropped")
     }
 
     @Test
@@ -169,23 +169,23 @@ class LibraryRepositoryTest {
         runCurrent()
         val a2 = async { repo.toggleWatchlist(movie, a) } // queued behind a1 on the same (title, kind) lock
         runCurrent()
-        identity.value = credentials(aoid = "b", session = "sb")
+        identity.value = credentials(aoid = "b", session = "sb").session()
         val history = mutableListOf<LibraryState>()
         val b = watchState(history)
         assertTrue(b().known)
         val bKnownAt = history.size
         api.writeGate!!.complete(Unit)
-        assertEquals("finished after the switch: no toast", LibraryWriteResult.Superseded, a1.await())
-        assertEquals("rejected inside the lock, not redirected to B", LibraryWriteResult.Superseded, a2.await())
+        assertEquals(LibraryWriteResult.Superseded, a1.await(), "finished after the switch: no toast")
+        assertEquals(LibraryWriteResult.Superseded, a2.await(), "rejected inside the lock, not redirected to B")
         runCurrent()
-        assertEquals("only a1 had reached TMDB", listOf("watchlist/movie:1=true"), api.writes)
-        assertTrue("B's button states were never cleared", history.drop(bKnownAt - 1).all { it.known })
+        assertEquals(listOf("watchlist/movie:1=true"), api.writes, "only a1 had reached TMDB")
+        assertTrue(history.drop(bKnownAt - 1).all { it.known }, "B's button states were never cleared")
     }
 
     @Test
     fun `a toggle made under A and dispatched after a switch to B is superseded and B is untouched`() = runTest {
         val a = identity.value
-        identity.value = credentials(aoid = "b", session = "sb")
+        identity.value = credentials(aoid = "b", session = "sb").session()
         val b = watchState()
         assertEquals(LibraryWriteResult.Superseded, repo.toggleWatchlist(movie, a))
         assertEquals(LibraryWriteResult.Superseded, repo.toggleFavourite(movie, a))
@@ -201,7 +201,7 @@ class LibraryRepositoryTest {
         val a = identity.value
         val write = async { repo.toggleWatchlist(movie, a) } // no cached state: reads account_states first
         runCurrent()
-        identity.value = credentials(aoid = "b", session = "sb")
+        identity.value = credentials(aoid = "b", session = "sb").session()
         gate.complete(Unit)
         assertEquals(LibraryWriteResult.Superseded, write.await())
         assertTrue(api.writes.isEmpty())
@@ -234,7 +234,7 @@ class LibraryRepositoryTest {
         api.landThenFail = true
         assertTrue(repo.toggleWatchlist(movie, identity.value) is LibraryWriteResult.Failed)
         runCurrent()
-        assertTrue("TMDB has it: shown as on the watchlist", state().watchlist)
+        assertTrue(state().watchlist, "TMDB has it: shown as on the watchlist")
         assertTrue(state().pending.isEmpty())
     }
 }

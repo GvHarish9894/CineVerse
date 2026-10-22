@@ -13,7 +13,10 @@ kotlin {
         namespace = "com.techgv.cineverse.shared"
         compileSdk = 37
         minSdk = 26
-        withHostTest {}
+        withHostTest {
+            // android.util.Log (logWarning) returns defaults instead of throwing in host tests, as in tvApp.
+            isReturnDefaultValues = true
+        }
     }
     iosArm64()
     iosSimulatorArm64()

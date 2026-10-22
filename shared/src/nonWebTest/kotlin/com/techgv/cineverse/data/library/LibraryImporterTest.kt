@@ -1,6 +1,6 @@
 package com.techgv.cineverse.data.library
 
-import com.techgv.cineverse.data.auth.Credentials
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.domain.LibraryKind
 import com.techgv.cineverse.domain.LibraryState
 import com.techgv.cineverse.domain.MediaRef
@@ -13,23 +13,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 class LibraryImporterTest {
     private val api = FakeAccountApi()
     private val dao = FakeLibraryDao()
     private val ledger = FakeImportLedgerDao()
-    private val account = credentials()
+    private val account = credentials().session()
     private var clock = 0L
-    private val guest = GuestLibrarySource(dao) { ++clock }
-    private val accountSource = AccountLibrarySource(tmdbRepository(api))
-    private val identity = MutableStateFlow<Credentials?>(account)
+    private val guest = guestSource(dao) { ++clock }
+    private val accountSource = accountSource(api)
+    private val identity = MutableStateFlow<AuthSession?>(account)
     private val repo = LibraryRepository(identity, guest, accountSource)
-    private val importer = LibraryImporter(ledger, guest, accountSource, repo)
+    private val importStore = RoomImportStore(ledger)
+    private val importer = LibraryImporter(importStore, importStore, guest, accountSource, repo)
 
     private suspend fun guestHas(title: Title, watchlist: Boolean = false, favourite: Boolean = false, rating: Double? = null) {
         val target = LibraryState(known = true, watchlist = watchlist, favourite = favourite, rating = rating, pending = emptySet())
@@ -59,18 +60,18 @@ class LibraryImporterTest {
         assertEquals(ImportOffer.Ask(1), importer.offer(account))
         importer.keepSeparate(account)
         assertNull(importer.offer(account))
-        assertEquals(ImportOffer.Ask(1), importer.offer(credentials(aoid = "another")))
+        assertEquals(ImportOffer.Ask(1), importer.offer(credentials(aoid = "another").session()))
     }
 
     @Test
-    fun `reads all pages of the six lists before any write, and aborts on a read failure`() = runTest {
+    fun `reads all pages of the six lists before any write and aborts on a read failure`() = runTest {
         api.pageSize = 1
         api.watchlist += listOf(MediaRef(MediaType.Movie, 10), MediaRef(MediaType.Movie, 11))
         guestHas(title(1), watchlist = true)
         api.failListPage = 2
         val aborted = importer.import(account)
         assertTrue(aborted is ImportResult.Aborted)
-        assertTrue("nothing written", api.writes.isEmpty())
+        assertTrue(api.writes.isEmpty(), "nothing written")
         assertEquals(ImportOffer.Resume(1), importer.offer(account))
 
         api.failListPage = null
@@ -87,7 +88,7 @@ class LibraryImporterTest {
     }
 
     @Test
-    fun `union for flags, TMDB rating wins, order rating then favourite then watchlist`() = runTest {
+    fun `union for flags TMDB rating wins order rating then favourite then watchlist`() = runTest {
         val kept = title(1)
         val fresh = title(2, MediaType.Tv)
         api.ratings[kept.ref] = 9.0
@@ -108,11 +109,11 @@ class LibraryImporterTest {
         assertTrue(result.unconfirmed.isEmpty())
         assertEquals(ImportLedgerEntity.DONE, ledgerState(kept.ref, LibraryKind.RATING)) // skipped as satisfied
         assertNull(importer.offer(account)) // complete
-        assertEquals("guest rows are retained", 6, dao.rows.value.size)
+        assertEquals(6, dao.rows.value.size, "guest rows are retained")
     }
 
     @Test
-    fun `an unconfirmed rating blocks that title's watchlist write`() = runTest {
+    fun `an unconfirmed rating blocks that titles watchlist write`() = runTest {
         val t = title(1)
         guestHas(t, watchlist = true, rating = 8.0)
         api.failWrites = 1
@@ -152,7 +153,7 @@ class LibraryImporterTest {
 
     /** Ambiguous: a prior attempt's outcome is unknown and TMDB now lacks the flag (maybe removed remotely). */
     @Test
-    fun `ambiguous removal is not resumed automatically, only by an explicit retry`() = runTest {
+    fun `ambiguous removal is not resumed automatically only by an explicit retry`() = runTest {
         val t = title(1)
         guestHas(t, watchlist = true)
         ledgerAttempting(t.ref, LibraryKind.WATCHLIST)
@@ -181,7 +182,7 @@ class LibraryImporterTest {
         importer.import(account)
 
         assertEquals(8.0, api.ratings[t.ref])
-        assertTrue("watchlist re-checked after the rating side effect", t.ref in api.watchlist)
+        assertTrue(t.ref in api.watchlist, "watchlist re-checked after the rating side effect")
         assertEquals(listOf("rate/movie:1=8.0", "watchlist/movie:1=true"), api.writes)
     }
 
@@ -198,12 +199,12 @@ class LibraryImporterTest {
         user.await()
         import.await()
 
-        assertEquals("TMDB's rating at execution time wins", 9.0, api.ratings[t.ref])
+        assertEquals(9.0, api.ratings[t.ref], "TMDB's rating at execution time wins")
         assertEquals(listOf("rate/movie:1=9.0"), api.writes)
     }
 
     @Test
-    fun `preflight reads the account lists from TMDB, not a warm cache`() = runTest {
+    fun `preflight reads the account lists from TMDB not a warm cache`() = runTest {
         accountSource.page(account, LibraryKind.WATCHLIST, MediaType.Movie, 1) // warms the 10-min list cache
         guestHas(title(1), favourite = true)
         api.calls.clear()
@@ -222,7 +223,7 @@ class LibraryImporterTest {
         importer.import(account)
         runCurrent()
 
-        assertTrue("refetched, not left Unknown", history.last().known)
+        assertTrue(history.last().known, "refetched, not left Unknown")
         assertTrue(history.last().watchlist)
     }
 
@@ -238,25 +239,25 @@ class LibraryImporterTest {
         val result = importer.import(account) as ImportResult.Done
         runCurrent()
 
-        assertEquals("confirmed by account_states, not counted as written", 0, result.written)
+        assertEquals(0, result.written, "confirmed by account_states, not counted as written")
         assertTrue(repo.listRevision.value > before)
         assertTrue(history.last().watchlist)
     }
 
     @Test
-    fun `a sign-in change during a step's account_states read stops the import before its POST`() = runTest {
+    fun `a sign-in change during a steps account_states read stops the import before its POST`() = runTest {
         val t = title(1)
         guestHas(t, watchlist = true) // not in the snapshot: the step reads account_states holding the lock
         val gate = CompletableDeferred<Unit>().also { api.statesGates += it }
         val import = async { importer.import(account) }
         runCurrent()
-        identity.value = credentials(aoid = "b", session = "sb")
+        identity.value = credentials(aoid = "b", session = "sb").session()
         gate.complete(Unit)
 
         assertEquals(ImportResult.Superseded, import.await())
         assertTrue(api.writes.isEmpty())
-        assertNull("never marked attempting", ledgerState(t.ref, LibraryKind.WATCHLIST))
-        assertEquals("unfinished: offered for resuming", ImportOffer.Resume(1), importer.offer(account))
+        assertNull(ledgerState(t.ref, LibraryKind.WATCHLIST), "never marked attempting")
+        assertEquals(ImportOffer.Resume(1), importer.offer(account), "unfinished: offered for resuming")
     }
 
     @Test
@@ -269,7 +270,7 @@ class LibraryImporterTest {
         val import = launch { importer.import(account) }
         runCurrent()
         assertEquals(listOf("watchlist/movie:2=true"), api.writes)
-        identity.value = credentials(aoid = "b", session = "sb")
+        identity.value = credentials(aoid = "b", session = "sb").session()
         val history = watchState(waiting.ref)
         assertTrue(history.last().known)
         val emitted = history.size
@@ -277,6 +278,6 @@ class LibraryImporterTest {
         import.cancel()
         runCurrent()
 
-        assertEquals("B's states neither cleared nor refetched", emitted, history.size)
+        assertEquals(emitted, history.size, "B's states neither cleared nor refetched")
     }
 }

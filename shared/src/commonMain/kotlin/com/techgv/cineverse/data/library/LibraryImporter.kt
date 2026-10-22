@@ -1,6 +1,6 @@
 package com.techgv.cineverse.data.library
 
-import com.techgv.cineverse.data.auth.Credentials
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.TmdbException
 import com.techgv.cineverse.domain.LibraryKind
@@ -41,7 +41,8 @@ sealed interface ImportResult {
  * whose outcome is unknown is reconciled through `account_states` instead of retried blindly.
  */
 class LibraryImporter(
-    private val ledger: ImportLedgerDao,
+    private val ledger: ImportLedgerStore,
+    private val offers: ImportOfferStore,
     private val guest: GuestLibrarySource,
     private val account: AccountLibrarySource,
     private val repository: LibraryRepository,
@@ -49,31 +50,31 @@ class LibraryImporter(
     /** Accounts whose resume prompt this process already offered ("once per launch"). */
     private val resumeOffered = mutableSetOf<String>()
 
-    suspend fun offer(c: Credentials): ImportOffer? {
+    suspend fun offer(c: AuthSession): ImportOffer? {
         val aoid = c.accountObjectId.value
-        val offer = ledger.offer(aoid)
+        val offer = offers.offer(aoid)
         return when {
             offer == null -> guest.all().map { it.title.ref }.toSet().size.takeIf { it > 0 }?.let { ImportOffer.Ask(it) }
             offer.imported && !offer.complete && resumeOffered.add(aoid) -> {
-                val left = guest.all().filter { ledger.state(aoid, it.title.ref.mediaType.path, it.title.ref.id, it.kind.name) != ImportLedgerEntity.DONE }
+                val left = guest.all().filter { ledger.state(aoid, it.title.ref, it.kind) != ImportStepState.Done }
                 ImportOffer.Resume(left.map { it.title.ref }.toSet().size)
             }
             else -> null
         }
     }
 
-    suspend fun keepSeparate(c: Credentials) = ledger.putOffer(ImportOfferEntity(c.accountObjectId.value, imported = false, complete = true))
+    suspend fun keepSeparate(c: AuthSession) = offers.put(ImportOfferRecord(c.accountObjectId.value, imported = false, complete = true))
 
     /** The user closed the result (incl. with unconfirmed items left): never offered again. */
-    suspend fun finish(c: Credentials) = ledger.putOffer(ImportOfferEntity(c.accountObjectId.value, imported = true, complete = true))
+    suspend fun finish(c: AuthSession) = offers.put(ImportOfferRecord(c.accountObjectId.value, imported = true, complete = true))
 
     /**
      * Runs (or resumes) the import. [retry]: unconfirmed steps the user chose to write again after the
      * warning that items removed on TMDB may be re-added.
      */
-    suspend fun import(c: Credentials, retry: Set<ImportStep> = emptySet()): ImportResult {
+    suspend fun import(c: AuthSession, retry: Set<ImportStep> = emptySet()): ImportResult {
         val aoid = c.accountObjectId.value
-        ledger.putOffer(ImportOfferEntity(aoid, imported = true, complete = false))
+        offers.put(ImportOfferRecord(aoid, imported = true, complete = false))
         account.invalidateLists() // rule 1 reads TMDB, not the 10-min list cache
         val remote = try {
             LibraryKind.entries.associateWith { kind ->
@@ -121,36 +122,36 @@ class LibraryImporter(
      * Decided holding the (title, kind) write lock, against TMDB's state at execution time unless the snapshot
      * already has it: a user write that committed while the import waited (e.g. a rating) wins.
      */
-    private suspend fun runStep(c: Credentials, step: ImportStep, value: Double?, inSnapshot: Boolean, forced: Boolean): Outcome {
-        val previous = ledger.state(c.accountObjectId.value, step.ref.mediaType.path, step.ref.id, step.kind.name)
-        if (previous == ImportLedgerEntity.DONE) return Outcome.Satisfied
+    private suspend fun runStep(c: AuthSession, step: ImportStep, value: Double?, inSnapshot: Boolean, forced: Boolean): Outcome {
+        val previous = ledger.state(c.accountObjectId.value, step.ref, step.kind)
+        if (previous == ImportStepState.Done) return Outcome.Satisfied
         return repository.serialized(step.ref, step.kind) {
-            val present = if (previous == ImportLedgerEntity.ATTEMPTING || !inSnapshot) remoteHas(c, step) else true
+            val present = if (previous == ImportStepState.Attempting || !inSnapshot) remoteHas(c, step) else true
             when {
                 present == true -> {
-                    mark(c, step, ImportLedgerEntity.DONE)
+                    mark(c, step, ImportStepState.Done)
                     Outcome.Satisfied
                 }
                 present == null -> Outcome.Unconfirmed
                 // A prior attempt has an unknown outcome and TMDB lacks it: ambiguous (maybe removed on TMDB).
-                previous == ImportLedgerEntity.ATTEMPTING && !forced -> Outcome.Unconfirmed
+                previous == ImportStepState.Attempting && !forced -> Outcome.Unconfirmed
                 // The account_states read above may have outlived the sign-in: re-checked right before the POST.
-                repository.credentials.first() != c -> Outcome.Superseded
+                repository.session.first() != c -> Outcome.Superseded
                 else -> post(c, step, value)
             }
         }
     }
 
-    private suspend fun post(c: Credentials, step: ImportStep, value: Double?): Outcome {
-        mark(c, step, ImportLedgerEntity.ATTEMPTING)
+    private suspend fun post(c: AuthSession, step: ImportStep, value: Double?): Outcome {
+        mark(c, step, ImportStepState.Attempting)
         return try {
             account.write(c, step.ref, step.kind, target(step.kind, value))
-            mark(c, step, ImportLedgerEntity.DONE)
+            mark(c, step, ImportStepState.Done)
             Outcome.Written
         } catch (_: TmdbException) {
             // Unknown outcome: the POST may have landed. Present now → done; absent → ambiguous, not resumed.
             if (remoteHas(c, step) == true) {
-                mark(c, step, ImportLedgerEntity.DONE)
+                mark(c, step, ImportStepState.Done)
                 Outcome.Landed
             } else {
                 Outcome.Unconfirmed
@@ -159,15 +160,14 @@ class LibraryImporter(
     }
 
     /** TMDB's current state for the step's kind; null when it cannot be read. */
-    private suspend fun remoteHas(c: Credentials, step: ImportStep): Boolean? = try {
+    private suspend fun remoteHas(c: AuthSession, step: ImportStep): Boolean? = try {
         account.states(c, step.ref).has(step.kind)
     } catch (_: TmdbException) {
         null
     }
 
-    private suspend fun mark(c: Credentials, step: ImportStep, state: String) = ledger.put(
-        ImportLedgerEntity(c.accountObjectId.value, step.ref.mediaType.path, step.ref.id, step.kind.name, state),
-    )
+    private suspend fun mark(c: AuthSession, step: ImportStep, state: ImportStepState) =
+        ledger.put(c.accountObjectId.value, step.ref, step.kind, state)
 
     private fun target(kind: LibraryKind, value: Double?) =
         LibraryState(known = true, watchlist = kind == LibraryKind.WATCHLIST, favourite = kind == LibraryKind.FAVOURITE, rating = value, pending = emptySet())
