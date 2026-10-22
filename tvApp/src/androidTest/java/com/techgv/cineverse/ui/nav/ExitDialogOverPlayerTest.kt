@@ -95,7 +95,7 @@ class ExitDialogOverPlayerTest {
 
     private fun openHomeOnPlayTrailer() {
         val container = AppContainer(compose.activity.applicationContext, api)
-        assertNull("needs a guest (signed-out) install", runBlocking { container.authRepository.credentials.first() })
+        assertNull("needs a guest (signed-out) install", runBlocking { container.authRepository.session.first() })
         compose.setContent { DesignCanvas { CineVerseTheme { AppNav(container) } } }
         compose.waitUntil(TIMEOUT) { exists("Continue as guest") }
         compose.onNodeWithText("Continue as guest").requestFocus()

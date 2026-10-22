@@ -111,10 +111,10 @@ class LoginViewModel(
         // Committed credentials (even when [stopPolling] cancelled the poll right after the commit, or
         // they exist on resume) leave Login exactly once and never re-offer the consumed code.
         viewModelScope.launch {
-            val credentials = auth.credentials.filterNotNull().first()
+            val session = auth.session.filterNotNull().first()
             generation.bump()
             _state.value = LoginUiState.signedIn
-            signedInEvents.send(credentials.displayName)
+            signedInEvents.send(session.displayName)
         }
     }
 
@@ -150,7 +150,7 @@ class LoginViewModel(
                 // Committed: the credentials observer (init) leaves Login; the optional offer outlives this job.
                 // shortcut: a cancel landing inside the commit itself loses the offer (sign-in still completes).
                 outcome is SignInOutcome.SignedIn -> appScope.launch {
-                    accountDefaultsOffer(outcome.credentials, outcome.account, settings.current())
+                    accountDefaultsOffer(outcome.session, outcome.account, settings.current())
                         ?.let { settings.offerAccountDefaults(it) }
                 }
                 !this.generation.isCurrent(generation) -> Unit

@@ -17,7 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.techgv.cineverse.appContainer
 import com.techgv.cineverse.data.auth.AndroidKeystoreKeys
-import com.techgv.cineverse.data.auth.AuthRepository
+import com.techgv.cineverse.data.auth.NativeAuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
 import com.techgv.cineverse.data.auth.DataStoreCredentialStore
 import com.techgv.cineverse.data.auth.Credentials
@@ -86,7 +86,7 @@ class SettingsScreenDpadTest {
             credentialStore.save(Credentials(UserAccessToken("t"), AccountObjectId("aoid"), SessionId("s"), AccountId(1), "harish", "Harish Gv"))
             localSettings.offerAccountDefaults(AccountDefaults("aoid", "hi-IN", "US", includeAdult = false))
         }
-        return SettingsViewModel(handle, localSettings, AuthRepository(api, credentialStore, onAccountChanged = {}))
+        return SettingsViewModel(handle, localSettings, NativeAuthRepository(api, credentialStore, onAccountChanged = {}))
     }
 
     @Test

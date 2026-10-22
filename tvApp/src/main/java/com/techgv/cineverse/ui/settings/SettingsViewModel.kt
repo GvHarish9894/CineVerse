@@ -43,11 +43,11 @@ class SettingsViewModel(
 
     /** Null until the first DataStore read: the screen restores focus only once real values show. */
     val state: StateFlow<SettingsUiState?> =
-        combine(settings.settings, auth.credentials, settings.pendingAccountDefaults) { s, credentials, pending ->
+        combine(settings.settings, auth.session, settings.pendingAccountDefaults) { s, session, pending ->
             SettingsUiState(
                 settings = s,
-                accountName = credentials?.displayName,
-                accountDefaults = credentials?.let { pending[it.accountObjectId.value] },
+                accountName = session?.displayName,
+                accountDefaults = session?.let { pending[it.accountObjectId.value] },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -73,7 +73,7 @@ class SettingsViewModel(
     /** Resolves [offer] only while its account is still the signed-in one (a stale screen's click does nothing). */
     fun resolveAccountDefaults(offer: AccountDefaults, apply: Boolean) {
         viewModelScope.launch {
-            if (auth.credentials.first()?.accountObjectId?.value == offer.accountObjectId) {
+            if (auth.session.first()?.accountObjectId?.value == offer.accountObjectId) {
                 settings.resolveAccountDefaults(offer.accountObjectId, apply)
             }
         }

@@ -1,17 +1,18 @@
 package com.techgv.cineverse.ui.library
 
-import com.techgv.cineverse.data.library.AccountLibrarySource
+import com.techgv.cineverse.data.library.accountSource
 import com.techgv.cineverse.data.library.FakeAccountApi
 import com.techgv.cineverse.data.library.FakeImportLedgerDao
 import com.techgv.cineverse.data.library.FakeLibraryDao
-import com.techgv.cineverse.data.library.GuestLibrarySource
+import com.techgv.cineverse.data.library.guestSource
 import com.techgv.cineverse.data.library.ImportLedgerEntity
 import com.techgv.cineverse.data.library.ImportOffer
 import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
+import com.techgv.cineverse.data.library.RoomImportStore
 import com.techgv.cineverse.data.library.credentials
+import com.techgv.cineverse.data.library.session
 import com.techgv.cineverse.data.library.title
-import com.techgv.cineverse.data.library.tmdbRepository
 import com.techgv.cineverse.domain.LibraryKind
 import com.techgv.cineverse.domain.LibraryState
 import com.techgv.cineverse.ui.components.ImportDialogState
@@ -29,11 +30,12 @@ import org.junit.Test
 class ImportLibraryControllerTest {
     private val api = FakeAccountApi()
     private val ledger = FakeImportLedgerDao()
-    private val account = credentials()
-    private val guest = GuestLibrarySource(FakeLibraryDao()) { 0L }
-    private val accountSource = AccountLibrarySource(tmdbRepository(api))
+    private val account = credentials().session()
+    private val guest = guestSource(FakeLibraryDao())
+    private val accountSource = accountSource(api)
+    private val importStore = RoomImportStore(ledger)
     private val repository = LibraryRepository(MutableStateFlow(account), guest, accountSource)
-    private val importer = LibraryImporter(ledger, guest, accountSource, repository)
+    private val importer = LibraryImporter(importStore, importStore, guest, accountSource, repository)
 
     private suspend fun guestWatchlist(id: Int) =
         guest.write(title(id), LibraryKind.WATCHLIST, LibraryState(known = true, watchlist = true, favourite = false, rating = null, pending = emptySet()))
@@ -83,7 +85,7 @@ class ImportLibraryControllerTest {
         runCurrent()
         val writes = api.writes.toList()
 
-        val nextLaunch = controller(LibraryImporter(ledger, guest, accountSource, repository))
+        val nextLaunch = controller(LibraryImporter(importStore, importStore, guest, accountSource, repository))
         nextLaunch.onAccount(account)
         runCurrent()
         assertEquals(ImportDialogState.Ask("Harish", 1, resume = true), nextLaunch.shown.first())

@@ -1,13 +1,13 @@
 package com.techgv.cineverse.ui.library
 
 import androidx.lifecycle.SavedStateHandle
-import com.techgv.cineverse.data.library.AccountLibrarySource
+import com.techgv.cineverse.data.library.accountSource
 import com.techgv.cineverse.data.library.FakeAccountApi
 import com.techgv.cineverse.data.library.FakeLibraryDao
-import com.techgv.cineverse.data.library.GuestLibrarySource
+import com.techgv.cineverse.data.library.guestSource
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.library.credentials
-import com.techgv.cineverse.data.library.tmdbRepository
+import com.techgv.cineverse.data.library.session
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.ui.components.SectionErrorKind
@@ -28,7 +28,7 @@ class LibraryViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val api = FakeAccountApi()
     private val repo = LibraryRepository(
-        MutableStateFlow(credentials()), GuestLibrarySource(FakeLibraryDao()) { 0L }, AccountLibrarySource(tmdbRepository(api)),
+        MutableStateFlow(credentials().session()), guestSource(FakeLibraryDao()), accountSource(api),
     )
 
     @Before

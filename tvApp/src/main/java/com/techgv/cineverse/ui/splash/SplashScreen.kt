@@ -42,7 +42,7 @@ fun SplashScreen(container: AppContainer, onFinished: (signedIn: Boolean) -> Uni
             appScope.launch { runCatching { tmdbRepository.genres(MediaType.Movie) } }
             appScope.launch { runCatching { tmdbRepository.genres(MediaType.Tv) } }
         }
-        val signedIn = async { runCatching { container.authRepository.credentials.first() != null }.getOrDefault(false) }
+        val signedIn = async { runCatching { container.authRepository.session.first() != null }.getOrDefault(false) }
         launch { progress.animateTo(1f, tween(SPLASH_DURATION_MILLIS.toInt(), easing = LinearEasing)) }
         delay(SPLASH_DURATION_MILLIS)
         onFinished(signedIn.await())

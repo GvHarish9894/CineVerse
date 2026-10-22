@@ -1,6 +1,6 @@
 package com.techgv.cineverse.ui.login
 
-import com.techgv.cineverse.data.auth.AuthRepository
+import com.techgv.cineverse.data.auth.NativeAuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
 import com.techgv.cineverse.data.auth.DataStoreCredentialStore
 import com.techgv.cineverse.data.auth.GatedPreferencesStore
@@ -61,7 +61,7 @@ class LoginViewModelTest {
     private val settingsData = GatedPreferencesStore()
     private val settings = SettingsRepository(DataStoreSettingsStore(settingsData))
     private val credentialData = GatedPreferencesStore()
-    private val auth = AuthRepository(api, DataStoreCredentialStore(credentialData, CredentialCipher(SoftwareKeys())), onAccountChanged = {})
+    private val auth = NativeAuthRepository(api, DataStoreCredentialStore(credentialData, CredentialCipher(SoftwareKeys())), onAccountChanged = {})
 
     /** TMDB "not approved yet": HTTP 422, status_code 41. */
     private fun pending() = TmdbHttpException(422, statusCode = 41, retryAfterSeconds = null)

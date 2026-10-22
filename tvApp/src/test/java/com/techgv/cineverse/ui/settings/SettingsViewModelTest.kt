@@ -1,7 +1,7 @@
 package com.techgv.cineverse.ui.settings
 
 import androidx.lifecycle.SavedStateHandle
-import com.techgv.cineverse.data.auth.AuthRepository
+import com.techgv.cineverse.data.auth.NativeAuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
 import com.techgv.cineverse.data.auth.DataStoreCredentialStore
 import com.techgv.cineverse.data.auth.Credentials
@@ -55,7 +55,7 @@ class SettingsViewModelTest {
     private val credentialData = GatedPreferencesStore()
     private val credentialStore = DataStoreCredentialStore(credentialData, CredentialCipher(SoftwareKeys()))
     private val settings = SettingsRepository(DataStoreSettingsStore(InMemoryPreferencesStore()))
-    private val vm by lazy { SettingsViewModel(SavedStateHandle(), settings, AuthRepository(api, credentialStore, onAccountChanged = {})) }
+    private val vm by lazy { SettingsViewModel(SavedStateHandle(), settings, NativeAuthRepository(api, credentialStore, onAccountChanged = {})) }
 
     private fun account(id: String, name: String) =
         Credentials(UserAccessToken("t-$id"), AccountObjectId(id), SessionId("s-$id"), AccountId(id.hashCode()), name.lowercase(), name)

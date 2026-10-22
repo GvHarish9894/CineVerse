@@ -13,7 +13,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.techgv.cineverse.data.auth.AndroidKeystoreKeys
-import com.techgv.cineverse.data.auth.AuthRepository
+import com.techgv.cineverse.data.auth.NativeAuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
 import com.techgv.cineverse.data.auth.DataStoreCredentialStore
 import com.techgv.cineverse.data.settings.DataStoreSettingsStore
@@ -61,7 +61,7 @@ class LoginScreenDpadTest {
 
     @Test
     fun okStartsWaiting_rightThenOkContinuesAsGuest() {
-        val auth = AuthRepository(api, DataStoreCredentialStore(store("login-test-credentials"), CredentialCipher(AndroidKeystoreKeys("login_test"))), onAccountChanged = {})
+        val auth = NativeAuthRepository(api, DataStoreCredentialStore(store("login-test-credentials"), CredentialCipher(AndroidKeystoreKeys("login_test"))), onAccountChanged = {})
         val vm = LoginViewModel(auth, SettingsRepository(DataStoreSettingsStore(store("login-test-settings"))), CoroutineScope(Dispatchers.Default))
         var guest = 0
         compose.setContent { LoginScreen(message = null, onContinueAsGuest = { guest++ }, onSignedIn = {}, vm = vm) }
