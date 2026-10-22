@@ -12,9 +12,15 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -32,7 +38,9 @@ import kotlin.test.assertEquals
 /** CvBottomSheet close paths: each reports exactly one dismissal under both motion settings. */
 @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
 class SheetDismissTest {
-    private fun ComposeUiTest.openAndClose(reduceMotion: Boolean, escape: Boolean) {
+    private enum class CloseVia { EscapeOnContent, EscapeOnHandle, Scrim }
+
+    private fun ComposeUiTest.openAndClose(reduceMotion: Boolean, close: CloseVia) {
         var dismissals = 0
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = reduceMotion)) {
             val inputMode = LocalInputModeManager.current
@@ -40,6 +48,7 @@ class SheetDismissTest {
             var open by remember { mutableStateOf(false) }
             val trigger = remember { FocusRequester() }
             PillButton("Open sheet", { open = true }, Modifier.focusRequester(trigger))
+            PillButton("Elsewhere", {})
             if (open) {
                 CvBottomSheet(onDismissRequest = { dismissals++; open = false }, restoreFocus = trigger) {
                     PillButton("Sheet action", {})
@@ -51,14 +60,20 @@ class SheetDismissTest {
         onNodeWithText("Open sheet").performKeyInput { pressKey(Key.Enter) }
         waitForIdle()
         onNodeWithText("Sheet action").assertExists()
-        if (escape) {
-            onNodeWithText("Sheet action").requestFocus()
-            waitForIdle()
-            onNodeWithText("Sheet action").assertIsFocused()
-            onNodeWithText("Sheet action").performKeyInput { pressKey(Key.Escape) }
-        } else {
-            // Material's scrim.
-            onNodeWithContentDescription("Close sheet").performClick()
+        // The page keeps its own focus while the sheet is open; park it off the trigger so only restoreFocus can return it.
+        onNodeWithText("Elsewhere").requestFocus()
+        waitForIdle()
+        onNodeWithText("Open sheet").assertIsNotFocused()
+        when (close) {
+            CloseVia.EscapeOnContent -> focusInSheet(onNodeWithText("Sheet action")).performKeyInput { pressKey(Key.Escape) }
+            // Material's focusable drag handle is a sibling of the content column.
+            CloseVia.EscapeOnHandle -> focusInSheet(onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.Focused) and hasClickAction() and !hasText("Sheet action") and !hasText("Open sheet") and !hasText("Elsewhere")))
+                .performKeyInput { pressKey(Key.Escape) }
+            CloseVia.Scrim -> {
+                focusInSheet(onNodeWithText("Sheet action"))
+                // Material's scrim.
+                onNodeWithContentDescription("Close sheet").performClick()
+            }
         }
         waitForIdle()
         onNodeWithText("Sheet action").assertDoesNotExist()
@@ -66,8 +81,17 @@ class SheetDismissTest {
         onNodeWithText("Open sheet").assertIsFocused()
     }
 
-    @Test fun reducedMotionSheetClosesOnEscapeAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = true, escape = true) }
-    @Test fun normalMotionSheetClosesOnEscapeAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = false, escape = true) }
-    @Test fun reducedMotionSheetClosesOnScrimAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = true, escape = false) }
-    @Test fun normalMotionSheetClosesOnScrimAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = false, escape = false) }
+    private fun ComposeUiTest.focusInSheet(node: SemanticsNodeInteraction): SemanticsNodeInteraction {
+        node.requestFocus()
+        waitForIdle()
+        node.assertIsFocused()
+        return node
+    }
+
+    @Test fun reducedMotionSheetClosesOnEscapeAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = true, CloseVia.EscapeOnContent) }
+    @Test fun normalMotionSheetClosesOnEscapeAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = false, CloseVia.EscapeOnContent) }
+    @Test fun reducedMotionSheetClosesOnEscapeFromHandleAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = true, CloseVia.EscapeOnHandle) }
+    @Test fun normalMotionSheetClosesOnEscapeFromHandleAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = false, CloseVia.EscapeOnHandle) }
+    @Test fun reducedMotionSheetClosesOnScrimAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = true, CloseVia.Scrim) }
+    @Test fun normalMotionSheetClosesOnScrimAndRestoresFocus() = runComposeUiTest { openAndClose(reduceMotion = false, CloseVia.Scrim) }
 }

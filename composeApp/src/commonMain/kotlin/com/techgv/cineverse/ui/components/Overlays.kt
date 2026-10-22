@@ -150,6 +150,10 @@ fun CvBottomSheet(onDismissRequest: () -> Unit, restoreFocus: FocusRequester? = 
     ModalBottomSheet(
         // Under reduce motion confirmValueChange already reported the close.
         onDismissRequest = { if (!reduceMotion) onDismissRequest() },
+        // On the sheet itself, not the content column: Material's focusable drag handle is a sibling of the content.
+        modifier = Modifier.onPreviewKeyEvent { event ->
+            (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismissRequest() }
+        },
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = Tokens.Radius.Sheet, topEnd = Tokens.Radius.Sheet),
         containerColor = Tokens.Colors.SurfaceSheet,
@@ -162,9 +166,6 @@ fun CvBottomSheet(onDismissRequest: () -> Unit, restoreFocus: FocusRequester? = 
         Column(
             Modifier
                 .fillMaxWidth()
-                .onPreviewKeyEvent { event ->
-                    (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismissRequest() }
-                }
                 .padding(start = 22.dp, end = 22.dp, bottom = 38.dp),
             content = content,
         )
