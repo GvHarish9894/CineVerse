@@ -21,11 +21,14 @@ import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.domain.Title
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.SavedFocus
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.techgv.cineverse.presentation.LibraryGroup
+import com.techgv.cineverse.presentation.LibraryTab
+import com.techgv.cineverse.presentation.LibraryUiState
 
 /** §7.8 with real D-pad keys: focus enters the grid, tabs switch on focus, OK on a tab enters the CTA. */
 @OptIn(ExperimentalTestApi::class)

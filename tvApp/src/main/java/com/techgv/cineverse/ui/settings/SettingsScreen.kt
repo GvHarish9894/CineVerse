@@ -58,6 +58,11 @@ import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.feedback.Feedback
 import com.techgv.cineverse.ui.feedback.LocalFeedback
+import com.techgv.cineverse.presentation.Choice
+import com.techgv.cineverse.presentation.LANGUAGE_NAMES
+import com.techgv.cineverse.presentation.REGION_NAMES
+import com.techgv.cineverse.presentation.SettingsUiState
+import com.techgv.cineverse.presentation.Toggle
 
 internal const val PANEL = "settings"
 internal const val DEFAULTS_ROW = "accountDefaults"
@@ -96,6 +101,7 @@ private fun settingRows(
     onSignIn: () -> Unit,
 ): List<SettingRow> {
     val s = state.settings
+    val accountName = state.accountName
     fun toggle(key: String, glyph: String, label: String, description: String, on: Boolean, toggle: Toggle) =
         SettingRow(key, glyph, label, description, RowValue.Toggle(on)) { vm.toggle(toggle) }
     fun choice(key: String, glyph: String, label: String, description: String, text: String, choice: Choice): SettingRow {
@@ -140,8 +146,8 @@ private fun settingRows(
             "Off by default. When on, adult titles can appear in search results.",
             s.includeAdult, Toggle.Adult,
         ),
-        if (state.accountName != null) {
-            SettingRow("account", "◉", "Sign out", "Ends your TMDB session on this TV. Your library stays on this TV.", RowValue.Label(state.accountName), vm::signOut)
+        if (accountName != null) {
+            SettingRow("account", "◉", "Sign out", "Ends your TMDB session on this TV. Your library stays on this TV.", RowValue.Label(accountName), vm::signOut)
         } else {
             SettingRow(
                 "account", "◉", "Sign in with TMDB",

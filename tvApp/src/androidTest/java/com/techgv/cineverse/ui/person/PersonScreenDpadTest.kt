@@ -19,7 +19,7 @@ import com.techgv.cineverse.data.tmdb.PersonDetailDto
 import com.techgv.cineverse.data.tmdb.toPersonDetail
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.ui.components.FocusMemory
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.nav.Route
 import com.techgv.cineverse.ui.components.focusedScrollableText
 import com.techgv.cineverse.ui.components.longText

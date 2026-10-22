@@ -40,6 +40,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.lang.reflect.Proxy
+import com.techgv.cineverse.presentation.cycle
 
 /** §7.9 with real D-pad keys: focus lands on the first row, DOWN moves, ←→ cycle a value without moving focus. */
 @OptIn(ExperimentalTestApi::class)

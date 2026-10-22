@@ -54,6 +54,7 @@ import com.techgv.cineverse.data.auth.RequestCode
 import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.QrCode
 import com.techgv.cineverse.ui.feedback.LocalFeedback
+import com.techgv.cineverse.presentation.LoginAction
 
 /**
  * §4.1 Login (prototype layout): steps + buttons + spinner on the left, QR card on the right.

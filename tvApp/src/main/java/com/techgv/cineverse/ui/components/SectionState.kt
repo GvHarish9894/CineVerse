@@ -12,34 +12,18 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import com.techgv.cineverse.data.tmdb.TmdbError
-import com.techgv.cineverse.data.tmdb.TmdbException
+import com.techgv.cineverse.presentation.SectionErrorKind
+import com.techgv.cineverse.presentation.SectionState
 
-/** Per-section async state (§1.1): a failed row never blanks the screen. */
-sealed interface SectionState<out T> {
-    data object Loading : SectionState<Nothing>
-    data class Content<T>(val value: T) : SectionState<T>
-    data object Empty : SectionState<Nothing>
-    data class Error(val kind: SectionErrorKind) : SectionState<Nothing>
-}
-
-enum class SectionErrorKind(val message: String, val retryable: Boolean) {
-    /** Network failure: distinct from empty (§3.4 offline state). */
-    Offline("You're offline. Check your connection.", true),
-    NotAvailable("Not available", false),
-    AppCredential("CineVerse can't reach TMDB right now (app configuration).", false),
-    /** The app is already signing out and returning to Login (AuthRepository.sessionExpired). */
-    SessionExpired("Sign-in expired", false),
-    Generic("Something went wrong.", true),
-}
-
-fun Throwable.toSectionErrorKind(): SectionErrorKind = when ((this as? TmdbException)?.error) {
-    TmdbError.Network -> SectionErrorKind.Offline
-    TmdbError.NotFound -> SectionErrorKind.NotAvailable
-    TmdbError.AppCredential -> SectionErrorKind.AppCredential
-    TmdbError.SessionExpired -> SectionErrorKind.SessionExpired
-    else -> SectionErrorKind.Generic
-}
+/** §3.3 copy of each section error (TV). */
+val SectionErrorKind.message: String
+    get() = when (this) {
+        SectionErrorKind.Offline -> "You're offline. Check your connection."
+        SectionErrorKind.NotAvailable -> "Not available"
+        SectionErrorKind.AppCredential -> "CineVerse can't reach TMDB right now (app configuration)."
+        SectionErrorKind.SessionExpired -> "Sign-in expired"
+        SectionErrorKind.Generic -> "Something went wrong."
+    }
 
 /** Loading / error with a focusable "Try again" / empty / content for one section. */
 @Composable

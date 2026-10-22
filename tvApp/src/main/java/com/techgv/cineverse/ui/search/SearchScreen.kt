@@ -60,7 +60,7 @@ import com.techgv.cineverse.ui.components.KEYBOARD_ROWS
 import com.techgv.cineverse.ui.components.KeyboardKey
 import com.techgv.cineverse.ui.components.OnScreenKeyboard
 import com.techgv.cineverse.ui.components.Section
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.UiColors
 import com.techgv.cineverse.ui.components.bleedStart
 import com.techgv.cineverse.ui.components.rememberSavedLazyGridState

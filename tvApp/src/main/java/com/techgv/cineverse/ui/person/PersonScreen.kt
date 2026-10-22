@@ -44,7 +44,7 @@ import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.PosterCard
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.ScrollableText
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.detail.DetailChip

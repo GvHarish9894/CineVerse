@@ -5,8 +5,8 @@ import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.domain.Hero
 import com.techgv.cineverse.ui.FakeCatalogApi
 import com.techgv.cineverse.ui.components.KeyboardKey
-import com.techgv.cineverse.ui.components.PagedItems
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.PagedItems
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.fakeRepository
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +15,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -25,6 +24,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 
+/** TV adapter: keyboard editing and Clear's focus report (rules: shared SearchStateHolderTest). */
 class SearchViewModelTest {
     private val api = FakeCatalogApi()
     private val app = GenerationCounter()
@@ -43,31 +43,6 @@ class SearchViewModelTest {
     }
 
     private fun SearchViewModel.type(text: String) = text.forEach { onTyped(it) }
-
-    @Test fun `empty query shows trending, typing searches after the debounce`() = runTest {
-        val vm = viewModel()
-        advanceUntilIdle()
-        assertEquals("trending@en-US-1-0", vm.uiState.value.results.titles().first())
-        vm.type("dune")
-        advanceTimeBy(SEARCH_DEBOUNCE_MILLIS - 1)
-        assertEquals(SectionState.Loading, vm.uiState.value.results)
-        advanceUntilIdle()
-        assertEquals("search:dune-1-0", vm.uiState.value.results.titles().first())
-        assertEquals(listOf("search/dune/1"), api.calls.filter { it.startsWith("search/") }) // one request per settled query
-    }
-
-    @Test fun `stale response of an older query is dropped`() = runTest {
-        val old = api.gate("search/a/1")
-        val vm = viewModel()
-        vm.type("a")
-        advanceUntilIdle()
-        vm.type("b")
-        advanceUntilIdle()
-        old.complete(Unit)
-        advanceUntilIdle()
-        assertEquals("ab", vm.uiState.value.query)
-        assertEquals("search:ab-1-0", vm.uiState.value.results.titles().first())
-    }
 
     @Test fun `every Clear reports its settled results, not one-shot`() = runTest {
         val vm = viewModel()

@@ -25,12 +25,13 @@ import com.techgv.cineverse.domain.Person
 import com.techgv.cineverse.domain.key
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
-import com.techgv.cineverse.ui.components.PagedItems
+import com.techgv.cineverse.presentation.PagedItems
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.PinToStart
 import com.techgv.cineverse.ui.components.PosterCard
 import com.techgv.cineverse.ui.components.UiColors
 import com.techgv.cineverse.ui.nav.Route
+import com.techgv.cineverse.ui.components.message
 
 /** Route of a grid / row item: title → Detail, person → Person. */
 fun Hero.route(): Route = when (this) {

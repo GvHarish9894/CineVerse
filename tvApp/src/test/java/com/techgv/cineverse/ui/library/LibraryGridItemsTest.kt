@@ -3,10 +3,12 @@ package com.techgv.cineverse.ui.library
 import com.techgv.cineverse.data.library.LibraryEntry
 import com.techgv.cineverse.data.library.title
 import com.techgv.cineverse.domain.MediaType
-import com.techgv.cineverse.ui.components.SectionErrorKind
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionErrorKind
+import com.techgv.cineverse.presentation.SectionState
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import com.techgv.cineverse.presentation.LibraryGroup
+import com.techgv.cineverse.presentation.LibraryUiState
 
 class LibraryGridItemsTest {
     private fun cards(vararg ids: Int, media: MediaType) = SectionState.Content(ids.map { LibraryEntry(title(it, media), null) })

@@ -35,13 +35,14 @@ import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.ImageSize
 import com.techgv.cineverse.ui.components.Section
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.UiColors
 import com.techgv.cineverse.ui.components.bleedStart
 import com.techgv.cineverse.ui.components.rememberSavedLazyGridState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
-import com.techgv.cineverse.ui.nav.BrowseKind
+import com.techgv.cineverse.presentation.BrowseKind
 import com.techgv.cineverse.ui.nav.Route
+import com.techgv.cineverse.presentation.browseTitle
 
 private const val PANEL = "browse"
 private const val TABS = "tabs"

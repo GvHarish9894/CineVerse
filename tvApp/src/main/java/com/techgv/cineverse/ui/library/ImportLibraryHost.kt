@@ -9,21 +9,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.techgv.cineverse.data.auth.AuthSession
-import com.techgv.cineverse.data.library.ImportOffer
-import com.techgv.cineverse.data.library.ImportResult
-import com.techgv.cineverse.data.library.ImportStep
 import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
+import com.techgv.cineverse.presentation.ImportLibraryStateHolder
+import com.techgv.cineverse.presentation.ImportPrompt
 import com.techgv.cineverse.ui.components.ImportDialogState
 import com.techgv.cineverse.ui.components.ImportLibraryDialog
 import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.Toaster
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 
 /**
  * §4.1 step 6 / §8.3: when an account is signed in (fresh or at launch) and it was never asked, and this TV
@@ -52,71 +48,33 @@ fun ImportLibraryHost(repository: LibraryRepository, importer: LibraryImporter, 
     }
 }
 
-/** The import flow of the signed-in account; [shown] is the dialog to display (null while the Player is up). */
-class ImportLibraryController(private val importer: LibraryImporter, private val toaster: Toaster, private val scope: CoroutineScope) {
-    private val dialog = MutableStateFlow<ImportDialogState?>(null)
-    private val playerActive = MutableStateFlow(false)
-    private var account: AuthSession? = null
-    private var unconfirmed = emptySet<ImportStep>()
-    private var job: Job? = null
+/** TV adapter over [ImportLibraryStateHolder]: the prompt as an [ImportDialogState], the "imported" toast. */
+class ImportLibraryController(importer: LibraryImporter, toaster: Toaster, scope: CoroutineScope) {
+    private val holder = ImportLibraryStateHolder(importer, scope) { toaster.show("Guest library imported", "Synced to your TMDB account") }
 
-    val shown: Flow<ImportDialogState?> = combine(dialog, playerActive) { d, player -> d.takeUnless { player } }
+    /** The dialog to display (null while the Player is up). */
+    val shown: Flow<ImportDialogState?> = holder.prompt.map { it?.toDialogState() }
 
-    fun setPlayerActive(active: Boolean) {
-        playerActive.value = active
-    }
+    fun setPlayerActive(active: Boolean) = holder.setPlayerActive(active)
 
     /** The signed-in account changed: the previous account's import stops; offer or resume for [c]. */
-    suspend fun onAccount(c: AuthSession?) {
-        job?.cancel()
-        dialog.value = null
-        account = c
-        c ?: return
-        when (val offer = importer.offer(c)) {
-            is ImportOffer.Ask -> dialog.value = ImportDialogState.Ask(c.displayName, offer.items)
-            is ImportOffer.Resume -> dialog.value = ImportDialogState.Ask(c.displayName, offer.items, resume = true)
-            null -> Unit
-        }
-    }
+    suspend fun onAccount(c: AuthSession?) = holder.onAccount(c)
 
-    fun keepSeparate() {
-        val c = account ?: return
-        dialog.value = null
-        scope.launch { importer.keepSeparate(c) }
-    }
+    fun keepSeparate() = holder.keepSeparate()
 
-    fun import() = run(emptySet())
+    fun import() = holder.import()
 
-    fun retry() = run(unconfirmed)
+    fun retry() = holder.retry()
 
-    fun close() {
-        val c = account ?: return
-        if (dialog.value is ImportDialogState.Unconfirmed) scope.launch { importer.finish(c) }
-        dialog.value = null
-    }
+    fun close() = holder.close()
 
-    /** Running / resume prompt → Later: stops the import. The ledger (incl. `attempting` steps) stays, so resuming reconciles. */
-    fun later() {
-        job?.cancel()
-        dialog.value = null
-    }
+    /** Running / resume prompt → Later: stops the import; the ledger stays, so resuming reconciles. */
+    fun later() = holder.later()
+}
 
-    private fun run(retry: Set<ImportStep>) {
-        val c = account ?: return
-        job?.cancel()
-        job = scope.launch {
-            dialog.value = ImportDialogState.Running
-            dialog.value = when (val result = importer.import(c, retry)) {
-                is ImportResult.Aborted -> ImportDialogState.Failed
-                ImportResult.Superseded -> null // signed out: the new account's flow owns the dialog
-                is ImportResult.Done -> if (result.unconfirmed.isEmpty()) {
-                    toaster.show("Guest library imported", "Synced to your TMDB account")
-                    null
-                } else {
-                    unconfirmed = result.unconfirmed.toSet()
-                    ImportDialogState.Unconfirmed(result.written, result.unconfirmedTitles)
-                }
-            }
-        }
-    }
+private fun ImportPrompt.toDialogState(): ImportDialogState = when (this) {
+    is ImportPrompt.Ask -> ImportDialogState.Ask(accountName, items, resume)
+    ImportPrompt.Running -> ImportDialogState.Running
+    is ImportPrompt.Unconfirmed -> ImportDialogState.Unconfirmed(written, titles)
+    ImportPrompt.Failed -> ImportDialogState.Failed
 }

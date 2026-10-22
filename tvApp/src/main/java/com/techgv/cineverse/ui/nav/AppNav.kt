@@ -55,6 +55,7 @@ import com.techgv.cineverse.ui.player.PlayerScreen
 import com.techgv.cineverse.ui.season.SeasonScreen
 import com.techgv.cineverse.ui.spikes.spikeDestinations
 import com.techgv.cineverse.ui.splash.SplashScreen
+import com.techgv.cineverse.presentation.BrowseKind
 
 /**
  * BACK steps 6–7 (§1.2): Home registers whether focus is at row 0 / col 0 and how to get there, from a

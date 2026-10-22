@@ -6,15 +6,12 @@ import com.techgv.cineverse.data.tmdb.PersonDetailDto
 import com.techgv.cineverse.data.tmdb.TmdbApi
 import com.techgv.cineverse.data.tmdb.TmdbRepository
 import com.techgv.cineverse.data.tmdb.unusedTmdbApi
-import com.techgv.cineverse.ui.components.SectionState
 import com.techgv.cineverse.ui.nav.Route
 import com.techgv.cineverse.util.GenerationCounter
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -25,17 +22,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+/** TV adapter: saved scalar through the SavedStateHandle, screen copy (rules: shared PersonStateHolderTest). */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PersonViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val settings = MutableStateFlow(Settings(language = "ta-IN"))
     private val generation = GenerationCounter()
     private val calls = mutableListOf<String>()
-    private var personGate: CompletableDeferred<Unit>? = null
     private val api = object : TmdbApi by unusedTmdbApi {
         override suspend fun person(id: Int, language: String, append: String): PersonDetailDto {
             calls += language
-            personGate?.await()
             return PersonDetailDto(id, name = "P", biography = if (language == "en-US") "English bio" else "")
         }
     }
@@ -44,30 +40,6 @@ class PersonViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
 
     @After fun tearDown() = Dispatchers.resetMain()
-
-    @Test
-    fun `blank localized biography is filled once from en-US and labelled`() = runTest(dispatcher) {
-        val vm = PersonViewModel(Route.Person(1), SavedStateHandle(), repo, settings, generation)
-        advanceUntilIdle()
-        val person = (vm.person.value as SectionState.Content).value
-        assertEquals("English bio", person.biography)
-        assertTrue(person.biographyInEnglish)
-        assertEquals(listOf("ta-IN", "en-US"), calls)
-    }
-
-    @Test
-    fun `app generation bump without a settings emission - the dropped result reloads, never stuck Loading`() = runTest(dispatcher) {
-        settings.value = Settings(language = "en-US")
-        val gate = CompletableDeferred<Unit>().also { personGate = it }
-        val vm = PersonViewModel(Route.Person(1), SavedStateHandle(), repo, settings, generation)
-        advanceUntilIdle()
-        assertEquals(SectionState.Loading, vm.person.value)
-        generation.bump()
-        gate.complete(Unit)
-        advanceUntilIdle()
-        assertTrue(vm.person.value is SectionState.Content)
-        assertEquals(listOf("en-US", "en-US"), calls)
-    }
 
     @Test
     fun `biography expansion is a saved screen scalar`() = runTest(dispatcher) {

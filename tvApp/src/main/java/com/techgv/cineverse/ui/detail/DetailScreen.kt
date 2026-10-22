@@ -70,12 +70,16 @@ import com.techgv.cineverse.ui.components.ScoreRing
 import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.SeasonCard
 import com.techgv.cineverse.ui.components.Section
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.nav.Route
+import com.techgv.cineverse.presentation.DetailUiState
+import com.techgv.cineverse.presentation.trailerOf
+import com.techgv.cineverse.presentation.canToggle
+import com.techgv.cineverse.presentation.episodesSeason
 
 private const val PANEL = "main"
 
@@ -109,7 +113,7 @@ class DetailActions(
 )
 
 /** Player route for [video] of [detail] (§7.10): film title, video name as kicker; BACK pops back here and focus is restored. */
-fun playerRoute(detail: Detail, video: Video) = Route.Player(video.key, title = detail.title, kicker = video.name.ifBlank { "Trailer" })
+fun playerRoute(detail: Detail, video: Video) = trailerOf(detail.title, video.key, video.name).let { Route.Player(it.videoKey, title = it.title, kicker = it.kicker) }
 
 @Composable
 fun DetailContent(
@@ -140,7 +144,7 @@ internal class ButtonSpec(
 internal fun detailButtons(detail: Detail, library: LibraryState, actions: DetailActions): List<ButtonSpec> {
     val title = detail.toTitle()
     val lib = actions.library?.takeIf { library.known }
-    fun enabled(kind: LibraryKind) = lib != null && kind !in library.pending
+    fun enabled(kind: LibraryKind) = library.canToggle(kind, hasLibrary = actions.library != null)
     return buildList {
         detail.videos.firstOrNull()?.let { trailer ->
             add(ButtonSpec("trailer", "▶", "Play trailer", primary = true) { actions.onNavigate(playerRoute(detail, trailer)) })
@@ -163,8 +167,8 @@ internal fun detailButtons(detail: Detail, library: LibraryState, actions: Detai
                 on = rating != null, enabled = enabled(LibraryKind.RATING),
             ) { lib?.openRate(title) },
         )
-        detail.seasons.firstOrNull()?.let { first ->
-            add(ButtonSpec("episodes", "☰", "Episodes") { actions.onNavigate(Route.Season(detail.ref.id, first.seasonNumber)) })
+        detail.episodesSeason()?.let { first ->
+            add(ButtonSpec("episodes", "☰", "Episodes") { actions.onNavigate(Route.Season(detail.ref.id, first)) })
         }
     }
 }

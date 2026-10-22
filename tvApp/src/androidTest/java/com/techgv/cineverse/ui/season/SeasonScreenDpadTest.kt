@@ -28,7 +28,7 @@ import com.techgv.cineverse.data.tmdb.TvDetailDto
 import com.techgv.cineverse.data.tmdb.toDetail
 import com.techgv.cineverse.data.tmdb.toSeason
 import com.techgv.cineverse.ui.components.FocusMemory
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.longText
 import com.techgv.cineverse.ui.components.readFocusedScrollableTextByDpad
 import org.junit.Assert.assertTrue

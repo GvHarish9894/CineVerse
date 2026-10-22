@@ -12,19 +12,19 @@ import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.library.LibraryWriteResult
 import com.techgv.cineverse.domain.LibraryActions
-import com.techgv.cineverse.domain.LibraryState
 import com.techgv.cineverse.domain.LocalLibraryActions
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.Title
+import com.techgv.cineverse.presentation.LibraryActionsStateHolder
+import com.techgv.cineverse.presentation.LibraryWrite
+import com.techgv.cineverse.presentation.LibraryWriteOutcome
 import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.ui.components.RateDialog
 import com.techgv.cineverse.ui.components.Toaster
 import com.techgv.cineverse.ui.components.formatRating
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 
 /**
  * Provides [LocalLibraryActions] to [content]: writes run in [scope] (app-wide, so a write outlives the
@@ -57,83 +57,50 @@ fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, pla
 class RateRequest(val title: Title, val initial: Double?, val identity: AuthSession?)
 
 /**
- * [LibraryActions] bound to the identity signed in at click time: each action captures [identity] synchronously
- * and the repository rejects it (Superseded, no toast) if that sign-in is gone, so it never retargets.
+ * TV adapter over [LibraryActionsStateHolder]: [LibraryActions] bound to the identity signed in at click time
+ * (a superseded write reports nothing), outcomes as toasts (§7.12) and the Rate dialog as a [RateRequest].
  */
 class LibraryActionsController(
-    private val repository: LibraryRepository,
+    repository: LibraryRepository,
     private val toaster: Toaster,
-    private val appScope: CoroutineScope,
-    private val uiScope: CoroutineScope,
+    appScope: CoroutineScope,
+    uiScope: CoroutineScope,
 ) : LibraryActions {
-    private var identity: AuthSession? = null
-    private val request = MutableStateFlow<RateRequest?>(null)
-    private val playerActive = MutableStateFlow(false)
+    private val holder = LibraryActionsStateHolder(repository, appScope, uiScope) { toaster.report(it) }
 
     /** The Rate dialog to display: null while the Player is up (the request waits). */
-    val shown: Flow<RateRequest?> = combine(request, playerActive) { r, player -> r.takeUnless { player } }
+    val shown: Flow<RateRequest?> = holder.ratePrompt.map { p -> p?.let { RateRequest(it.title, it.initial, it.identity) } }
 
     /** The collected sign-in changed: a dialog of another identity closes without writing. */
-    fun onIdentity(c: AuthSession?) {
-        identity = c
-        if (request.value?.identity != c) request.value = null
-    }
+    fun onIdentity(c: AuthSession?) = holder.onIdentity(c)
 
-    fun setPlayerActive(active: Boolean) {
-        playerActive.value = active
-    }
+    fun setPlayerActive(active: Boolean) = holder.setPlayerActive(active)
 
-    override fun state(ref: MediaRef) = repository.state(ref)
+    override fun state(ref: MediaRef) = holder.state(ref)
 
-    override fun toggleWatchlist(title: Title) {
-        val identity = identity
-        appScope.launch {
-            val result = repository.toggleWatchlist(title, identity)
-            toaster.report(title, result) { if (it.watchlist) "Added “${title.title}” to Watchlist" else "Removed from Watchlist" }
-        }
-    }
+    override fun toggleWatchlist(title: Title) = holder.toggleWatchlist(title)
 
-    override fun toggleFavourite(title: Title) {
-        val identity = identity
-        appScope.launch {
-            val result = repository.toggleFavourite(title, identity)
-            toaster.report(title, result) { if (it.favourite) "Added “${title.title}” to Favourites" else "Removed from Favourites" }
-        }
-    }
+    override fun toggleFavourite(title: Title) = holder.toggleFavourite(title)
 
-    override fun openRate(title: Title) {
-        val identity = identity
-        uiScope.launch {
-            val initial = repository.currentRating(identity, title.ref)
-            // The sign-in may have changed while the rating was read.
-            if (identity == this@LibraryActionsController.identity) request.value = RateRequest(title, initial, identity)
-        }
-    }
+    override fun openRate(title: Title) = holder.openRate(title)
 
-    fun submitRating(value: Double) {
-        val r = request.value ?: return
-        request.value = null
-        appScope.launch {
-            val result = repository.rate(r.title, value, r.identity)
-            toaster.report(r.title, result) { "Rated ${r.title.title} ${formatRating(value)} / 10" }
-        }
-    }
+    fun submitRating(value: Double) = holder.submitRating(value)
 
-    fun removeRating() {
-        val r = request.value ?: return
-        request.value = null
-        appScope.launch { toaster.report(r.title, repository.unrate(r.title, r.identity)) { "Rating removed" } }
-    }
+    fun removeRating() = holder.removeRating()
 
-    fun closeRate() {
-        request.value = null
-    }
+    fun closeRate() = holder.closeRate()
 }
 
-private fun Toaster.report(title: Title, result: LibraryWriteResult, message: (LibraryState) -> String) {
-    when (result) {
+private fun Toaster.report(outcome: LibraryWriteOutcome) {
+    val title = outcome.title
+    when (val result = outcome.result) {
         is LibraryWriteResult.Done -> show(
-            message(result.state),
+            when (val write = outcome.write) {
+                LibraryWrite.ToggleWatchlist -> if (result.state.watchlist) "Added “${title.title}” to Watchlist" else "Removed from Watchlist"
+                LibraryWrite.ToggleFavourite -> if (result.state.favourite) "Added “${title.title}” to Favourites" else "Removed from Favourites"
+                is LibraryWrite.Rate -> "Rated ${title.title} ${formatRating(write.value)} / 10"
+                LibraryWrite.Unrate -> "Rating removed"
+            },
             when {
                 result.removedFromWatchlist -> "Synced · TMDB removed it from your watchlist"
                 result.synced -> "Synced to your TMDB account"
@@ -141,6 +108,6 @@ private fun Toaster.report(title: Title, result: LibraryWriteResult, message: (L
             },
         )
         is LibraryWriteResult.Failed -> show("Couldn't sync — try again", title.title)
-        LibraryWriteResult.Superseded -> Unit // the sign-in changed: a toast would describe another library
+        LibraryWriteResult.Superseded -> Unit // never reported by the holder
     }
 }

@@ -65,13 +65,13 @@ import com.techgv.cineverse.ui.components.HeroInfo
 import com.techgv.cineverse.ui.components.ImageSize
 import com.techgv.cineverse.ui.components.LandscapeCard
 import com.techgv.cineverse.ui.components.LocalToaster
-import com.techgv.cineverse.ui.components.PagedItems
+import com.techgv.cineverse.presentation.PagedItems
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.PinToStart
 import com.techgv.cineverse.ui.components.PosterCard
 import com.techgv.cineverse.ui.components.ScoreRing
 import com.techgv.cineverse.ui.components.Section
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.UiColors
 import com.techgv.cineverse.ui.components.bleedStart
 import com.techgv.cineverse.ui.components.parseTmdbDate
@@ -81,6 +81,10 @@ import com.techgv.cineverse.ui.nav.HomeBackHandle
 import com.techgv.cineverse.ui.browse.route
 import com.techgv.cineverse.ui.spikes.spikesMenuRoute
 import kotlinx.coroutines.launch
+import com.techgv.cineverse.presentation.HomeCard
+import com.techgv.cineverse.presentation.HomeRow
+import com.techgv.cineverse.presentation.HomeUiState
+import com.techgv.cineverse.presentation.canToggle
 
 private const val PANEL = "home"
 private const val BUTTONS = "buttons"
@@ -332,8 +336,7 @@ private fun HeroButtons(
 }
 
 /** §6: enabled only with a provider, a known state and no Watchlist write in flight. */
-fun heroWatchlistEnabled(hasActions: Boolean, state: LibraryState): Boolean =
-    hasActions && state.known && LibraryKind.WATCHLIST !in state.pending
+fun heroWatchlistEnabled(hasActions: Boolean, state: LibraryState): Boolean = state.canToggle(LibraryKind.WATCHLIST, hasActions)
 
 /** Hero Watchlist toggle (§7.2) driven by the Library lane's [LocalLibraryActions]; see [heroWatchlistEnabled]. */
 @Composable

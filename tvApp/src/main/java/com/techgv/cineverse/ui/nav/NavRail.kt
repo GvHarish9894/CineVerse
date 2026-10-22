@@ -42,6 +42,7 @@ import com.techgv.cineverse.ui.components.FocusSurface
 import com.techgv.cineverse.ui.components.LocalSettings
 import com.techgv.cineverse.ui.components.UiColors
 import com.techgv.cineverse.ui.components.initials
+import com.techgv.cineverse.presentation.BrowseKind
 
 /** Rail items in prototype order (§5). */
 enum class RailItem(val label: String, val glyph: String, val route: Route) {

@@ -29,13 +29,14 @@ import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.longText
 import com.techgv.cineverse.ui.components.readFocusedScrollableTextByDpad
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.nav.Route
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.techgv.cineverse.presentation.DetailUiState
 
 /** Detail with real D-pad keys: initial focus, row moves, Play trailer → Player route, focus restored on return. */
 @OptIn(ExperimentalTestApi::class)

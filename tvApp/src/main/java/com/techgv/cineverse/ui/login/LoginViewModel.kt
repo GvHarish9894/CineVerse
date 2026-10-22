@@ -6,31 +6,26 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.data.auth.AuthRepository
+import com.techgv.cineverse.data.auth.PollingApprovalFlow
 import com.techgv.cineverse.data.auth.RequestCode
 import com.techgv.cineverse.data.auth.SignInOutcome
 import com.techgv.cineverse.data.settings.SettingsRepository
-import com.techgv.cineverse.data.tmdb.TmdbException
-import com.techgv.cineverse.ui.components.SectionErrorKind
-import com.techgv.cineverse.ui.components.toSectionErrorKind
-import com.techgv.cineverse.ui.settings.accountDefaultsOffer
-import com.techgv.cineverse.util.GenerationCounter
+import com.techgv.cineverse.presentation.LoginAction
+import com.techgv.cineverse.presentation.LoginButton
+import com.techgv.cineverse.presentation.LoginMessage
+import com.techgv.cineverse.presentation.LoginScreenState
+import com.techgv.cineverse.presentation.LoginStateHolder
+import com.techgv.cineverse.presentation.SectionErrorKind
+import com.techgv.cineverse.presentation.toLoginScreenState
+import com.techgv.cineverse.ui.components.message
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
-/** What OK on the primary button does. */
-enum class LoginAction { None, Poll, NewCode }
-
-/** §4.1 Login: [code] drives the QR; [waiting] shows the spinner; [banner] is the app-credential problem. */
+/** §4.1 Login copy: [code] drives the QR; [waiting] shows the spinner; [banner] is the app-credential problem. */
 data class LoginUiState(
     val code: RequestCode? = null,
     val message: String? = null,
@@ -46,135 +41,62 @@ data class LoginUiState(
         const val NEW_CODE_LABEL = "Get a new code"
         const val CHECK_AGAIN_LABEL = "Check again"
 
-        val requestingCode = LoginUiState(message = "Getting a sign-in code…", waiting = true)
-
-        /** Terminal: credentials are committed, the request code is consumed and never offered again. */
-        val signedIn = LoginUiState(message = "Signing you in…")
-        fun ready(code: RequestCode) = LoginUiState(code, primaryAction = LoginAction.Poll)
-        fun polling(code: RequestCode) =
-            LoginUiState(code, "Waiting for TMDB to confirm your approval…", "Checking…", waiting = true)
-
-        fun codeError(kind: SectionErrorKind) = LoginUiState(
-            message = if (kind == SectionErrorKind.Offline) kind.message else "Couldn't get a sign-in code.",
-            primaryLabel = "Try again",
-            primaryAction = LoginAction.NewCode,
-            banner = kind.message.takeIf { kind == SectionErrorKind.AppCredential },
-        )
+        fun ready(code: RequestCode) = LoginScreenState.ready(code).toUiState()
     }
 }
+
+/** TV copy of the shared Login state. */
+fun LoginScreenState.toUiState() = LoginUiState(
+    code = code,
+    message = when (message) {
+        LoginMessage.RequestingCode -> "Getting a sign-in code…"
+        LoginMessage.SigningIn -> "Signing you in…"
+        LoginMessage.WaitingForApproval -> "Waiting for TMDB to confirm your approval…"
+        LoginMessage.StillWaiting -> "Still waiting — press OK to check again"
+        LoginMessage.CodeExpired -> "Code expired — press OK for a new one"
+        LoginMessage.NotApproved -> "TMDB didn't approve this sign-in"
+        LoginMessage.CouldNotFinish -> "Couldn't finish signing in — press OK for a new code"
+        LoginMessage.Offline -> SectionErrorKind.Offline.message
+        LoginMessage.CodeError -> "Couldn't get a sign-in code."
+        null -> null
+    },
+    primaryLabel = when (button) {
+        LoginButton.Approved -> LoginUiState.APPROVED_LABEL
+        LoginButton.Checking -> "Checking…"
+        LoginButton.CheckAgain -> LoginUiState.CHECK_AGAIN_LABEL
+        LoginButton.NewCode -> LoginUiState.NEW_CODE_LABEL
+        LoginButton.TryAgain -> "Try again"
+    },
+    primaryAction = action,
+    waiting = waiting,
+    banner = SectionErrorKind.AppCredential.message.takeIf { appCredentialProblem },
+)
 
 /** §3.3 / §4.1 copy for every outcome that keeps the user on Login; null for SignedIn / Superseded. */
-fun SignInOutcome.toLoginState(code: RequestCode): LoginUiState? = when (this) {
-    is SignInOutcome.SignedIn, SignInOutcome.Superseded -> null
-    SignInOutcome.AlreadyPolling -> LoginUiState.ready(code)
-    SignInOutcome.TimedOut ->
-        LoginUiState(code, "Still waiting — press OK to check again", LoginUiState.CHECK_AGAIN_LABEL, LoginAction.Poll)
-    SignInOutcome.CodeExpired ->
-        LoginUiState(null, "Code expired — press OK for a new one", LoginUiState.NEW_CODE_LABEL, LoginAction.NewCode)
-    is SignInOutcome.Rejected ->
-        LoginUiState(null, "TMDB didn't approve this sign-in", LoginUiState.NEW_CODE_LABEL, LoginAction.NewCode)
-    is SignInOutcome.Failed ->
-        LoginUiState(null, "Couldn't finish signing in — press OK for a new code", LoginUiState.NEW_CODE_LABEL, LoginAction.NewCode)
-    SignInOutcome.AppCredentialError -> LoginUiState(
-        code,
-        primaryLabel = LoginUiState.CHECK_AGAIN_LABEL,
-        primaryAction = LoginAction.Poll,
-        banner = SectionErrorKind.AppCredential.message,
-    )
-}
+fun SignInOutcome.toLoginState(code: RequestCode): LoginUiState? = toLoginScreenState(code)?.toUiState()
 
 /**
- * One request code per screen; polling only on "I've approved it" and only while the screen is started,
- * window-focused and composed (the screen calls [stopPolling]). Results commit only for the current
- * generation (§1.1); a newer press or [stopPolling] bumps it — except the credential commit, which is
- * the terminal success however the poll ends.
+ * TV adapter over [LoginStateHolder] with QR + polling approval ([PollingApprovalFlow]). The screen calls
+ * [stopPolling] when it stops, loses window focus or is disposed.
  */
 class LoginViewModel(
-    private val auth: AuthRepository,
-    private val settings: SettingsRepository,
+    auth: AuthRepository,
+    settings: SettingsRepository,
     /** Outlives this screen: post-commit work must not be cancelled by [stopPolling] or dispose. */
-    private val appScope: CoroutineScope,
+    appScope: CoroutineScope,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(LoginUiState.requestingCode)
-    val state: StateFlow<LoginUiState> = _state.asStateFlow()
+    private val holder = LoginStateHolder(auth, PollingApprovalFlow(auth), settings, appScope, viewModelScope)
 
-    private val signedInEvents = Channel<String>(Channel.BUFFERED)
+    val state: StateFlow<LoginUiState> =
+        holder.state.map { it.toUiState() }.stateIn(viewModelScope, SharingStarted.Eagerly, holder.state.value.toUiState())
 
     /** Display name of the account that just signed in (credentials are already committed). */
-    val signedIn: Flow<String> = signedInEvents.receiveAsFlow()
+    val signedIn: Flow<String> = holder.signedIn.map { it.displayName }
 
-    private val generation = GenerationCounter()
-    private var work: Job? = null
-
-    init {
-        requestCode()
-        // Committed credentials (even when [stopPolling] cancelled the poll right after the commit, or
-        // they exist on resume) leave Login exactly once and never re-offer the consumed code.
-        viewModelScope.launch {
-            val session = auth.session.filterNotNull().first()
-            generation.bump()
-            _state.value = LoginUiState.signedIn
-            signedInEvents.send(session.displayName)
-        }
-    }
-
-    fun onPrimary() = when (_state.value.primaryAction) {
-        LoginAction.Poll -> poll()
-        LoginAction.NewCode -> requestCode()
-        LoginAction.None -> Unit
-    }
+    fun onPrimary() = holder.onPrimary()
 
     /** BACK, guest, dispose, background: polling stops; the code stays for the next "I've approved it". */
-    fun stopPolling() {
-        val code = _state.value.code ?: return
-        if (!_state.value.polling) return
-        generation.bump()
-        work?.cancel()
-        _state.value = LoginUiState.ready(code)
-    }
-
-    private fun requestCode() = start(LoginUiState.requestingCode) { generation ->
-        val next = try {
-            LoginUiState.ready(auth.createRequestCode())
-        } catch (e: TmdbException) {
-            LoginUiState.codeError(e.toSectionErrorKind())
-        }
-        commit(generation, next)
-    }
-
-    private fun poll() {
-        val code = _state.value.code ?: return
-        start(LoginUiState.polling(code)) { generation ->
-            val outcome = auth.awaitApproval(code)
-            when {
-                // Committed: the credentials observer (init) leaves Login; the optional offer outlives this job.
-                // shortcut: a cancel landing inside the commit itself loses the offer (sign-in still completes).
-                outcome is SignInOutcome.SignedIn -> appScope.launch {
-                    accountDefaultsOffer(outcome.session, outcome.account, settings.current())
-                        ?.let { settings.offerAccountDefaults(it) }
-                }
-                !this.generation.isCurrent(generation) -> Unit
-                // A sign-out / expiry raced the commit: nothing was saved and the code is consumed; start over quietly.
-                outcome == SignInOutcome.Superseded -> requestCode()
-                else -> outcome.toLoginState(code)?.let { _state.value = it }
-            }
-        }
-    }
-
-    /** Replaces the running step: the previous one is cancelled (and its poll lock released) first. */
-    private fun start(initial: LoginUiState, block: suspend (generation: Long) -> Unit) {
-        val previous = work
-        val generation = generation.bump()
-        _state.value = initial
-        work = viewModelScope.launch {
-            previous?.cancelAndJoin()
-            block(generation)
-        }
-    }
-
-    private fun commit(generation: Long, next: LoginUiState) {
-        if (this.generation.isCurrent(generation)) _state.value = next
-    }
+    fun stopPolling() = holder.stopPolling()
 
     companion object {
         fun factory(container: AppContainer) = viewModelFactory {

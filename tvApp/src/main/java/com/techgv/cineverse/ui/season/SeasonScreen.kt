@@ -60,7 +60,7 @@ import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.Section
-import com.techgv.cineverse.ui.components.SectionState
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.detail.SCREEN_INSET

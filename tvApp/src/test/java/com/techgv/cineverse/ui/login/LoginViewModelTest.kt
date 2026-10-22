@@ -21,7 +21,8 @@ import com.techgv.cineverse.data.tmdb.TmdbApi
 import com.techgv.cineverse.data.tmdb.TmdbHttpException
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.unusedTmdbApi
-import com.techgv.cineverse.ui.components.SectionErrorKind
+import com.techgv.cineverse.presentation.SectionErrorKind
+import com.techgv.cineverse.ui.components.message
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
@@ -40,6 +41,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.techgv.cineverse.presentation.LoginAction
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoginViewModelTest {
