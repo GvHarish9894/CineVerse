@@ -46,10 +46,10 @@ clients pick their own IP and escape every per-IP limit).
 |---|---|---|
 | `GET /healthz` | — | liveness, `ok` |
 | `GET /api/tmdb/{v3 path}` | — | allow-listed catalog read → `https://api.themoviedb.org/3/{path}` with the read token |
-| `GET /api/session` | — | `AuthSession` JSON; issues the `cv_csrf` cookie if missing |
+| `GET /api/session` | — | `AuthSession` JSON; issues the `cv_csrf` cookie if missing. Also the **sync** path: the only route besides logout that clears `cv_session` (see "Cookie deletion") |
 | `POST /api/auth/start` | CSRF | creates a v4 request token; `{approveUrl, attemptId}` + attempt cookie |
 | `GET /api/auth/callback?attempt=` | attempt cookie | TMDB redirect target; exchange → convert → account; sets `cv_session`; 302 to `${PUBLIC_ORIGIN}/?signedIn=1` |
-| `POST /api/auth/logout` | CSRF | local sign-out + cancels this browser's pending sign-ins, then best-effort TMDB revocation; returns signed-out `AuthSession` |
+| `POST /api/auth/logout` | CSRF | local sign-out of this browser's current session (also one a running callback committed but has not delivered yet) + cancels its pending sign-ins, then best-effort TMDB revocation; clears `cv_session`; returns signed-out `AuthSession` |
 | `POST /api/auth/cancel[?attempt=]` | CSRF | "Not now": cancels every pending/in-flight sign-in of this browser; the current session stays; `204` |
 | `GET /api/account/{movie\|tv}/{watchlist\|favorites\|rated}?page&sort_by&language` | session | v4 account list (user token) |
 | `GET /api/account/states/{movie\|tv}/{id}` | session | v3 `account_states` |
@@ -88,11 +88,11 @@ never relayed. TMDB codes map per spec §3.3:
 | exchange other 4xx | 403 | `denied` |
 | attempt unknown/expired/used | 410 | `attempt_expired` |
 | attempt cookie mismatch | 403 | `attempt_mismatch` |
-| logout / cancel / another sign-in of this browser happened first (or the attempt expired mid-callback) | 409 | `attempt_superseded` (nothing kept, tokens revoked) |
+| logout / cancel / another sign-in of this browser happened first (or the attempt expired mid-callback), or a logout ended the new session while the callback was still revoking the old one | 409 | `attempt_superseded` (nothing kept, tokens revoked, no `cv_session` set) |
 | convert/account failed after exchange | 502 | `sign_in_failed` (nothing kept, tokens revoked) |
 | no session cookie | 401 | `not_signed_in` |
-| TMDB 3/14/17/37/35/36 on an account call | 401 | `session_expired` + `sessionGeneration`, `accountObjectId` of the ended session; cookie cleared only if this request ended a still-current session |
-| session expired (TTL) / unknown cookie | 401 | `session_expired` (TTL: cookie cleared; unknown: cookie left alone) |
+| TMDB 3/14/17/37/35/36 on an account call | 401 | `session_expired` + `sessionGeneration`, `accountObjectId` of the ended session; never a cookie deletion |
+| session expired (TTL) / unknown cookie | 401 | `session_expired`; never a cookie deletion |
 | CSRF Origin / Fetch-Metadata | 403 | `csrf_origin` |
 | CSRF token | 403 | `csrf_token` |
 | missing binding headers | 400 | `missing_session_binding` |
@@ -117,9 +117,10 @@ never relayed. TMDB codes map per spec §3.3:
    completed sign-in also supersedes the browser's other attempts.
 4. Account writes send `X-CV-Expected-Session-Generation` and `X-CV-Expected-Account` (= `accountObjectId`) from
    the `AuthSession` the screen is showing; `409 stale_session` → refetch the session and drop the action.
-   `401 session_expired` → signed out ("Sign-in expired") — but if the body's `sessionGeneration` is older than
-   the `AuthSession` currently shown, it is a late answer for a replaced session: refetch `/api/session` instead
-   of signing out. Writes are never retried by the server.
+   `401 session_expired` → always call `GET /api/session` (the sync path) and render what it returns:
+   `{signedIn:false}` → signed out ("Sign-in expired"); a newer session → it was a late answer for a replaced
+   session, keep going. The 401 itself never clears `cv_session`; the sync does, if the cookie is genuinely stale.
+   Writes are never retried by the server.
 5. Send `credentials: "include"` only when using `CORS_ORIGIN` in dev; same-origin needs nothing.
 6. `429` (catalog `rate_limited`, or an empty-body local limit) and `503 upstream_busy`: back off for
    `Retry-After` seconds, keep showing cached content; neither means signed out. A write refused with
@@ -144,7 +145,14 @@ never relayed. TMDB codes map per spec §3.3:
   exchange decides. Attempts are single-use and expire after 15 min. The binding is kept per browser across
   attempts and carries an auth epoch: logout, cancel and every committed sign-in bump it, and the callback
   re-checks it (atomically with creating the session) after `/3/account` answers — a superseded attempt keeps
-  nothing and revokes what it just obtained. Logout never waits on a callback's upstream calls.
+  nothing and revokes what it just obtained. Logout never waits on a callback's upstream calls. The server also
+  tracks each browser's current session: a sign-in commits it (ending the one it replaces) before revoking the
+  old tokens, logout ends whatever the browser's current session is, and the callback publishes `cv_session` only
+  if its session is still current after revocation — otherwise 409 `attempt_superseded`.
+- **Cookie deletion.** Only `POST /api/auth/logout` and the sync path `GET /api/session` send a `cv_session`
+  deletion; a 401 (TMDB `session_expired`, TTL expiry, unknown cookie) never does, because a delayed response could
+  otherwise delete a newer cookie the browser stored meanwhile. The sync clears a presented unknown/ended/expired
+  cookie unless that browser already holds a newer live session (then the newer cookie is left alone).
 - **CSRF.** Every state-changing route requires `Origin` ∈ {`PUBLIC_ORIGIN`, `CORS_ORIGIN`}, rejects
   `Sec-Fetch-Site` other than same-origin/same-site, requires `X-CV-CSRF` == `cv_csrf` cookie (double submit;
   cookie is SameSite=Strict), and writes require `application/json`. CORS is off unless `CORS_ORIGIN` is set.

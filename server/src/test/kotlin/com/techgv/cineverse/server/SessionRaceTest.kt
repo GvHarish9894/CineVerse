@@ -1,6 +1,8 @@
 package com.techgv.cineverse.server
 
+import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runInterruptible
 import io.ktor.utils.io.writeStringUtf8
 import io.ktor.utils.io.ByteWriteChannel
@@ -122,6 +124,119 @@ class SessionRaceTest {
                 "Late A response sends Set-Cookie that removes already-current B cookie in the shared browser jar")
             assertEquals("AOID-B", activeTab.session().accountObjectId)
             assertEquals(HttpStatusCode.OK, activeTab.get("/api/account/movie/rated").status)
+        }
+    }
+
+    @Test
+    fun logoutDuringPostCommitRevocationEndsTheBrowserSession() {
+        val fake = FakeTmdb()
+        val revokeStarted = CountDownLatch(1)
+        val finishRevoke = CountDownLatch(1)
+        serverTest(fake) {
+            val callbackTab = browser()
+            callbackTab.signIn(fake, "A")
+            val (attempt, token) = callbackTab.start()
+            fake.approve(token, "B")
+            val logoutTab = browser().also { it.cookies.putAll(callbackTab.cookies) }
+            fake.overrides["DELETE /4/auth/access_token"] = { r ->
+                if (r.authorization == "Bearer UAT-A") {
+                    revokeStarted.countDown()
+                    check(finishRevoke.await(10, TimeUnit.SECONDS))
+                }
+                Reply(200, """{"success":true}""")
+            }
+            coroutineScope {
+                val callback = async(Dispatchers.IO) { callbackTab.callback(attempt) }
+                try {
+                    // B is committed and A is being revoked; B's cookie has not reached the browser yet.
+                    check(revokeStarted.await(10, TimeUnit.SECONDS))
+                    assertEquals(HttpStatusCode.OK, logoutTab.send(HttpMethod.Post, "/api/auth/logout").status)
+                } finally { finishRevoke.countDown() }
+                val response = callback.await()
+                assertEquals(HttpStatusCode.Conflict, response.status)
+                assertEquals("""{"error":"attempt_superseded"}""", response.bodyAsText())
+                assertTrue(callbackTab.lastSetCookies.none { it.name == SESSION_COOKIE }, "B's cookie is never published")
+            }
+            assertFalse(callbackTab.session().signedIn,
+                "Logout completed while callback was still revoking A, but callback then published a live B session")
+            // B's record is gone (logout ended it) and its tokens are revoked at TMDB.
+            assertEquals(1, fake.requests.count { it.method == HttpMethod.Delete && it.authorization == "Bearer UAT-B" })
+            assertTrue(fake.requests.any { it.method == HttpMethod.Delete && it.body?.contains("SID-B") == true })
+        }
+    }
+
+    @Test
+    fun expiryDeletionAlreadyPreparedCannotDeleteLaterSignIn() {
+        val fake = FakeTmdb()
+        fake.overrides["GET /4/account/AOID-A/movie/rated"] = { tmdbError(401, 35) }
+        val responsePrepared = CompletableDeferred<Unit>()
+        val deliverResponse = CompletableDeferred<Unit>()
+        val delayOldResponse = createClientPlugin("DelayExpiryDelivery") {
+            onResponse { response ->
+                if (response.call.request.url.encodedPath == "/api/account/movie/rated") {
+                    responsePrepared.complete(Unit)
+                    deliverResponse.await()
+                }
+            }
+        }
+        serverTest(fake) {
+            val activeTab = browser()
+            activeTab.signIn(fake, "A")
+            val delayedClient = createClient {
+                followRedirects = false
+                install(delayOldResponse)
+            }
+            val oldTab = Browser(delayedClient).also { it.cookies.putAll(activeTab.cookies) }
+            coroutineScope {
+                val oldRead = async(Dispatchers.IO) { oldTab.get("/api/account/movie/rated") }
+                try {
+                    responsePrepared.await()
+                    assertEquals("AOID-B", activeTab.signIn(fake, "B").accountObjectId)
+                } finally { deliverResponse.complete(Unit) }
+                assertEquals(HttpStatusCode.Unauthorized, oldRead.await().status)
+            }
+            assertTrue(oldTab.lastSetCookies.none { it.name == SESSION_COOKIE && it.maxAge == 0 },
+                "A's failure removed a live record first, but its delayed Set-Cookie still deletes B's fresh browser cookie")
+            assertEquals("AOID-B", activeTab.session().accountObjectId)
+        }
+    }
+
+    @Test
+    fun syncKeepsTheCookieOfANewerSessionOfTheBrowser() {
+        val fake = FakeTmdb()
+        serverTest(fake) {
+            // A ends at TMDB; before any sync this browser signs in as B. A sync request that still carried A
+            // (sent before B's cookie arrived) must not delete B's cookie.
+            val tab = browser()
+            tab.signIn(fake, "A")
+            val staleTab = browser().also { it.cookies.putAll(tab.cookies) }
+            fake.overrides["GET /4/account/AOID-A/movie/rated"] = { tmdbError(401, 35) }
+            assertEquals(HttpStatusCode.Unauthorized, tab.get("/api/account/movie/rated").status)
+            assertEquals("AOID-B", tab.signIn(fake, "B").accountObjectId)
+            assertEquals(SIGNED_OUT, staleTab.session())
+            assertTrue(staleTab.lastSetCookies.none { it.name == SESSION_COOKIE })
+            assertEquals("AOID-B", tab.session().accountObjectId)
+        }
+    }
+
+    @Test
+    fun syncClearsAGenuinelyStaleCookie() {
+        val fake = FakeTmdb()
+        serverTest(fake) {
+            // TMDB ends A: the 401 leaves the cookie alone; the client's follow-up sync clears it.
+            val tab = browser()
+            tab.signIn(fake, "A")
+            fake.overrides["GET /4/account/AOID-A/movie/rated"] = { tmdbError(401, 35) }
+            assertEquals(HttpStatusCode.Unauthorized, tab.get("/api/account/movie/rated").status)
+            assertTrue(tab.lastSetCookies.none { it.name == SESSION_COOKIE })
+            assertEquals(SIGNED_OUT, tab.session())
+            assertEquals(0, tab.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
+            assertFalse(SESSION_COOKIE in tab.cookies)
+
+            // A forged/unknown cookie belongs to no browser state: cleared.
+            val forged = browser().also { it.cookies[SESSION_COOKIE] = "forged" }
+            assertEquals(SIGNED_OUT, forged.session())
+            assertEquals(0, forged.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
         }
     }
 

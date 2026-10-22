@@ -78,52 +78,105 @@ class AuthStore(private val config: ServerConfig, private val nowMillis: () -> L
     private val generations = AtomicLong(0)
     private val attemptTtl = config.attemptTtl.inWholeMilliseconds
 
-    private class BrowserEpoch(val epoch: Long, val touchedAt: Long)
+    /**
+     * Per browser (keyed by its attempt-cookie binding): the auth [epoch] and the session the browser currently holds
+     * (the last committed sign-in, until logout). Lets logout end a session whose cookie the browser has not received yet.
+     */
+    private class BrowserState(val epoch: Long, val currentSessionId: String?, val touchedAt: Long)
 
-    /** Auth-transition epoch per browser, keyed by its attempt-cookie binding. Guarded by `this`. */
-    private val browserEpochs = HashMap<String, BrowserEpoch>()
+    /** Guarded by `this`. */
+    private val browsers = HashMap<String, BrowserState>()
 
-    /** Reuses the browser's [existingBinding] while the server still knows it, so one epoch covers all its attempts. */
+    /** Session id -> browser binding, kept until the session's own expiry (its cookie's Max-Age), even once ended. */
+    private class SessionOwner(val binding: String, val expiresAt: Long)
+    private val owners = ConcurrentHashMap<String, SessionOwner>()
+
+    private fun bindingOf(sessionId: String?) = sessionId?.let { owners[it]?.binding }
+
+    /**
+     * Reuses the browser's binding — [attemptBinding] while the server still knows it, else the server-issued binding
+     * of its [sessionId] cookie — so one state covers all its attempts and sessions.
+     */
     @Synchronized
-    fun newAttempt(requestToken: String, id: String, existingBinding: String?): AuthAttempt {
+    fun newAttempt(requestToken: String, id: String, attemptBinding: String?, sessionId: String?): AuthAttempt {
         val now = nowMillis()
         attempts.values.removeIf { now - it.createdAt >= attemptTtl }
-        // Untouched for a whole attempt TTL: every attempt under that binding has expired.
-        browserEpochs.values.removeIf { now - it.touchedAt >= attemptTtl }
-        val binding = existingBinding?.takeIf { it in browserEpochs } ?: randomId()
-        val epoch = browserEpochs[binding]?.epoch ?: 0
-        browserEpochs[binding] = BrowserEpoch(epoch, now)
-        return AuthAttempt(id, binding, epoch, requestToken, now).also { attempts[id] = it }
+        // Untouched for a whole attempt TTL (so every attempt under it expired) and not holding a live session.
+        browsers.values.removeIf { now - it.touchedAt >= attemptTtl && it.currentSessionId?.let(::liveSession) == null }
+        val binding = attemptBinding?.takeIf { it in browsers } ?: bindingOf(sessionId) ?: randomId()
+        val state = browsers[binding]
+        browsers[binding] = BrowserState(state?.epoch ?: 0, state?.currentSessionId, now)
+        return AuthAttempt(id, binding, state?.epoch ?: 0, requestToken, now).also { attempts[id] = it }
     }
 
     fun attempt(id: String): AuthAttempt? = attempts[id]?.takeIf { nowMillis() - it.createdAt < attemptTtl }
 
-    /** Logout, cancel or a committed sign-in: every outstanding (pending or in-flight) attempt of the browser dies. */
+    /** Cancel: every outstanding (pending or in-flight) attempt of the browser dies; its session stays. */
     @Synchronized
     fun supersede(binding: String) {
-        val current = browserEpochs[binding] ?: return
-        browserEpochs[binding] = BrowserEpoch(current.epoch + 1, nowMillis())
+        val state = browsers[binding] ?: return
+        browsers[binding] = BrowserState(state.epoch + 1, state.currentSessionId, nowMillis())
     }
 
     @Synchronized
     fun isCurrent(attempt: AuthAttempt) =
-        browserEpochs[attempt.binding]?.epoch == attempt.epoch && nowMillis() - attempt.createdAt < attemptTtl
+        browsers[attempt.binding]?.epoch == attempt.epoch && nowMillis() - attempt.createdAt < attemptTtl
 
-    /** Creates the session unless [attempt] was superseded meanwhile; atomic with [supersede], no I/O inside. */
+    class SignIn(val session: UserSession, val replaced: List<UserSession>)
+
+    /**
+     * Creates the session unless [attempt] was superseded meanwhile, makes it the browser's current one and ends the
+     * sessions it replaces ([previousSessionId] from the cookie, and the browser's former current one). Atomic with
+     * [logout] and [supersede]; no I/O inside — the caller revokes [SignIn.replaced] afterwards.
+     */
     @Synchronized
-    fun commitSignIn(attempt: AuthAttempt, tokens: AccessTokenDto, sessionId: String, account: AccountDto): UserSession? {
+    fun commitSignIn(attempt: AuthAttempt, tokens: AccessTokenDto, sessionId: String, account: AccountDto, previousSessionId: String?): SignIn? {
         if (!isCurrent(attempt)) return null
-        supersede(attempt.binding)
-        return createSession(tokens, sessionId, account)
+        val state = browsers.getValue(attempt.binding)
+        val session = createSession(tokens, sessionId, account, attempt.binding)
+        val replaced = listOfNotNull(previousSessionId, state.currentSessionId).distinct().mapNotNull(sessions::remove)
+        browsers[attempt.binding] = BrowserState(state.epoch + 1, session.id, nowMillis())
+        return SignIn(session, replaced)
+    }
+
+    /** [session] is still live and still its browser's current session (no logout since its commit). */
+    @Synchronized
+    fun isBrowserCurrent(session: UserSession) =
+        browsers[bindingOf(session.id)]?.currentSessionId == session.id && isLive(session)
+
+    /**
+     * Logout: ends the browser's current session — whichever it is, also one committed but not yet in the browser's
+     * cookie jar — and the [sessionId] cookie's session, and supersedes every attempt. Returns the ended sessions
+     * for the caller to revoke outside the lock.
+     */
+    @Synchronized
+    fun logout(attemptBinding: String?, sessionId: String?): List<UserSession> {
+        val current = listOfNotNull(attemptBinding, bindingOf(sessionId)).distinct().mapNotNull { binding ->
+            val state = browsers[binding] ?: return@mapNotNull null
+            browsers[binding] = BrowserState(state.epoch + 1, null, nowMillis())
+            state.currentSessionId
+        }
+        return (current + listOfNotNull(sessionId)).distinct().mapNotNull(sessions::remove)
+    }
+
+    /**
+     * A sync (`GET /api/session`) presenting the unknown/ended/expired [sessionId] may clear `cv_session` only if
+     * that browser holds no newer live session — otherwise the deletion could hit the newer cookie.
+     */
+    @Synchronized
+    fun mayClearStaleCookie(sessionId: String): Boolean {
+        val current = browsers[bindingOf(sessionId)]?.currentSessionId ?: return true
+        return current == sessionId || liveSession(current) == null
     }
 
     /** Atomically takes [attempt] so concurrent callbacks never exchange one request token twice. */
     fun claim(attempt: AuthAttempt) = attempts.remove(attempt.id, attempt)
     fun restore(attempt: AuthAttempt) { attempts.putIfAbsent(attempt.id, attempt) }
 
-    private fun createSession(tokens: AccessTokenDto, sessionId: String, account: AccountDto): UserSession {
+    private fun createSession(tokens: AccessTokenDto, sessionId: String, account: AccountDto, binding: String): UserSession {
         val now = nowMillis()
         sessions.values.removeIf { now >= it.expiresAt }
+        owners.values.removeIf { now >= it.expiresAt }
         val session = UserSession(
             id = randomId(),
             generation = generations.incrementAndGet(),
@@ -135,21 +188,22 @@ class AuthStore(private val config: ServerConfig, private val nowMillis: () -> L
             expiresAt = now + config.sessionTtl.inWholeMilliseconds,
         )
         sessions[session.id] = session
+        owners[session.id] = SessionOwner(binding, session.expiresAt)
         return session
     }
 
-    /** The live session for [id]. An expired one is removed, and [expired] runs for the caller that removed it. */
-    fun session(id: String, expired: () -> Unit = {}): UserSession? {
+    /** The live session for [id]; an expired one is removed. */
+    fun session(id: String): UserSession? {
         val session = sessions[id] ?: return null
         if (nowMillis() < session.expiresAt) return session
-        if (sessions.remove(id, session)) expired()
+        sessions.remove(id, session)
         return null
     }
 
+    private fun liveSession(id: String) = sessions[id]?.takeIf { nowMillis() < it.expiresAt }
+
     /** [session] is still the stored, unexpired record for its id (same generation and account). */
     fun isLive(session: UserSession) = sessions[session.id] === session && nowMillis() < session.expiresAt
-
-    fun removeSession(id: String): UserSession? = sessions.remove(id)
 
     /** True only for the caller that actually removed [session]. */
     fun removeSession(session: UserSession): Boolean = sessions.remove(session.id, session)
@@ -186,14 +240,19 @@ fun ApplicationCall.setCookie(c: Cookie) = response.headers.append(
 )
 
 /**
- * Session state of a request. Only the request that ends a still-stored session clears `cv_session`: a session
- * already gone (replaced by a sign-in in this browser, logged out, or unknown) leaves the cookie alone, because a
- * late response must never delete the newer cookie of the same browser.
+ * Session state of a request. Only logout and the [sync] path ever clear `cv_session`: any other response (e.g. a
+ * 401 `session_expired`) may be delivered after the browser already stored a newer cookie, which a deletion header
+ * would destroy.
  */
 class SessionLookup(private val store: AuthStore, private val cookies: Cookies) {
-    fun current(call: ApplicationCall): UserSession? {
-        val id = call.request.cookies[SESSION_COOKIE]?.takeIf { it.isNotEmpty() } ?: return null
-        return store.session(id) { call.setCookie(cookies.clearSession()) }
+    private fun cookieId(call: ApplicationCall) = call.request.cookies[SESSION_COOKIE]?.takeIf { it.isNotEmpty() }
+
+    fun current(call: ApplicationCall): UserSession? = cookieId(call)?.let(store::session)
+
+    /** `GET /api/session`: also clears a stale presented cookie, unless that browser holds a newer live session. */
+    fun sync(call: ApplicationCall): UserSession? {
+        val id = cookieId(call) ?: return null
+        return store.session(id) ?: null.also { if (store.mayClearStaleCookie(id)) call.setCookie(cookies.clearSession()) }
     }
 
     fun require(call: ApplicationCall): UserSession {
@@ -202,8 +261,8 @@ class SessionLookup(private val store: AuthStore, private val cookies: Cookies) 
     }
 
     /** TMDB reported [session] invalid: ends it locally; the 401 names the ended session for the client. */
-    fun expired(call: ApplicationCall, session: UserSession, tmdbStatusCode: Int?): ApiError {
-        if (store.removeSession(session)) call.setCookie(cookies.clearSession())
+    fun expired(session: UserSession, tmdbStatusCode: Int?): ApiError {
+        store.removeSession(session)
         return ApiError(
             HttpStatusCode.Unauthorized, SESSION_EXPIRED, tmdbStatusCode,
             sessionGeneration = session.generation, accountObjectId = session.accountObjectId,
@@ -226,7 +285,7 @@ private class StartResponse(val approveUrl: String, val attemptId: String)
 fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies: Cookies, sessions: SessionLookup) {
     get("/api/session") {
         if (call.request.cookies[CSRF_COOKIE].isNullOrEmpty()) call.setCookie(cookies.csrf(randomId()))
-        call.respondSession(sessions.current(call)?.toAuthSession() ?: SIGNED_OUT)
+        call.respondSession(sessions.sync(call)?.toAuthSession() ?: SIGNED_OUT)
     }
 
     rateLimit(AUTH_BY_IP) {
@@ -237,7 +296,10 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
                 val redirectTo = "${config.publicOrigin}/api/auth/callback?attempt=$id"
                 val upstream = tmdb.call(HttpMethod.Post, "4/auth/request_token", body = buildJsonObject { put("redirect_to", redirectTo) })
                 if (!upstream.ok) throw classify(TmdbOperation.Catalog, upstream)
-                val attempt = store.newAttempt(upstream.decode<RequestTokenDto>().requestToken, id, call.request.cookies[ATTEMPT_COOKIE])
+                val attempt = store.newAttempt(
+                    upstream.decode<RequestTokenDto>().requestToken, id,
+                    call.request.cookies[ATTEMPT_COOKIE], call.request.cookies[SESSION_COOKIE],
+                )
                 call.setCookie(cookies.attempt(attempt.binding))
                 val approveUrl = "https://www.themoviedb.org/auth/access?request_token=" + attempt.requestToken.encodeURLParameter()
                 call.respondJson(apiJson.encodeToString(StartResponse(approveUrl, attempt.id)))
@@ -290,13 +352,18 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
                 }
 
                 // Logout / cancel / another sign-in of this browser while TMDB was answering wins over this one.
-                val session = store.commitSignIn(attempt, tokens, sessionId, account) ?: run {
+                val signIn = store.commitSignIn(attempt, tokens, sessionId, account, call.request.cookies[SESSION_COOKIE]) ?: run {
                     revoke(call, tmdb, tokens.accessToken, sessionId)
                     throw ApiError(HttpStatusCode.Conflict, ATTEMPT_SUPERSEDED)
                 }
-                // Rotation: a previous session in this browser is ended, never reused.
-                call.request.cookies[SESSION_COOKIE]?.let(store::removeSession)?.let {
-                    revoke(call, tmdb, it.userAccessToken, it.sessionId)
+                val session = signIn.session
+                // Rotation: the sessions this browser held are ended, never reused.
+                signIn.replaced.forEach { revoke(call, tmdb, it.userAccessToken, it.sessionId) }
+                // A logout during that revocation ended the new session already: never hand its cookie out.
+                if (!store.isBrowserCurrent(session)) {
+                    // Normally that logout removed (and revokes) it; otherwise this request does.
+                    if (store.removeSession(session)) revoke(call, tmdb, session.userAccessToken, session.sessionId)
+                    throw ApiError(HttpStatusCode.Conflict, ATTEMPT_SUPERSEDED)
                 }
                 call.setCookie(cookies.session(session.id))
                 call.setCookie(cookies.csrf(randomId()))
@@ -306,11 +373,10 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
 
             post("/api/auth/logout") {
                 call.requireCsrf(config)
-                call.request.cookies[ATTEMPT_COOKIE]?.let(store::supersede)
                 // Local sign-out first; remote revocation is best effort and never blocks it.
-                val session = call.request.cookies[SESSION_COOKIE]?.let(store::removeSession)
+                val ended = store.logout(call.request.cookies[ATTEMPT_COOKIE], call.request.cookies[SESSION_COOKIE])
                 call.setCookie(cookies.clearSession())
-                if (session != null) revoke(call, tmdb, session.userAccessToken, session.sessionId)
+                ended.forEach { revoke(call, tmdb, it.userAccessToken, it.sessionId) }
                 call.respondSession(SIGNED_OUT)
             }
 

@@ -164,8 +164,10 @@ class AccountTest {
                 val response = alice.send(HttpMethod.Post, "/api/account/watchlist", watchlistBody, session = a)
                 assertEquals(HttpStatusCode.Unauthorized, response.status)
                 assertTrue(response.bodyAsText().startsWith("""{"error":"session_expired""""))
-                assertEquals(0, alice.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
+                // No deletion header on the 401 (it may land after a newer cookie); the sync clears the stale one.
+                assertTrue(alice.lastSetCookies.none { it.name == SESSION_COOKIE })
                 assertEquals(SIGNED_OUT, alice.session())
+                assertEquals(0, alice.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
             }
         }
         val fake = FakeTmdb()
@@ -180,10 +182,8 @@ class AccountTest {
                 """{"error":"session_expired","status_code":35,"sessionGeneration":${a.sessionGeneration},"accountObjectId":"AOID-A"}""",
                 response.bodyAsText(),
             )
-            assertFalse(SESSION_COOKIE in alice.cookies)
-            // The server-side session is gone too: replaying the cookie gives session_expired, and since this
-            // request did not end the session, its response leaves whatever cookie the browser has now alone.
-            alice.cookies[SESSION_COOKIE] = cookie
+            assertEquals(cookie, alice.cookies[SESSION_COOKIE], "a 401 never sends a cookie deletion")
+            // The server-side session is gone too: replaying the cookie gives session_expired, cookie left alone.
             val replay = alice.get("/api/account/movie/rated")
             assertEquals("""{"error":"session_expired"}""", replay.bodyAsText())
             assertTrue(alice.lastSetCookies.none { it.name == SESSION_COOKIE })
@@ -214,9 +214,11 @@ class AccountTest {
             assertEquals(HttpStatusCode.Unauthorized, guest.send(HttpMethod.Delete, "/api/account/rating/movie/1").status)
             guest.cookies[SESSION_COOKIE] = "forged"
             assertEquals("""{"error":"session_expired"}""", guest.get("/api/account/movie/watchlist").bodyAsText())
-            assertEquals(SIGNED_OUT, guest.session())
-            // Unknown cookie: possibly a late request of a replaced session, so no deletion cookie is sent.
+            // Unknown cookie: possibly a late request of a replaced session, so the 401 sends no deletion cookie;
+            // only the sync path clears it (it belongs to no browser holding a newer session).
             assertTrue(guest.lastSetCookies.none { it.name == SESSION_COOKIE })
+            assertEquals(SIGNED_OUT, guest.session())
+            assertEquals(0, guest.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
             assertTrue(fake.requests.none { it.path.contains("account") })
         }
     }

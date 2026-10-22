@@ -52,7 +52,7 @@ fun Route.accountRoutes(config: ServerConfig, tmdb: Tmdb, sessions: SessionLooku
     suspend fun RoutingContext.relay(operation: TmdbOperation, session: UserSession, upstream: Upstream) {
         if (upstream.ok) return call.respondJson(upstream.body, HttpStatusCode.fromValue(upstream.status))
         val error = classify(operation, upstream)
-        throw if (error.code == SESSION_EXPIRED) sessions.expired(call, session, error.tmdbStatusCode) else error
+        throw if (error.code == SESSION_EXPIRED) sessions.expired(session, error.tmdbStatusCode) else error
     }
 
     /** Mutation preconditions, in order: CSRF, signed in, request bound to this exact session. */
