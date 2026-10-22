@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CineVerse web</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&amp;family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0;background:#07060F}
+sc-for,sc-if{display:contents}
+.web{position:relative;min-height:100vh;background:#07060F;color:#F4F2FF;font-family:'Inter',system-ui,sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.web *{box-sizing:border-box}
+:where(.web) button{font:inherit;color:inherit;border:0;background:none;padding:0;margin:0;cursor:pointer;text-align:left}
+.web button:focus-visible,.web input:focus-visible,.web select:focus-visible{outline:2px solid #FFFFFF;outline-offset:3px}
+.rm *{animation:none !important;transition:none !important}
+.disp{font-family:'Bricolage Grotesque','Inter',system-ui,sans-serif}
+.wrap{max-width:1320px;margin:0 auto;padding:0 32px}
+.ic{width:20px;height:20px;flex:none;display:block}
+.ic path{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic.solid path{fill:currentColor}
+.ic.sm{width:16px;height:16px}
+.ic.lg{width:28px;height:28px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.amb{position:absolute;left:-10%;right:-10%;top:-120px;height:1100px;pointer-events:none;filter:blur(90px) saturate(150%);transition:opacity .8s ease}
+.a0{animation:ambA 1s ease}
+.a1{animation:ambB 1s ease}
+@keyframes ambA{from{opacity:.25}to{opacity:1}}
+@keyframes ambB{from{opacity:.25}to{opacity:1}}
+.pagein{position:relative;animation:pageIn .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes pageIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.hdr{position:sticky;top:0;z-index:60;background:rgba(9,8,18,.74);backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid rgba(255,255,255,.07)}
+.hdr-in{display:flex;align-items:center;gap:6px;height:72px}
+.logo{display:flex !important;align-items:center;gap:10px;margin-right:16px}
+.logo-mark{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;color:#FFFFFF;flex:none}
+.logo-word{font-weight:800;font-size:22px;letter-spacing:-.02em}
+.navlinks{display:flex;gap:2px}
+.dd{position:relative}
+.navlink{height:40px;padding:0 14px;border-radius:10px;font-weight:600;font-size:15px;display:flex !important;align-items:center;gap:6px;transition:background-color .15s,color .15s}
+.navlink:hover{background:rgba(255,255,255,.08)}
+.menu{position:absolute;top:48px;left:0;min-width:230px;padding:8px;border-radius:16px;background:rgba(22,19,40,.98);box-shadow:0 24px 60px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.08);animation:menuIn .18s ease;z-index:70}
+.menu.right{left:auto;right:0}
+@keyframes menuIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.mi{display:flex !important;width:100%;height:42px;padding:0 12px;border-radius:10px;align-items:center;gap:10px;font-size:14.5px;font-weight:500;color:rgba(244,242,255,.9)}
+.mi:hover{background:rgba(255,255,255,.08);color:#FFFFFF}
+.mi-sep{height:1px;margin:6px 4px;background:rgba(255,255,255,.08)}
+.hsearch{margin-left:auto;display:flex;align-items:center;gap:10px;height:44px;width:340px;max-width:40vw;padding:0 14px;border-radius:12px;background:rgba(255,255,255,.08);transition:box-shadow .2s,background-color .2s}
+.hsearch input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:none;color:#F4F2FF;font:inherit;font-size:14.5px}
+.hsearch input::placeholder{color:rgba(244,242,255,.55)}
+.kbd{font-size:11px;font-weight:700;padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.1);color:rgba(244,242,255,.7)}
+.btn{height:46px;padding:0 22px;border-radius:999px;display:inline-flex !important;align-items:center;justify-content:center;gap:9px;font-weight:600;font-size:15px;white-space:nowrap;transition:transform .15s,box-shadow .25s,background-color .2s,filter .2s}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{transform:scale(.97)}
+.btn.sm{height:38px;padding:0 16px;font-size:14px}
+.btn.ghost{background:rgba(255,255,255,.1);color:#FFFFFF}
+.btn.ghost:hover{background:rgba(255,255,255,.16)}
+.avatar{width:40px;height:40px;border-radius:50%;display:grid !important;place-items:center;font-weight:700;font-size:15px;margin-left:8px}
+.burger{display:none !important;width:42px;height:42px;border-radius:12px;place-items:center;background:rgba(255,255,255,.08)}
+.mnav{display:none;padding:8px 0 14px 0;flex-direction:column;gap:2px}
+
+.hero{position:relative;height:660px;overflow:hidden}
+.hero-art{position:absolute;inset:0}
+.hring{position:absolute;border-radius:50%;border:2px solid rgba(255,255,255,.15)}
+.grain{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1.3px);background-size:6px 6px;mix-blend-mode:overlay;pointer-events:none}
+.f0{animation:fadeA .8s cubic-bezier(.2,.8,.2,1)}
+.f1{animation:fadeB .8s cubic-bezier(.2,.8,.2,1)}
+@keyframes fadeA{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:none}}
+@keyframes fadeB{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:none}}
+.scrim-l{position:absolute;inset:0;background:linear-gradient(90deg,#07060F 0%,rgba(7,6,15,.9) 28%,rgba(7,6,15,.45) 58%,rgba(7,6,15,0) 82%)}
+.scrim-b{position:absolute;left:0;right:0;bottom:0;height:55%;background:linear-gradient(0deg,#07060F 0%,rgba(7,6,15,.7) 40%,rgba(7,6,15,0) 100%)}
+.hero-in{position:relative;height:100%;display:flex;flex-direction:column;justify-content:center;padding-bottom:40px}
+.t0{animation:txtA .5s ease}
+.t1{animation:txtB .5s ease}
+@keyframes txtA{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes txtB{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.eyebrow{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(244,242,255,.82)}
+.edot{width:8px;height:8px;border-radius:50%}
+.hero-title{margin:14px 0 0 0;font-weight:800;font-size:76px;line-height:.95;letter-spacing:-.035em;max-width:760px;text-shadow:0 6px 50px rgba(0,0,0,.45)}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:18px;font-size:15px;color:rgba(244,242,255,.86)}
+.ring{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;flex:none}
+.ring-in{width:44px;height:44px;border-radius:50%;background:#0B0A16;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.ring-in sup{font-size:8px;margin-left:1px}
+.ring.big{width:72px;height:72px}
+.ring.big .ring-in{width:62px;height:62px;font-size:20px}
+.ring.mini{width:40px;height:40px;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.ring.mini .ring-in{width:34px;height:34px;font-size:11.5px}
+.overview{margin:16px 0 0 0;max-width:580px;font-size:17px;line-height:1.55;color:rgba(244,242,255,.86)}
+.btnrow{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
+.picks{position:absolute;bottom:34px;right:max(32px,calc((100% - 1320px) / 2 + 32px));display:flex;gap:12px}
+.pick{width:156px;display:block !important;opacity:.7;transition:opacity .2s,transform .2s}
+.pick:hover,.pick.on{opacity:1}
+.pick-art{display:block;position:relative;width:156px;height:88px;border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+.pick.on .pick-art{box-shadow:0 0 0 2px #FFFFFF}
+.pick-t{display:block;margin-top:8px;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbar{display:block;position:relative;height:3px;margin-top:6px;border-radius:3px;background:rgba(255,255,255,.18);overflow:hidden}
+.pbar span{position:absolute;inset:0;transform-origin:left;transform:scaleX(0)}
+.pbar.run0 span{animation:pgA 8s linear forwards}
+.pbar.run1 span{animation:pgB 8s linear forwards}
+.pbar.paused span{animation-play-state:paused}
+@keyframes pgA{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes pgB{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+
+.sec{position:relative;margin-top:44px}
+.sec-h{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.sec-t{margin:0;font-weight:800;font-size:26px;letter-spacing:-.02em}
+.seg{display:inline-flex;padding:4px;border-radius:999px;background:rgba(255,255,255,.08)}
+.seg-b{height:32px;padding:0 16px;border-radius:999px;font-size:13.5px;font-weight:600;display:flex !important;align-items:center;transition:background-color .25s,color .25s}
+.arrows{margin-left:auto;display:flex;gap:8px}
+.arrow{width:40px;height:40px;border-radius:50%;display:grid !important;place-items:center;background:rgba(255,255,255,.08);transition:background-color .2s}
+.arrow:hover{background:rgba(255,255,255,.18)}
+.hs{display:flex;gap:20px;overflow-x:auto;padding:10px max(32px,calc((100% - 1320px) / 2 + 32px)) 26px max(32px,calc((100% - 1320px) / 2 + 32px));scroll-snap-type:x proximity;scroll-padding:0 max(32px,calc((100% - 1320px) / 2 + 32px));scrollbar-width:none;scroll-behavior:smooth}
+.hs::-webkit-scrollbar{display:none}
+
+.card{position:relative;flex:none;width:180px;scroll-snap-align:start}
+.card.fill{width:auto}
+.card-main{display:block !important;width:100%}
+.art-wrap{position:relative;display:block}
+.card-art{position:relative;display:block;width:100%;aspect-ratio:2/3;border-radius:16px;overflow:hidden;transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s ease}
+.card.hov .card-art{transform:translateY(-6px) scale(1.03)}
+.card-ring{position:absolute;left:10px;bottom:-18px;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+.card.hov .card-ring{transform:translateY(-6px)}
+.card-t{display:block;margin-top:28px;font-size:15px;font-weight:700;line-height:1.25}
+.card-s{display:block;margin-top:3px;font-size:13px;color:rgba(244,242,255,.62)}
+.qa{position:absolute;top:10px;right:10px;width:38px;height:38px;border-radius:50%;display:grid !important;place-items:center;backdrop-filter:blur(8px);opacity:0;transform:scale(.8);transition:opacity .2s,transform .2s;z-index:2}
+.card.hov .qa,.qa.on,.card:focus-within .qa{opacity:1;transform:none}
+.pm{position:absolute;inset:0;pointer-events:none}
+.pm::before,.pm::after{content:'';position:absolute}
+.mo0::before{width:86%;padding-top:86%;height:0;border-radius:50%;border:2px solid rgba(255,255,255,.3);top:9%;left:24%}
+.mo0::after{width:44%;padding-top:44%;height:0;border-radius:50%;border:2px solid rgba(255,255,255,.22);top:30%;left:45%}
+.mo1::before{width:46%;padding-top:46%;height:0;border-radius:50%;background:rgba(255,255,255,.22);top:16%;left:14%}
+.mo1::after{left:0;right:0;top:56%;height:2px;background:rgba(255,255,255,.32)}
+.mo2::before{width:170%;height:16%;background:rgba(255,255,255,.12);transform:rotate(-34deg);top:24%;left:-30%}
+.mo2::after{width:170%;height:7%;background:rgba(255,255,255,.18);transform:rotate(-34deg);top:46%;left:-30%}
+.mo3::before{inset:7% 7% 44% 7%;background-image:radial-gradient(rgba(255,255,255,.42) 1.6px,transparent 1.8px);background-size:13px 13px}
+.mo3::after{width:30%;height:30%;border:2px solid rgba(255,255,255,.3);transform:rotate(45deg);top:22%;left:56%}
+.pscrim{position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.62) 0%,rgba(0,0,0,0) 58%)}
+.pt{position:absolute;left:14px;right:14px;bottom:24px;font-weight:800;font-size:21px;line-height:1.02;letter-spacing:-.01em;text-shadow:0 2px 14px rgba(0,0,0,.55)}
+.ptag{position:absolute;top:10px;left:10px;font-size:10.5px;font-weight:700;letter-spacing:.08em;padding:3px 7px;border-radius:6px;background:rgba(7,6,15,.72);color:#FFFFFF}
+.pbadge{position:absolute;top:10px;left:10px;font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:6px;background:#FFC24B;color:#1A1205}
+.pcard{position:relative;flex:none;width:156px;scroll-snap-align:start}
+.pcard.fill{width:auto}
+.pcard-art{position:relative;display:grid;place-items:center;width:100%;aspect-ratio:4/5;border-radius:16px;overflow:hidden;transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
+.pcard.hov .pcard-art{transform:translateY(-5px) scale(1.03)}
+.pini{font-weight:800;font-size:44px;color:#FFFFFF;text-shadow:0 2px 16px rgba(0,0,0,.4)}
+.pcard .card-t{margin-top:12px}
+.vc{position:relative;flex:none;width:340px;scroll-snap-align:start}
+.vc-art{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:16px;overflow:hidden;transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
+.vc.hov .vc-art{transform:scale(1.03)}
+.playdot{position:absolute;top:50%;left:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;display:grid;place-items:center;background:rgba(7,6,15,.55);backdrop-filter:blur(8px);color:#FFFFFF;transition:transform .25s}
+.vc.hov .playdot{transform:scale(1.12)}
+.vc .card-t{margin-top:12px;text-align:center}
+.vc .card-s{text-align:center}
+.trailers{position:relative;margin-top:56px;padding:40px 0 20px 0;overflow:hidden}
+.tr-bg{position:absolute;inset:0;transition:opacity .5s}
+.tr-scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,6,15,.88),rgba(7,6,15,.6)),linear-gradient(0deg,#07060F 0%,rgba(7,6,15,0) 30%,rgba(7,6,15,0) 70%,#07060F 100%)}
+.cta{margin-top:56px;border-radius:28px;padding:40px;display:flex;flex-wrap:wrap;align-items:center;gap:24px;position:relative;overflow:hidden}
+.cta-t{margin:0;font-weight:800;font-size:34px;letter-spacing:-.02em}
+.cta-p{margin-top:8px;font-size:16px;color:rgba(244,242,255,.85);max-width:560px;line-height:1.5}
+
+.phead{padding-top:44px}
+.page-t{margin:0;font-weight:800;font-size:48px;letter-spacing:-.03em;line-height:1}
+.page-s{margin-top:8px;font-size:16px;color:rgba(244,242,255,.7)}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.chip{height:38px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:600;display:inline-flex !important;align-items:center;gap:6px;transition:background-color .2s,color .2s;white-space:nowrap}
+.chip:hover{filter:brightness(1.12)}
+.split{display:flex;flex-wrap:wrap;gap:36px;margin-top:30px;align-items:flex-start}
+.aside{flex:1 1 260px;max-width:300px;display:flex;flex-direction:column;gap:16px}
+.mainc{flex:999 1 560px;min-width:0}
+.panel{border-radius:20px;padding:20px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.panel-t{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(244,242,255,.62);margin-bottom:12px}
+.sel{width:100%;height:44px;border-radius:12px;background:rgba(255,255,255,.08);color:#F4F2FF;border:0;padding:0 12px;font:inherit;font-size:14.5px}
+.sel option{background:#16132B;color:#F4F2FF}
+.gchips{display:flex;flex-wrap:wrap;gap:8px}
+.gchip{height:34px;padding:0 13px;border-radius:999px;font-size:13px;font-weight:600;display:inline-flex !important;align-items:center;gap:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:34px 22px}
+.grid.people{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:26px 20px}
+.count{font-size:14px;color:rgba(244,242,255,.65);margin-bottom:18px}
+.empty{padding:50px 20px;text-align:center;border-radius:24px;background:rgba(255,255,255,.04)}
+.empty-art{position:relative;width:140px;height:140px;margin:0 auto}
+.empty-art span{position:absolute;border-radius:50%;border:2px solid rgba(255,255,255,.18)}
+.empty-t{margin-top:18px;font-weight:800;font-size:26px}
+.empty-p{margin:8px auto 0 auto;font-size:15.5px;line-height:1.5;color:rgba(244,242,255,.72);max-width:440px}
+
+.dhero{position:relative;overflow:hidden}
+.dhero-art{position:absolute;inset:0}
+.dhero-scrim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,6,15,.96) 0%,rgba(7,6,15,.86) 38%,rgba(7,6,15,.55) 100%),linear-gradient(0deg,#07060F 0%,rgba(7,6,15,0) 30%)}
+.dhero-in{position:relative;display:flex;flex-wrap:wrap;gap:44px;padding:40px 0 60px 0;align-items:flex-start}
+.backlink{display:inline-flex !important;align-items:center;gap:6px;font-size:14px;font-weight:600;color:rgba(244,242,255,.8);padding:24px 0 0 0;position:relative}
+.backlink:hover{color:#FFFFFF}
+.dposter{position:relative;width:300px;aspect-ratio:2/3;border-radius:22px;overflow:hidden;flex:none}
+.dposter .pt{font-size:32px;left:22px;right:22px;bottom:22px}
+.dinfo{flex:1 1 440px;min-width:0}
+.dtitle{margin:0;font-weight:800;font-size:52px;line-height:1;letter-spacing:-.03em}
+.dtitle span{font-weight:500;opacity:.6}
+.facts-line{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px;font-size:15px;color:rgba(244,242,255,.85)}
+.cert{padding:2px 7px;border-radius:6px;box-shadow:inset 0 0 0 1.5px rgba(244,242,255,.55);font-size:13px;font-weight:600}
+.score-row{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:22px}
+.score-l{font-weight:700;font-size:15px;line-height:1.15;margin-right:8px}
+.circ{position:relative;width:50px;height:50px;border-radius:50%;display:grid !important;place-items:center;transition:transform .15s,background-color .2s}
+.circ:hover{transform:translateY(-2px)}
+.circ .tip{position:absolute;bottom:58px;left:50%;transform:translateX(-50%) translateY(4px);padding:6px 10px;border-radius:8px;background:#FFFFFF;color:#0B0A16;font-size:12.5px;font-weight:600;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s}
+.circ:hover .tip,.circ:focus-visible .tip{opacity:1;transform:translateX(-50%)}
+.tagline{margin-top:24px;font-size:17px;font-style:italic;color:rgba(244,242,255,.72)}
+.h3{margin:16px 0 0 0;font-weight:700;font-size:20px}
+.dov{margin:8px 0 0 0;font-size:16.5px;line-height:1.6;color:rgba(244,242,255,.9);max-width:760px}
+.crew{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-top:22px;max-width:760px}
+.crew-n{font-weight:700;font-size:15px}
+.crew-r{font-size:13.5px;margin-top:2px;color:rgba(244,242,255,.7)}
+.side-f{display:flex;flex-direction:column;gap:18px}
+.sf-l{font-size:13px;font-weight:700;color:rgba(244,242,255,.62)}
+.sf-v{margin-top:3px;font-size:15.5px}
+.kw{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.kwc{font-size:12.5px;padding:5px 10px;border-radius:8px;background:rgba(255,255,255,.08)}
+.inrow{display:flex;gap:18px;overflow-x:auto;padding:10px 4px 22px 4px;scrollbar-width:thin}
+.cast{flex:none;width:150px;display:block !important;border-radius:16px;overflow:hidden;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);transition:transform .25s,box-shadow .25s}
+.cast:hover{transform:translateY(-4px)}
+.cast-art{display:grid;place-items:center;width:150px;height:180px}
+.cast-n{display:block;padding:10px 12px 0 12px;font-weight:700;font-size:14px}
+.cast-r{display:block;padding:2px 12px 12px 12px;font-size:12.5px;color:rgba(244,242,255,.68)}
+.rev{border-radius:20px;padding:22px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);margin-top:14px}
+.rev-top{display:flex;align-items:center;gap:12px}
+.rev-av{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:rgba(255,255,255,.14)}
+.rev-score{font-size:12.5px;font-weight:700;padding:4px 9px;border-radius:8px;background:#FFC24B;color:#1A1205}
+.pill{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(244,242,255,.8)}
+.rev-text{margin-top:12px;font-size:15.5px;line-height:1.6;color:rgba(244,242,255,.88)}
+.season-card{display:flex !important;gap:20px;border-radius:20px;padding:16px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);width:100%;align-items:center;transition:background-color .2s}
+.season-card:hover{background:rgba(255,255,255,.08)}
+.sc-art{position:relative;width:100px;aspect-ratio:2/3;border-radius:12px;overflow:hidden;flex:none}
+
+.ep{display:flex !important;flex-wrap:wrap;gap:22px;border-radius:20px;padding:16px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);margin-top:14px;width:100%;transition:background-color .2s}
+.ep:hover{background:rgba(255,255,255,.08)}
+.ep-art{position:relative;width:240px;aspect-ratio:16/9;border-radius:14px;overflow:hidden;flex:none}
+.ep-body{flex:1 1 300px;min-width:0}
+.ep-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ep-n{font-weight:800;font-size:22px;color:rgba(244,242,255,.5)}
+.ep-name{font-weight:700;font-size:18px}
+.ep-meta{margin-top:4px;font-size:13.5px;color:rgba(244,242,255,.66)}
+.ep-ov{margin-top:8px;font-size:15px;line-height:1.55;color:rgba(244,242,255,.86)}
+
+.pportrait{position:relative;width:100%;max-width:300px;aspect-ratio:2/3;border-radius:22px;display:grid;place-items:center;overflow:hidden}
+.pportrait .pini{font-size:96px}
+.bio{margin:10px 0 0 0;font-size:16px;line-height:1.65;color:rgba(244,242,255,.88);max-width:820px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.bio.open{-webkit-line-clamp:40}
+.more{margin-top:6px;font-weight:700;font-size:14.5px}
+.ctable{margin-top:12px;border-radius:20px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);overflow:hidden}
+.crow{display:flex !important;gap:18px;align-items:center;padding:14px 20px;width:100%;border-top:1px solid rgba(255,255,255,.06);transition:background-color .2s}
+.crow:hover{background:rgba(255,255,255,.05)}
+.crow.first{border-top:0}
+.crow-y{width:48px;font-weight:700;color:rgba(244,242,255,.6);flex:none}
+.crow-dot{width:10px;height:10px;border-radius:50%;flex:none}
+
+.sbig{display:flex;align-items:center;gap:12px;height:60px;padding:0 20px;border-radius:18px;background:rgba(255,255,255,.07);margin-top:22px;max-width:820px}
+.sbig input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:none;color:#F4F2FF;font:inherit;font-size:19px}
+.sbig input::placeholder{color:rgba(244,242,255,.55)}
+.facet{display:flex !important;align-items:center;justify-content:space-between;width:100%;height:44px;padding:0 14px;border-radius:12px;font-size:15px;font-weight:600}
+.facet-n{font-size:12.5px;font-weight:700;padding:2px 9px;border-radius:999px;background:rgba(255,255,255,.12)}
+.sres{display:flex !important;gap:18px;width:100%;border-radius:18px;padding:12px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);margin-bottom:14px;transition:background-color .2s,transform .2s}
+.sres:hover{background:rgba(255,255,255,.08)}
+.sres-art{position:relative;width:86px;aspect-ratio:2/3;border-radius:12px;overflow:hidden;flex:none;display:grid;place-items:center}
+.sres-art.round{aspect-ratio:1/1;border-radius:50%}
+.sres-art .pini{font-size:26px}
+.sres-t{font-weight:700;font-size:18px}
+.sres-s{margin-top:2px;font-size:13.5px;color:rgba(244,242,255,.65)}
+.sres-o{margin-top:8px;font-size:14.5px;line-height:1.5;color:rgba(244,242,255,.82);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+.setgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;margin-top:30px}
+.setrow{display:flex !important;align-items:center;gap:14px;width:100%;min-height:62px;padding:10px 0;border-top:1px solid rgba(255,255,255,.07)}
+.setrow.first{border-top:0}
+.set-ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none}
+.set-t{display:block;font-weight:600;font-size:15.5px}
+.set-d{display:block;font-size:13px;margin-top:2px;color:rgba(244,242,255,.62)}
+.sw{margin-left:auto;width:50px;height:30px;border-radius:999px;position:relative;flex:none;transition:background-color .2s}
+.kn{position:absolute;top:3px;width:24px;height:24px;border-radius:50%;background:#FFFFFF;transition:left .24s cubic-bezier(.3,1.4,.5,1);box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.api{display:inline-flex;margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.08);color:rgba(244,242,255,.8)}
+
+.footer{margin-top:80px;padding:48px 0 60px 0;background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.04));border-top:1px solid rgba(255,255,255,.06)}
+.foot-in{display:flex;flex-wrap:wrap;gap:40px;justify-content:space-between}
+.foot-col{display:flex;flex-direction:column;gap:10px;font-size:14.5px;color:rgba(244,242,255,.78)}
+.foot-col b{color:#FFFFFF;font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.foot-col button:hover{color:#FFFFFF}
+.foot-note{margin-top:28px;font-size:13px;line-height:1.6;color:rgba(244,242,255,.55);max-width:720px}
+
+.ov{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:20px;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.ov-bg{position:absolute !important;inset:0;width:100%;height:100%;background:rgba(5,4,12,.72) !important;backdrop-filter:blur(12px)}
+.dialog{position:relative;width:100%;max-width:560px;border-radius:28px;padding:34px 36px;background:#16132B;box-shadow:0 40px 120px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.08);animation:dlgIn .35s cubic-bezier(.2,.8,.2,1);outline:none}
+@keyframes dlgIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:none}}
+.dlg-x{position:absolute;top:18px;right:18px;width:38px;height:38px;border-radius:50%;display:grid !important;place-items:center;background:rgba(255,255,255,.08)}
+.dlg-x:hover{background:rgba(255,255,255,.16)}
+.dlg-k{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(244,242,255,.64)}
+.dlg-t{margin:6px 0 0 0;font-weight:800;font-size:30px;letter-spacing:-.02em}
+.dlg-p{margin-top:10px;font-size:15.5px;line-height:1.55;color:rgba(244,242,255,.8)}
+.steps{margin-top:18px;display:flex;flex-direction:column;gap:12px}
+.step{display:flex;gap:12px;font-size:15px;line-height:1.45}
+.step-n{width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;font-size:12.5px;color:#14030C}
+.spin{width:18px;height:18px;border-radius:50%;border:2px solid rgba(20,3,12,.25);border-top-color:#14030C;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.stars{display:flex;gap:8px;margin-top:22px}
+.star{position:relative;width:44px;height:44px}
+.star .ic{position:absolute;left:0;top:0;width:44px;height:44px;pointer-events:none}
+.star-fill{position:absolute;left:0;top:0;height:44px;overflow:hidden;pointer-events:none}
+.half{position:absolute !important;top:0;bottom:0;width:50%}
+.half.l{left:0}
+.half.r{right:0}
+.rate-v{margin-top:16px;font-weight:800;font-size:46px;letter-spacing:-.03em;line-height:1}
+.rate-w{margin-top:4px;font-size:14px;color:rgba(244,242,255,.7)}
+.player{position:relative;width:100%;max-width:1000px;animation:dlgIn .35s cubic-bezier(.2,.8,.2,1);outline:none}
+.pframe{position:relative;width:100%;aspect-ratio:16/9;border-radius:22px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.7)}
+.pcenter{position:absolute;left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;display:grid !important;place-items:center;background:rgba(7,6,15,.55);backdrop-filter:blur(10px);color:#FFFFFF;transition:opacity .3s,transform .3s}
+.pcenter.hide{opacity:0;transform:scale(.85)}
+.pframe:hover .pcenter.hide{opacity:1;transform:none}
+.pctrl{position:absolute;left:0;right:0;bottom:0;padding:40px 22px 16px 22px;background:linear-gradient(0deg,rgba(0,0,0,.75),rgba(0,0,0,0));display:flex;align-items:center;gap:14px}
+.ptrack{flex:1;height:5px;border-radius:5px;background:rgba(255,255,255,.25);position:relative;overflow:hidden}
+.pfill{position:absolute;inset:0;transform-origin:left;animation:prog 151s linear both}
+.pfill.paused{animation-play-state:paused}
+@keyframes prog{from{transform:scaleX(.02)}to{transform:scaleX(1)}}
+.pbtn{width:40px;height:40px;border-radius:50%;display:grid !important;place-items:center;color:#FFFFFF}
+.pbtn:hover{background:rgba(255,255,255,.14)}
+.cc{position:absolute;left:50%;bottom:76px;transform:translateX(-50%);padding:6px 14px;border-radius:8px;background:rgba(0,0,0,.75);font-size:18px;white-space:nowrap}
+.pnext{display:flex;gap:14px;margin-top:18px;overflow-x:auto}
+.pn{flex:none;width:220px;display:block !important;opacity:.85}
+.pn:hover{opacity:1}
+.pn-art{display:block;position:relative;width:220px;aspect-ratio:16/9;border-radius:12px;overflow:hidden}
+.toast{position:fixed;left:24px;bottom:24px;z-index:120;display:flex;align-items:center;gap:12px;padding:14px 18px 14px 14px;border-radius:18px;background:rgba(30,27,54,.97);box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.08);opacity:0;transform:translateY(16px);transition:opacity .3s,transform .35s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+.toast.in{opacity:1;transform:none}
+.toast-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;color:#14030C;flex:none}
+.toast-t{display:block;font-weight:600;font-size:14.5px}
+.toast-s{display:block;font-size:12.5px;margin-top:1px;color:rgba(244,242,255,.68)}
+
+@media (max-width:1000px){.picks{display:none}.hero-title{font-size:56px}}
+@media (max-width:860px){.navlinks{display:none}.burger{display:grid !important}.mnav.open{display:flex}.hsearch{width:auto;flex:1 1 0;min-width:0;max-width:none}.hsearch input{width:100%}.logo{margin-right:6px}.logo-word{display:none}.hdr .btn.sm{padding:0 12px}}
+@media (max-width:640px){.wrap{padding:0 16px}.hero{height:560px}.hero-title{font-size:42px}.overview{font-size:15.5px}.dtitle{font-size:36px}.dposter{width:200px}.page-t{font-size:36px}.card{width:140px}.vc{width:260px}.ep-art{width:100%}.aside{max-width:none}.cta{padding:26px}.cta-t{font-size:26px}.hs{padding-left:16px;padding-right:16px;scroll-padding:0 16px}.dialog{padding:28px 22px}}
+</style>
+</helmet>
+<div class="web {{rootCls}}">
+<div class="amb {{amb.cls}}" style="background: {{amb.bg}}; opacity: {{amb.op}}"></div>
+
+<header class="hdr">
+<div class="wrap">
+<div class="hdr-in">
+<button class="logo" onClick="{{nav.home}}" aria-label="CineVerse home"><span class="logo-mark" style="background: linear-gradient(135deg, {{accent}}, #7C3AED); box-shadow: 0 8px 24px -8px {{accent}}"><svg class="ic solid sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"></path></svg></span><span class="logo-word disp">CineVerse</span></button>
+<nav class="navlinks" aria-label="Main">
+<div class="dd" onMouseLeave="{{nav.closeMenu}}">
+<button class="navlink" onClick="{{nav.toggleMovies}}" aria-expanded="{{nav.moviesOpen}}" style="color: {{nav.moviesFg}}">Movies<svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button>
+<sc-if value="{{nav.moviesOpen}}" hint-placeholder-val="{{false}}"><div class="menu"><sc-for list="{{nav.movieItems}}" as="m" hint-placeholder-count="4"><button class="mi" onClick="{{m.tap}}">{{m.label}}</button></sc-for></div></sc-if>
+</div>
+<div class="dd" onMouseLeave="{{nav.closeMenu}}">
+<button class="navlink" onClick="{{nav.toggleTv}}" aria-expanded="{{nav.tvOpen}}" style="color: {{nav.tvFg}}">TV Shows<svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg></button>
+<sc-if value="{{nav.tvOpen}}" hint-placeholder-val="{{false}}"><div class="menu"><sc-for list="{{nav.tvItems}}" as="m" hint-placeholder-count="4"><button class="mi" onClick="{{m.tap}}">{{m.label}}</button></sc-for></div></sc-if>
+</div>
+<button class="navlink" onClick="{{nav.people}}" style="color: {{nav.peopleFg}}">People</button>
+<button class="navlink" onClick="{{nav.library}}" style="color: {{nav.libraryFg}}">My Library</button>
+</nav>
+<div class="hsearch" style="box-shadow: inset 0 0 0 1.5px {{nav.searchBorder}}">
+<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" style="color: rgba(244,242,255,0.65)"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M20 20l-4.2-4.2"></path></svg>
+<label class="vh" for="w-search">Search movies, TV shows and people</label>
+<input id="w-search" type="search" value="{{nav.query}}" onChange="{{nav.onQuery}}" onFocus="{{nav.onFocus}}" onBlur="{{nav.onBlur}}" placeholder="Search movies, TV shows, people" autocomplete="off">
+</div>
+<sc-if value="{{nav.guest}}" hint-placeholder-val="{{true}}"><button class="btn sm" onClick="{{nav.signIn}}" style="background: {{accent}}; color: #14030C; margin-left: 10px">Sign in</button></sc-if>
+<sc-if value="{{nav.signedIn}}" hint-placeholder-val="{{false}}">
+<div class="dd" onMouseLeave="{{nav.closeMenu}}">
+<button class="avatar" onClick="{{nav.toggleAccount}}" aria-label="Account menu" aria-expanded="{{nav.accountOpen}}" style="background: {{accent}}; color: #14030C">H</button>
+<sc-if value="{{nav.accountOpen}}" hint-placeholder-val="{{false}}"><div class="menu right"><div style="padding: 10px 12px 8px 12px"><div style="font-weight: 700">Harish</div><div style="font-size: 12.5px; color: rgba(244,242,255,0.6)">TMDB account · synced</div></div><div class="mi-sep"></div><sc-for list="{{nav.accountItems}}" as="m" hint-placeholder-count="4"><button class="mi" onClick="{{m.tap}}">{{m.label}}</button></sc-for></div></sc-if>
+</div>
+</sc-if>
+<button class="burger" onClick="{{nav.toggleMnav}}" aria-label="Menu" aria-expanded="{{nav.mnavOpen}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16 M4 12h16 M4 17h16"></path></svg></button>
+</div>
+<div class="mnav {{nav.mnavCls}}"><sc-for list="{{nav.mobileItems}}" as="m" hint-placeholder-count="6"><button class="mi" onClick="{{m.tap}}">{{m.label}}</button></sc-for></div>
+</div>
+</header>
+
+<main class="pagein {{pageKey}}">
+
+<sc-if value="{{is.home}}" hint-placeholder-val="{{true}}">
+<section class="hero" onMouseEnter="{{home.pause}}" onMouseLeave="{{home.resume}}">
+<div class="hero-art {{home.fx}}" style="background: {{home.h.bd}}">
+<div class="hring" style="right: 6%; top: 8%; width: 520px; height: 520px"></div>
+<div class="hring" style="right: 30%; top: 46%; width: 220px; height: 220px"></div>
+<div class="grain"></div>
+</div>
+<div class="scrim-l"></div>
+<div class="scrim-b"></div>
+<div class="wrap hero-in">
+<div class="{{home.tx}}">
+<div class="eyebrow"><span class="edot" style="background: {{accent}}"></span><span>{{home.h.eyebrow}}</span></div>
+<h1 class="hero-title disp">{{home.h.title}}</h1>
+<div class="meta"><span class="ring" style="background: conic-gradient({{home.h.ring.color}} {{home.h.ring.deg}}deg, rgba(255,255,255,0.14) 0deg)"><span class="ring-in">{{home.h.ring.pct}}<sup>{{home.h.ring.sym}}</sup></span></span><span>{{home.h.meta}}</span></div>
+<p class="overview">{{home.h.overview}}</p>
+<div class="btnrow">
+<button class="btn" onClick="{{home.h.trailer}}" style="background: {{accent}}; color: #14030C; box-shadow: 0 14px 40px -12px {{accent}}"><svg class="ic solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"></path></svg><span>Play trailer</span></button>
+<button class="btn ghost" onClick="{{home.h.watch}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="{{home.h.watchD}}"></path></svg><span>{{home.h.watchLabel}}</span></button>
+<button class="btn ghost" onClick="{{home.h.info}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 11v6 M12 7.5v.5"></path></svg><span>More info</span></button>
+</div>
+</div>
+</div>
+<div class="picks" aria-label="Featured">
+<sc-for list="{{home.picks}}" as="p" hint-placeholder-count="5"><button class="pick {{p.cls}}" onClick="{{p.tap}}" aria-label="Feature {{p.title}}"><span class="pick-art" style="background: {{p.art}}"><span class="pm {{p.mo}}"></span></span><span class="pick-t">{{p.title}}</span><span class="pbar {{p.barCls}}"><span style="background: {{accent}}"></span></span></button></sc-for>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{is.detail}}" hint-placeholder-val="{{false}}">
+<section class="dhero">
+<div class="dhero-art" style="background: {{det.bd}}"><div class="hring" style="right: 4%; top: -10%; width: 560px; height: 560px"></div><div class="grain"></div></div>
+<div class="dhero-scrim"></div>
+<div class="wrap" style="position: relative">
+<button class="backlink" onClick="{{back}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg><span>{{backLabel}}</span></button>
+<div class="dhero-in">
+<span class="dposter" style="background: {{det.art}}; box-shadow: 0 40px 90px -24px {{det.c1}}, 0 0 0 1px rgba(255,255,255,0.12)"><span class="pm {{det.mo}}"></span><span class="pscrim"></span><span class="pt disp">{{det.title}}</span></span>
+<div class="dinfo">
+<h1 class="dtitle disp">{{det.title}} <span>({{det.year}})</span></h1>
+<div class="facts-line"><span class="cert">{{det.cert}}</span><span>{{det.date}}</span><span>•</span><span>{{det.genres}}</span><span>•</span><span>{{det.length}}</span></div>
+<div class="score-row">
+<span class="ring big" style="background: conic-gradient({{det.ring.color}} {{det.ring.deg}}deg, rgba(255,255,255,0.14) 0deg)"><span class="ring-in">{{det.ring.pct}}<sup>{{det.ring.sym}}</sup></span></span>
+<span class="score-l">User<br>score</span>
+<sc-for list="{{det.acts}}" as="a" hint-placeholder-count="3"><button class="circ" onClick="{{a.tap}}" aria-label="{{a.label}}" style="background: {{a.bg}}; color: {{a.fg}}"><svg class="{{a.icCls}}" viewBox="0 0 24 24" aria-hidden="true"><path d="{{a.d}}"></path></svg><span class="tip">{{a.label}}</span></button></sc-for>
+<button class="btn ghost" onClick="{{det.trailer}}" style="background: transparent; padding: 0 12px"><svg class="ic solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"></path></svg><span>Play trailer</span></button>
+</div>
+<div class="tagline">{{det.tagline}}</div>
+<h2 class="h3 disp">Overview</h2>
+<p class="dov">{{det.overview}}</p>
+<div class="crew"><sc-for list="{{det.crew}}" as="c" hint-placeholder-count="3"><button onClick="{{c.tap}}" style="text-align: left"><div class="crew-n">{{c.name}}</div><div class="crew-r">{{c.role}}</div></button></sc-for></div>
+</div>
+</div>
+</div>
+</section>
+<div class="wrap">
+<div class="split" style="margin-top: 20px">
+<div class="mainc">
+<div class="sec-h" style="margin-top: 10px"><h2 class="sec-t disp">Top billed cast</h2></div>
+<div class="inrow"><sc-for list="{{det.cast}}" as="c" hint-placeholder-count="6"><button class="cast" onClick="{{c.tap}}"><span class="cast-art" style="background: {{c.art}}"><span class="pini disp">{{c.ini}}</span></span><span class="cast-n">{{c.name}}</span><span class="cast-r">{{c.role}}</span></button></sc-for></div>
+<sc-if value="{{det.isTV}}" hint-placeholder-val="{{false}}">
+<div class="sec-h" style="margin-top: 26px"><h2 class="sec-t disp">Current season</h2></div>
+<button class="season-card" onClick="{{det.season.tap}}"><span class="sc-art" style="background: {{det.season.art}}"><span class="pm {{det.season.mo}}"></span></span><span style="min-width: 0"><span class="disp" style="display: block; font-weight: 800; font-size: 22px">{{det.season.title}}</span><span style="display: block; margin-top: 4px; color: rgba(244,242,255,0.7)">{{det.season.sub}}</span><span style="display: block; margin-top: 10px; font-size: 14.5px; line-height: 1.5">{{det.season.desc}}</span><span style="display: inline-flex; margin-top: 10px; font-weight: 700; font-size: 14px; color: {{accent}}">View all seasons and episodes →</span></span></button>
+</sc-if>
+<div class="sec-h" style="margin-top: 30px"><h2 class="sec-t disp">Reviews</h2><span class="pill">Sample</span></div>
+<sc-if value="{{det.noReviews}}" hint-placeholder-val="{{false}}"><div class="rev"><div class="rev-text" style="margin-top: 0">No reviews yet — they open once the title is released.</div></div></sc-if>
+<sc-for list="{{det.reviews}}" as="r" hint-placeholder-count="2"><div class="rev"><div class="rev-top"><span class="rev-av">{{r.ini}}</span><span><span style="display: block; font-weight: 700">A review by {{r.author}}</span><span style="display: block; font-size: 13px; color: rgba(244,242,255,0.6)">Written on {{r.date}}</span></span><span class="rev-score" style="margin-left: auto">★ {{r.rating}}</span></div><div class="rev-text">{{r.text}}</div></div></sc-for>
+<div class="sec-h" style="margin-top: 30px"><h2 class="sec-t disp">Videos</h2></div>
+<div class="inrow"><sc-for list="{{det.videos}}" as="it" hint-placeholder-count="3"><div class="vc {{it.hov}}" onMouseEnter="{{it.enter}}" onMouseLeave="{{it.leave}}" style="width: 300px"><button class="card-main" onClick="{{it.open}}" aria-label="Play {{it.title}}"><span class="vc-art" style="background: {{it.art}}; box-shadow: {{it.glow}}"><span class="pm {{it.mo}}"></span><span class="pscrim"></span><span class="playdot"><svg class="ic solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"></path></svg></span></span><span class="card-t">{{it.title}}</span><span class="card-s">{{it.sub}}</span></button></div></sc-for></div>
+</div>
+<aside class="aside" style="max-width: 320px">
+<div class="panel side-f">
+<sc-for list="{{det.facts}}" as="f" hint-placeholder-count="5"><div><div class="sf-l">{{f.label}}</div><div class="sf-v">{{f.value}}</div></div></sc-for>
+<div><div class="sf-l">Keywords</div><div class="kw"><sc-for list="{{det.keywords}}" as="k" hint-placeholder-count="4"><span class="kwc">{{k.label}}</span></sc-for></div></div>
+</div>
+</aside>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{is.season}}" hint-placeholder-val="{{false}}">
+<div class="wrap">
+<button class="backlink" onClick="{{back}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg><span>{{backLabel}}</span></button>
+<div class="phead" style="padding-top: 20px; display: flex; gap: 22px; align-items: center; flex-wrap: wrap">
+<span class="sc-art" style="width: 90px; background: {{sea.art}}; box-shadow: 0 20px 50px -16px {{sea.c1}}"><span class="pm {{sea.mo}}"></span></span>
+<div><div class="page-s" style="margin-top: 0">{{sea.show}}</div><h1 class="page-t disp" style="margin-top: 6px">{{sea.heading}}</h1></div>
+</div>
+<div class="tabs"><sc-for list="{{sea.chips}}" as="c" hint-placeholder-count="3"><button class="chip" onClick="{{c.tap}}" aria-pressed="{{c.on}}" style="background: {{c.bg}}; color: {{c.fg}}">{{c.label}}</button></sc-for></div>
+<div style="margin-top: 16px">
+<sc-for list="{{sea.eps}}" as="e" hint-placeholder-count="4"><button class="ep" onClick="{{e.tap}}"><span class="ep-art" style="background: {{e.art}}"><span class="pm {{e.mo}}"></span><span class="playdot" style="width: 46px; height: 46px; margin: -23px 0 0 -23px"><svg class="ic solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"></path></svg></span></span><span class="ep-body"><span class="ep-top"><span class="ep-n disp">{{e.n}}</span><span class="ep-name">{{e.name}}</span><span class="rev-score">★ {{e.rating}}</span></span><span class="ep-meta" style="display: block">{{e.meta}}</span><span class="ep-ov" style="display: block">{{e.overview}}</span></span></button></sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{is.person}}" hint-placeholder-val="{{false}}">
+<div class="wrap">
+<button class="backlink" onClick="{{back}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg><span>{{backLabel}}</span></button>
+<div class="split" style="margin-top: 24px">
+<aside class="aside">
+<div class="pportrait" style="background: {{per.art}}; box-shadow: 0 40px 90px -26px {{per.c1}}"><span class="pini disp">{{per.ini}}</span></div>
+<div class="panel side-f">
+<div class="sf-l" style="font-size: 18px; color: #FFFFFF; font-weight: 800">Personal info</div>
+<sc-for list="{{per.facts}}" as="f" hint-placeholder-count="4"><div><div class="sf-l">{{f.label}}</div><div class="sf-v">{{f.value}}</div></div></sc-for>
+</div>
+</aside>
+<div class="mainc">
+<h1 class="page-t disp">{{per.name}}</h1>
+<h2 class="h3 disp" style="margin-top: 24px">Biography</h2>
+<p class="bio {{per.bioCls}}">{{per.bio}}</p>
+<button class="more" onClick="{{per.tapBio}}" style="color: {{accent}}">{{per.bioLabel}}</button>
+<h2 class="h3 disp" style="margin-top: 30px">Known for</h2>
+<div class="inrow"><sc-for list="{{per.known}}" as="it" hint-placeholder-count="5"><div class="card {{it.hov}}" onMouseEnter="{{it.enter}}" onMouseLeave="{{it.leave}}" style="width: 150px"><button class="card-main" onClick="{{it.open}}" aria-label="{{it.title}}"><span class="art-wrap"><span class="card-art" style="background: {{it.art}}; box-shadow: {{it.glow}}"><span class="pm {{it.mo}}"></span><span class="pscrim"></span><span class="pt disp" style="font-size: 17px">{{it.title}}</span></span><span class="card-ring ring mini" style="background: conic-gradient({{it.ring.color}} {{it.ring.deg}}deg, rgba(255,255,255,0.14) 0deg)"><span class="ring-in">{{it.ring.pct}}<sup>{{it.ring.sym}}</sup></span></span></span><span class="card-t" style="font-size: 14px">{{it.title}}</span></button></div></sc-for></div>
+<h2 class="h3 disp" style="margin-top: 20px">{{per.creditsTitle}}</h2>
+<div class="ctable"><sc-for list="{{per.credits}}" as="c" hint-placeholder-count="4"><button class="crow {{c.first}}" onClick="{{c.tap}}"><span class="crow-y">{{c.year}}</span><span class="crow-dot" style="background: {{c.c1}}"></span><span><span style="display: block; font-weight: 700">{{c.title}}</span><span style="display: block; font-size: 13.5px; color: rgba(244,242,255,0.68)">{{c.role}}</span></span></button></sc-for></div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{is.browse}}" hint-placeholder-val="{{false}}">
+<div class="wrap">
+<div class="phead">
+<h1 class="page-t disp">{{br.title}}</h1>
+<div class="page-s">{{br.sub}}</div>
+<div class="tabs"><sc-for list="{{br.tabs}}" as="c" hint-placeholder-count="4"><button class="chip" onClick="{{c.tap}}" aria-pressed="{{c.on}}" style="background: {{c.bg}}; color: {{c.fg}}">{{c.label}}</button></sc-for></div>
+</div>
+<div class="split">
+<sc-if value="{{br.hasFilters}}" hint-placeholder-val="{{true}}">
+<aside class="aside">
+<div class="panel">
+<div class="panel-t">Sort</div>
+<label class="vh" for="w-sort">Sort results by</label>
+<select id="w-sort" class="sel" value="{{br.sort}}" onChange="{{br.onSort}}"><option value="pop">Popularity</option><option value="rating">Rating, highest first</option><option value="date">Release date, newest first</option><option value="title">Title, A to Z</option></select>
+</div>
+<div class="panel">
+<div class="panel-t">Genres</div>
+<div class="gchips"><sc-for list="{{br.genres}}" as="g" hint-placeholder-count="6"><button class="gchip" onClick="{{g.tap}}" aria-pressed="{{g.on}}" style="background: {{g.bg}}; color: {{g.fg}}"><sc-if value="{{g.on}}" hint-placeholder-val="{{false}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></sc-if><span>{{g.label}}</span></button></sc-for></div>
+<sc-if value="{{br.hasGenreSel}}" hint-placeholder-val="{{false}}"><button class="more" onClick="{{br.clearGenres}}" style="color: {{accent}}; margin-top: 14px">Clear genres</button></sc-if>
+</div>
+</aside>
+</sc-if>
+<div class="mainc">
+<div class="count">{{br.count}}</div>
+<sc-if value="{{br.isEmpty}}" hint-placeholder-val="{{false}}"><div class="empty"><div class="empty-art"><span style="inset: 0"></span><span style="inset: 26px"></span><span style="inset: 52px; background: {{accent}}; border: 0; opacity: 0.55"></span></div><div class="empty-t disp">{{br.emptyT}}</div><div class="empty-p">{{br.emptyP}}</div><sc-if value="{{br.hasEmptyBtn}}" hint-placeholder-val="{{false}}"><div style="margin-top: 18px"><button class="btn" onClick="{{br.emptyTap}}" style="background: {{accent}}; color: #14030C">{{br.emptyBtn}}</button></div></sc-if></div></sc-if>
+<sc-if value="{{br.isPeople}}" hint-placeholder-val="{{false}}"><div class="grid people"><sc-for list="{{br.items}}" as="it" hint-placeholder-count="8"><div class="pcard fill {{it.hov}}" onMouseEnter="{{it.enter}}" onMouseLeave="{{it.leave}}"><button class="card-main" onClick="{{it.open}}" aria-label="{{it.title}}"><span class="pcard-art" style="background: {{it.art}}; box-shadow: {{it.glow}}"><span class="pini disp">{{it.ini}}</span></span><span class="card-t">{{it.title}}</span><span class="card-s">{{it.sub}}</span></button></div></sc-for></div></sc-if>
+<sc-if value="{{br.isTitles}}" hint-placeholder-val="{{true}}"><div class="grid"><sc-for list="{{br.items}}" as="it" hint-placeholder-count="8"><div class="card fill {{it.hov}}" onMouseEnter="{{it.enter}}" onMouseLeave="{{it.leave}}"><button class="card-main" onClick="{{it.open}}" aria-label="{{it.title}}"><span class="art-wrap"><span class="card-art" style="background: {{it.art}}; box-shadow: {{it.glow}}"><span class="pm {{it.mo}}"></span><span class="pscrim"></span><sc-if value="{{it.hasTag}}" hint-placeholder-val="{{false}}"><span class="ptag">TV</span></sc-if><sc-if value="{{it.hasBadge}}" hint-placeholder-val="{{false}}"><span class="pbadge">{{it.badge}}</span></sc-if><span class="pt disp">{{it.title}}</span></span><span class="card-ring ring mini" style="background: conic-gradient({{it.ring.color}} {{it.ring.deg}}deg, rgba(255,255,255,0.14) 0deg)"><span class="ring-in">{{it.ring.pct}}<sup>{{it.ring.sym}}</sup></span></span></span><span class="card-t">{{it.title}}</span><span class="card-s">{{it.sub}}</span></button><button class="qa {{it.qaCls}}" onClick="{{it.qa}}" aria-label="{{it.qaLabel}}" title="{{it.qaLabel}}" style="background: {{it.qaBg}}; color: {{it.qaFg}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="{{it.qaD}}"></path></svg></button></div></sc-for></div></sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{is.search}}" hint-placeholder-val="{{false}}">
+<div class="wrap">
+<div class="phead">
+<h1 class="page-t disp">Search</h1>
+<div class="sbig" style="box-shadow: inset 0 0 0 1.5px {{sr.border}}">
+<svg class="ic lg" viewBox="0 0 24 24" aria-hidden="true" style="color: rgba(244,242,255,0.65)"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M20 20l-4.2-4.2"></path></svg>
+<label class="vh" for="w-search-big">Search</label>
+<input id="w-search-big" type="search" value="{{sr.query}}" onChange="{{sr.onQuery}}" onFocus="{{sr.onFocus}}" onBlur="{{sr.onBlur}}" placeholder="Try “neon”, “pixel” or a name" autocomplete="off">
+</div>
+</div>
+<div class="split">
+<aside class="aside">
+<div class="panel" style="padding: 10px">
+<div class="panel-t" style="padding: 10px 10px 0 10px">Search results</div>
+<sc-for list="{{sr.facets}}" as="f" hint-placeholder-count="4"><button class="facet" onClick="{{f.tap}}" aria-pressed="{{f.on}}" style="background: {{f.bg}}"><span>{{f.label}}</span><span class="facet-n">{{f.n}}</span></button></sc-for>
+</div>
+</aside>
+<div class="mainc">
+<div class="count">{{sr.count}}</div>
+<sc-if value="{{sr.noRes}}" hint-placeholder-val="{{false}}"><div class="empty"><div class="empty-t disp">No matches</div><div class="empty-p">There are no movies, shows or people that match your query. Try a shorter word.</div></div></sc-if>
+<sc-for list="{{sr.list}}" as="it" hint-placeholder-count="4"><button class="sres" onClick="{{it.tap}}"><span class="sres-art {{it.round}}" style="background: {{it.art}}"><sc-if value="{{it.isPerson}}" hint-placeholder-val="{{false}}"><span class="pini disp">{{it.ini}}</span></sc-if><sc-if value="{{it.isTitle}}" hint-placeholder-val="{{true}}"><span class="pm {{it.mo}}"></span></sc-if></span><span style="min-width: 0; padding-top: 4px"><span class="sres-t" style="display: block">{{it.title}}</span><span class="sres-s" style="display: block">{{it.sub}}</span><span class="sres-o">{{it.overview}}</span></span></button></sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{is.settings}}" hint-placeholder-val="{{false}}">
+<div class="wrap">
+<div class="phead"><h1 class="page-t disp">Settings</h1><div class="page-s">How CineVerse looks, feels and what it shows you</div></div>
+<div class="setgrid">
+<sc-for list="{{st.groups}}" as="g" hint-placeholder-count="3">
+<div class="panel">
+<div class="panel-t">{{g.title}}</div>
+<sc-for list="{{g.rows}}" as="it" hint-placeholder-count="3">
+<sc-if value="{{it.isTog}}" hint-placeholder-val="{{true}}"><button class="setrow {{it.first}}" onClick="{{it.tap}}" role="switch" aria-checked="{{it.on}}"><span class="set-ic" style="background: {{it.icBg}}; color: {{it.icFg}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="{{it.d}}"></path></svg></span><span style="min-width: 0"><span class="set-t">{{it.label}}</span><span class="set-d">{{it.desc}}</span></span><span class="sw" style="background: {{it.swBg}}"><span class="kn" style="left: {{it.knob}}px"></span></span></button></sc-if>
+<sc-if value="{{it.isSel}}" hint-placeholder-val="{{false}}"><div class="setrow {{it.first}}"><span class="set-ic" style="background: {{it.icBg}}; color: {{it.icFg}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="{{it.d}}"></path></svg></span><span style="min-width: 0; flex: 1"><label class="set-t" for="{{it.id}}">{{it.label}}</label><span class="api">{{it.api}}</span></span><sc-if value="{{it.isLang}}" hint-placeholder-val="{{true}}"><select id="{{it.id}}" class="sel" style="width: 170px" value="{{it.value}}" onChange="{{it.onChange}}"><option value="0">English</option><option value="1">हिन्दी · Hindi</option><option value="2">தமிழ் · Tamil</option><option value="3">മലയാളം · Malayalam</option><option value="4">Español</option></select></sc-if><sc-if value="{{it.isRegion}}" hint-placeholder-val="{{false}}"><select id="{{it.id}}" class="sel" style="width: 170px" value="{{it.value}}" onChange="{{it.onChange}}"><option value="0">India</option><option value="1">United States</option><option value="2">United Kingdom</option></select></sc-if></div></sc-if>
+<sc-if value="{{it.isBtn}}" hint-placeholder-val="{{false}}"><div class="setrow {{it.first}}"><span class="set-ic" style="background: {{it.icBg}}; color: {{it.icFg}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="{{it.d}}"></path></svg></span><span style="min-width: 0; flex: 1"><span class="set-t">{{it.label}}</span><span class="set-d">{{it.desc}}</span></span><button class="btn sm" onClick="{{it.tap}}" style="background: {{it.btnBg}}; color: {{it.btnFg}}">{{it.btn}}</button></div></sc-if>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="2">
+<sc-if value="{{row.isTrailers}}" hint-placeholder-val="{{false}}">
+<section class="trailers">
+<div class="tr-bg {{row.bgCls}}" style="background: {{row.bg}}"></div>
+<div class="tr-scrim"></div>
+<div class="wrap" style="position: relative"><div class="sec-h"><h2 class="sec-t disp">{{row.title}}</h2><div class="arrows"><button class="arrow" onClick="{{row.prev}}" aria-label="Scroll left"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg></button><button class="arrow" onClick="{{row.next}}" aria-label="Scroll right"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6l-6 6"></path></svg></button></div></div></div>
+<div class="hs" ref="{{row.setRef}}" style="position: relative"><sc-for list="{{row.items}}" as="it" hint-placeholder-count="3"><div class="vc {{it.hov}}" onMouseEnter="{{it.enter}}" onMouseLeave="{{it.leave}}"><button class="card-main" onClick="{{it.open}}" aria-label="Play {{it.title}}"><span class="vc-art" style="background: {{it.art}}; box-shadow: {{it.glow}}"><span class="pm {{it.mo}}"></span><span class="pscrim"></span><span class="playdot"><svg class="ic solid lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"></path></svg></span></span><span class="card-t">{{it.title}}</span><span class="card-s">{{it.sub}}</span></button></div></sc-for></div>
+</section>
+</sc-if>
+<sc-if value="{{row.isCta}}" hint-placeholder-val="{{false}}">
+<div class="wrap"><div class="cta" style="background: linear-gradient(120deg, {{accent}}55, rgba(124,58,237,0.4) 55%, rgba(34,211,238,0.25))"><div class="grain"></div><div style="position: relative; flex: 1 1 380px"><h2 class="cta-t disp">Build your watchlist</h2><div class="cta-p">Sign in with your TMDB account to save titles, rate what you’ve seen and pick up on your phone or TV where you left off.</div></div><button class="btn" onClick="{{row.tap}}" style="background: #FFFFFF; color: #0B0A16; position: relative">Sign in with TMDB</button></div></div>
+</sc-if>
+<sc-if value="{{row.isStd}}" hint-placeholder-val="{{true}}">
+<section class="sec">
+<div class="wrap"><div class="sec-h"><h2 class="sec-t disp">{{row.title}}</h2>
+<sc-if value="{{row.hasSeg}}" hint-placeholder-val="{{false}}"><span class="seg"><sc-for list="{{row.seg}}" as="sg" hint-placeholder-count="2"><button class="seg-b" onClick="{{sg.tap}}" aria-pressed="{{sg.on}}" style="background: {{sg.bg}}; color: {{sg.fg}}">{{sg.label}}</button></sc-for></span></sc-if>
+<div class="arrows"><button class="arrow" onClick="{{row.prev}}" aria-label="Scroll left"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg></button><button class="arrow" onClick="{{row.next}}" aria-label="Scroll right"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6l-6 6"></path></svg></button></div>
+</div></div>
+<div class="hs" ref="{{row.setRef}}">
+<sc-if value="{{row.isPeople}}" hint-placeholder-val="{{false}}"><sc-for list="{{row.items}}" as="it" hint-placeholder-count="6"><div class="pcard {{it.hov}}" onMouseEnter="{{it.enter}}" onMouseLeave="{{it.leave}}"><button class="card-main" onClick="{{it.open}}" aria-label="{{it.title}}"><span class="pcard-art" style="background: {{it.art}}; box-shadow: {{it.glow}}"><span class="pini disp">{{it.ini}}</span></span><span class="card-t">{{it.title}}</span><span class="card-s">{{it.sub}}</span></button></div></sc-for></sc-if>
+<sc-if value="{{row.isTitles}}" hint-placeholder-val="{{true}}"><sc-for list="{{row.items}}" as="it" hint-placeholder-count="6"><div class="card {{it.hov}}" onMouseEnter="{{it.enter}}" onMouseLeave="{{it.leave}}"><button class="card-main" onClick="{{it.open}}" aria-label="{{it.title}}"><span class="art-wrap"><span class="card-art" style="background: {{it.art}}; box-shadow: {{it.glow}}"><span class="pm {{it.mo}}"></span><span class="pscrim"></span><sc-if value="{{it.hasTag}}" hint-placeholder-val="{{false}}"><span class="ptag">TV</span></sc-if><sc-if value="{{it.hasBadge}}" hint-placeholder-val="{{false}}"><span class="pbadge">{{it.badge}}</span></sc-if><span class="pt disp">{{it.title}}</span></span><span class="card-ring ring mini" style="background: conic-gradient({{it.ring.color}} {{it.ring.deg}}deg, rgba(255,255,255,0.14) 0deg)"><span class="ring-in">{{it.ring.pct}}<sup>{{it.ring.sym}}</sup></span></span></span><span class="card-t">{{it.title}}</span><span class="card-s">{{it.sub}}</span></button><button class="qa {{it.qaCls}}" onClick="{{it.qa}}" aria-label="{{it.qaLabel}}" title="{{it.qaLabel}}" style="background: {{it.qaBg}}; color: {{it.qaFg}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="{{it.qaD}}"></path></svg></button></div></sc-for></sc-if>
+</div>
+</section>
+</sc-if>
+</sc-for>
+</main>
+
+<footer class="footer">
+<div class="wrap">
+<div class="foot-in">
+<div style="max-width: 360px"><div class="logo" style="margin: 0"><span class="logo-mark" style="background: linear-gradient(135deg, {{accent}}, #7C3AED)"><svg class="ic solid sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"></path></svg></span><span class="logo-word disp">CineVerse</span></div><div class="foot-note" style="margin-top: 14px">Movies, TV and the people who make them — on your TV, phone and the web.</div></div>
+<div class="foot-col"><b>Browse</b><sc-for list="{{foot.browse}}" as="l" hint-placeholder-count="4"><button onClick="{{l.tap}}">{{l.label}}</button></sc-for></div>
+<div class="foot-col"><b>You</b><sc-for list="{{foot.you}}" as="l" hint-placeholder-count="4"><button onClick="{{l.tap}}">{{l.label}}</button></sc-for></div>
+</div>
+<div class="foot-note">This product uses the TMDB API but is not endorsed or certified by TMDB. Titles, people and reviews in this prototype are sample data.</div>
+</div>
+</footer>
+
+<sc-if value="{{is.signin}}" hint-placeholder-val="{{false}}">
+<div class="ov">
+<button class="ov-bg" onClick="{{modal.close}}" aria-label="Close dialog"></button>
+<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-signin" tabIndex="-1" ref="{{modal.setRef}}" onKeyDown="{{modal.onKey}}">
+<button class="dlg-x" onClick="{{modal.close}}" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18"></path></svg></button>
+<div class="dlg-k">TMDB account</div>
+<h2 id="dlg-signin" class="dlg-t disp">Sign in to CineVerse</h2>
+<div class="dlg-p">We use your TMDB account so your watchlist, favourites and ratings follow you to your phone and TV.</div>
+<div class="steps">
+<div class="step"><span class="step-n" style="background: {{accent}}">1</span><span>We open themoviedb.org in a new tab.</span></div>
+<div class="step"><span class="step-n" style="background: {{accent}}">2</span><span>Sign in there and approve CineVerse.</span></div>
+<div class="step"><span class="step-n" style="background: {{accent}}">3</span><span>Come back to this tab — you’re signed in.</span></div>
+</div>
+<div class="btnrow">
+<button class="btn" onClick="{{modal.approve}}" style="background: {{accent}}; color: #14030C"><sc-if value="{{modal.approving}}" hint-placeholder-val="{{false}}"><span class="spin"></span></sc-if><span>{{modal.approveLabel}}</span></button>
+<button class="btn ghost" onClick="{{modal.close}}">Not now</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{is.rate}}" hint-placeholder-val="{{false}}">
+<div class="ov">
+<button class="ov-bg" onClick="{{modal.close}}" aria-label="Close dialog"></button>
+<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-rate" tabIndex="-1" ref="{{modal.setRef}}" onKeyDown="{{modal.onKey}}">
+<button class="dlg-x" onClick="{{modal.close}}" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18"></path></svg></button>
+<div class="dlg-k">Rate on TMDB</div>
+<h2 id="dlg-rate" class="dlg-t disp">{{modal.title}}</h2>
+<div class="stars" onMouseLeave="{{modal.unhover}}">
+<sc-for list="{{modal.stars}}" as="st" hint-placeholder-count="5"><span class="star"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" style="color: rgba(255,255,255,0.28)"><path d="M12 3.2l2.7 5.6l6.1.9l-4.4 4.3l1 6.1L12 17.2l-5.4 2.9l1-6.1l-4.4-4.3l6.1-.9z"></path></svg><span class="star-fill" style="width: {{st.w}}px"><svg class="ic solid" viewBox="0 0 24 24" aria-hidden="true" style="color: #FFC24B"><path d="M12 3.2l2.7 5.6l6.1.9l-4.4 4.3l1 6.1L12 17.2l-5.4 2.9l1-6.1l-4.4-4.3l6.1-.9z"></path></svg></span><button class="half l" onClick="{{st.tapL}}" onMouseEnter="{{st.hovL}}" aria-label="{{st.labelL}}"></button><button class="half r" onClick="{{st.tapR}}" onMouseEnter="{{st.hovR}}" aria-label="{{st.labelR}}"></button></span></sc-for>
+</div>
+<div class="rate-v disp">{{modal.val}}<span style="font-size: 20px; opacity: 0.55"> / 10</span></div>
+<div class="rate-w">{{modal.word}}</div>
+<div class="btnrow">
+<button class="btn" onClick="{{modal.submit}}" style="background: {{accent}}; color: #14030C">Submit rating</button>
+<sc-if value="{{modal.canRemove}}" hint-placeholder-val="{{false}}"><button class="btn ghost" onClick="{{modal.remove}}">Remove rating</button></sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{is.trailer}}" hint-placeholder-val="{{false}}">
+<div class="ov">
+<button class="ov-bg" onClick="{{modal.close}}" aria-label="Close trailer"></button>
+<div class="player" role="dialog" aria-modal="true" aria-label="{{modal.label}}" tabIndex="-1" ref="{{modal.setRef}}" onKeyDown="{{modal.onKey}}">
+<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px"><div style="flex: 1; min-width: 0"><div class="dlg-k">{{modal.kicker}}</div><div class="disp" style="font-weight: 800; font-size: 24px">{{modal.label}}</div></div><button class="dlg-x" onClick="{{modal.close}}" aria-label="Close" style="position: static"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18"></path></svg></button></div>
+<div class="pframe" style="background: {{modal.art}}">
+<div class="hring" style="right: 10%; top: 6%; width: 380px; height: 380px"></div>
+<div class="grain"></div>
+<button class="pcenter {{modal.centerCls}}" onClick="{{modal.toggle}}" aria-label="{{modal.toggleLabel}}"><svg class="{{modal.ppCls}} lg" viewBox="0 0 24 24" aria-hidden="true"><path d="{{modal.ppD}}"></path></svg></button>
+<sc-if value="{{modal.cc}}" hint-placeholder-val="{{false}}"><div class="cc">[ distant thunder ]  You hear that? It’s calling us back.</div></sc-if>
+<div class="pctrl">
+<button class="pbtn" onClick="{{modal.toggle}}" aria-label="{{modal.toggleLabel}}"><svg class="{{modal.ppCls}}" viewBox="0 0 24 24" aria-hidden="true"><path d="{{modal.ppD}}"></path></svg></button>
+<span style="font-size: 13px; font-variant-numeric: tabular-nums">{{modal.state}}</span>
+<div class="ptrack"><div class="pfill {{modal.fillCls}}" style="background: {{accent}}"></div></div>
+<span style="font-size: 13px">2:31</span>
+<button class="pbtn" onClick="{{modal.ccTap}}" aria-label="Captions" style="background: {{modal.ccBg}}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3z M10.5 10.3a2.2 2.2 0 1 0 0 3.4 M17 10.3a2.2 2.2 0 1 0 0 3.4"></path></svg></button>
+</div>
+</div>
+<div class="pnext"><sc-for list="{{modal.more}}" as="vd" hint-placeholder-count="3"><button class="pn" onClick="{{vd.tap}}"><span class="pn-art" style="background: {{vd.art}}"><span class="pm {{vd.mo}}"></span><span class="playdot" style="width: 40px; height: 40px; margin: -20px 0 0 -20px"><svg class="ic solid sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"></path></svg></span></span><span class="card-s" style="display: block; margin-top: 8px; color: #F4F2FF; font-weight: 600">{{vd.title}}</span></button></sc-for></div>
+</div>
+</div>
+</sc-if>
+
+<div class="toast {{toast.cls}}" role="status"><span class="toast-ic" style="background: {{accent}}"><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="{{toast.d}}"></path></svg></span><span><span class="toast-t">{{toast.text}}</span><span class="toast-s">{{toast.sub}}</span></span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#FF3D7F","options":["#FF3D7F","#22D3EE","#A3E635","#FFB020"]},"glowStrength":{"editor":"range","default":70,"min":0,"max":100,"step":5,"unit":"%"},"$preview":{"width":1440,"height":2400}}'>
+const IC = {
+  play: 'M8 5.5v13l10.5-6.5z', pause: 'M8 5v14 M16 5v14', plus: 'M12 5v14 M5 12h14', check: 'M5 12.5l4.5 4.5L19 7', close: 'M6 6l12 12 M18 6L6 18',
+  heart: 'M12 20.5s-7.5-4.6-9.3-9.4A5 5 0 0 1 12 6.6a5 5 0 0 1 9.3 4.5c-1.8 4.8-9.3 9.4-9.3 9.4z',
+  star: 'M12 3.2l2.7 5.6l6.1.9l-4.4 4.3l1 6.1L12 17.2l-5.4 2.9l1-6.1l-4.4-4.3l6.1-.9z',
+  bookmark: 'M6 3h12v18l-6-4.5L6 21z', user: 'M12 12a4 4 0 1 0 0-8a4 4 0 1 0 0 8z M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7',
+  glow: 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z M12 2v2 M12 20v2 M2 12h2 M20 12h2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4',
+  motion: 'M3 12h4l3-8l4 16l3-8h4', vib: 'M8 4h8v16H8z M4.5 8v8 M19.5 8v8 M1.5 10v4 M22.5 10v4',
+  globe: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M3 12h18 M12 3c3 3.5 3 14.5 0 18 M12 3c-3 3.5-3 14.5 0 18',
+  shield: 'M12 3l8 3v6c0 4.5-3.4 8-8 9c-4.6-1-8-4.5-8-9V6z', autoplay: 'M3 6h18v12H3z M10 9.5v5l4.5-2.5z'
+};
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function rng(n) { const o = []; for (let i = 0; i < n; i++) o.push(i); return o; }
+function initials(n) { return n.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase(); }
+function fmtRuntime(m) { if (!m) return ''; const h = Math.floor(m / 60), mm = m % 60; return (h ? h + 'h ' : '') + mm + 'm'; }
+function fmtDate(d) { return MON[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+function dateVal(s) { const t = Date.parse(s); return isNaN(t) ? 0 : t; }
+function ringOf(r) {
+  if (r == null) return { pct: 'NR', sym: '', deg: 0, color: '#6B7280' };
+  const p = Math.round(r * 10);
+  return { pct: String(p), sym: '%', deg: Math.round(p * 3.6), color: p >= 70 ? '#21D07A' : (p >= 40 ? '#D2D531' : '#DB2360') };
+}
+function posterArt(t) { return 'radial-gradient(circle at 25% 18%, ' + t.c1 + ' 0%, rgba(0,0,0,0) 55%), radial-gradient(circle at 85% 82%, ' + t.c2 + ' 0%, rgba(0,0,0,0) 60%), linear-gradient(165deg, ' + t.c2 + '77 0%, #0A0913 100%)'; }
+function backdropArt(t) { return 'radial-gradient(60% 80% at 66% 34%, ' + t.c1 + 'dd 0%, rgba(0,0,0,0) 62%), radial-gradient(50% 70% at 96% 88%, ' + t.c2 + 'dd 0%, rgba(0,0,0,0) 66%), radial-gradient(42% 52% at 40% 96%, ' + t.c2 + '66 0%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #0A0913 0%, ' + t.c2 + '55 100%)'; }
+function personArt(p) { return 'radial-gradient(circle at 30% 25%, ' + p.c1 + ' 0%, rgba(0,0,0,0) 62%), radial-gradient(circle at 80% 85%, ' + p.c2 + ' 0%, rgba(0,0,0,0) 66%), linear-gradient(160deg, ' + p.c2 + '88, #0B0A16)'; }
+function stillArt(t, e) { return 'radial-gradient(70% 90% at ' + (20 + (e * 17) % 60) + '% ' + (30 + (e * 23) % 50) + '%, ' + t.c1 + ' 0%, rgba(0,0,0,0) 66%), linear-gradient(' + (120 + (e * 29) % 120) + 'deg, ' + t.c2 + 'aa, #0B0A16)'; }
+
+const MOVIES = [
+  { id: 'm1', title: 'Neon Tide', year: 2026, date: 'Mar 13, 2026', genres: ['Science Fiction', 'Thriller'], rating: 8.1, runtime: 128, cert: 'UA 13+', lang: 'English', status: 'Released', tags: 'pt', c1: '#FF3D7F', c2: '#6B21FF', tagline: 'The ocean remembers everything.', overview: 'When a coastal megacity floods overnight, a salvage diver discovers the water is carrying signals from a future that hasn’t happened yet.' },
+  { id: 'm2', title: 'The Last Lantern', year: 2025, date: 'Dec 19, 2025', genres: ['Fantasy', 'Adventure'], rating: 7.6, runtime: 141, cert: 'U', lang: 'English', status: 'Released', tags: 'p', c1: '#FFB020', c2: '#E0410B', tagline: 'Keep the light. Keep the way.', overview: 'A lamplighter’s apprentice must carry the last flame across a kingdom where night has stopped ending.' },
+  { id: 'm3', title: 'Quiet Orbit', year: 2026, date: 'Jun 5, 2026', genres: ['Drama', 'Science Fiction'], rating: 7.9, runtime: 117, cert: 'U', lang: 'English', status: 'Released', tags: 'pt', c1: '#22D3EE', c2: '#1E3A8A', tagline: 'Two hundred miles up, nobody hears you apologise.', overview: 'An estranged mother and daughter share a cramped research station when a solar storm cuts them off from Earth.' },
+  { id: 'm4', title: 'Paper Tigers', year: 2025, date: 'Aug 8, 2025', genres: ['Action', 'Comedy'], rating: 6.9, runtime: 104, cert: 'UA 7+', lang: 'Hindi', status: 'Released', tags: 'p', c1: '#F97316', c2: '#CA8A04', tagline: 'Bad plans. Worse partners.', overview: 'Three retired stunt performers plan one last heist on the film studio that wrote them out of history.' },
+  { id: 'm5', title: 'Velvet Static', year: 2026, date: 'Feb 14, 2026', genres: ['Mystery', 'Romance'], rating: 7.3, runtime: 112, cert: 'UA 13+', lang: 'English', status: 'Released', tags: 'p', c1: '#A855F7', c2: '#EC4899', tagline: 'Some frequencies only open at midnight.', overview: 'A late-night radio host falls for a caller who seems to know tomorrow’s headlines.' },
+  { id: 'm6', title: 'Ironbloom', year: 2025, date: 'Nov 21, 2025', genres: ['Action', 'Science Fiction'], rating: 7.1, runtime: 133, cert: 'UA 13+', lang: 'English', status: 'Released', tags: 'pt', c1: '#10B981', c2: '#065F46', tagline: 'Grown for war. Built for spring.', overview: 'A battle mech designed to clear forests starts planting them instead, and its pilot has to choose a side.' },
+  { id: 'm7', title: 'Saffron Skies', year: 2026, date: 'Oct 2, 2026', genres: ['Romance', 'Drama'], rating: 7.8, runtime: 126, cert: 'U', lang: 'Malayalam', status: 'Released', tags: 'nt', c1: '#F59E0B', c2: '#DC2626', tagline: 'Every monsoon brings someone home.', overview: 'A Kochi spice trader and a returning architect rebuild a crumbling family warehouse — and an old promise.' },
+  { id: 'm8', title: 'Glass Harbor', year: 2024, date: 'Sep 27, 2024', genres: ['Thriller', 'Crime'], rating: 7.4, runtime: 119, cert: 'A', lang: 'English', status: 'Released', tags: 'p', c1: '#38BDF8', c2: '#0F766E', tagline: 'Everyone can see in. No one sees out.', overview: 'A detective returns to her island hometown to investigate a disappearance the whole community witnessed and nobody reported.' },
+  { id: 'm9', title: 'Moonlit Mechanics', year: 2026, date: 'Sep 18, 2026', genres: ['Animation', 'Family'], rating: 8.3, runtime: 98, cert: 'U', lang: 'English', status: 'Released', tags: 'npt', c1: '#818CF8', c2: '#F472B6', tagline: 'Fixing the moon, one bolt at a time.', overview: 'A tiny repair robot discovers the moon’s night-light is running out and rallies a garage full of misfits to fix it.' },
+  { id: 'm10', title: 'Red Meridian', year: 2025, date: 'Jan 24, 2025', genres: ['War', 'History'], rating: 7.7, runtime: 152, cert: 'UA 16+', lang: 'English', status: 'Released', tags: '', c1: '#EF4444', c2: '#7C2D12', tagline: 'Two voices. One frequency. No ceasefire.', overview: 'Along a disputed mountain border, two radio operators on opposite sides begin a forbidden correspondence.' },
+  { id: 'm11', title: 'Afterparty Protocol', year: 2026, date: 'Oct 9, 2026', genres: ['Comedy', 'Mystery'], rating: 6.6, runtime: 101, cert: 'UA 13+', lang: 'English', status: 'Released', tags: 'n', c1: '#84CC16', c2: '#0EA5E9', tagline: 'Nobody leaves until someone confesses.', overview: 'A tech launch party becomes a locked-room mystery when the company’s new AI goes missing.' },
+  { id: 'm12', title: 'Hollow Crown Road', year: 2025, date: 'Jul 11, 2025', genres: ['Western', 'Drama'], rating: 7.2, runtime: 137, cert: 'A', lang: 'English', status: 'Released', tags: '', c1: '#FB923C', c2: '#78350F', tagline: 'Every mile has a price.', overview: 'A stagecoach driver ferries a dying outlaw across the desert while three crews ride to collect the bounty.' },
+  { id: 'm13', title: 'Starling Season', year: 2026, date: 'Sep 25, 2026', genres: ['Drama', 'Family'], rating: 8.0, runtime: 121, cert: 'U', lang: 'Tamil', status: 'Released', tags: 'nt', c1: '#2DD4BF', c2: '#4F46E5', tagline: 'Learn to fly in formation.', overview: 'A small-town teacher coaches an unlikely girls’ cricket team all the way to the state finals.' },
+  { id: 'm14', title: 'Undertow', year: 2026, date: 'Oct 16, 2026', genres: ['Horror'], rating: 6.8, runtime: 96, cert: 'A', lang: 'English', status: 'Released', tags: 'n', c1: '#64748B', c2: '#BE123C', tagline: 'Don’t swim after dark.', overview: 'Five friends rent a lake house for the weekend and learn why the locals never go near the water.' },
+  { id: 'm15', title: 'Prism Heights', year: 2026, date: 'Nov 27, 2026', genres: ['Science Fiction', 'Mystery'], rating: null, runtime: 124, cert: 'UA 13+', lang: 'English', status: 'Post Production', tags: 'u', c1: '#E879F9', c2: '#0891B2', tagline: 'Every floor is a different year.', overview: 'A courier making a late delivery finds each floor of a skyscraper stuck in a different decade.' },
+  { id: 'm16', title: 'Wildfire Waltz', year: 2026, date: 'Dec 11, 2026', genres: ['Music', 'Romance'], rating: null, runtime: 115, cert: 'U', lang: 'English', status: 'Post Production', tags: 'u', c1: '#FB7185', c2: '#EA580C', tagline: 'Dance like the forest is listening.', overview: 'A ballroom champion and a smoke-jumper are paired for a charity dance in a town waiting out fire season.' },
+  { id: 'm17', title: 'The Cartographer’s Daughter', year: 2024, date: 'May 17, 2024', genres: ['Adventure', 'Family'], rating: 7.9, runtime: 138, cert: 'U', lang: 'English', status: 'Released', tags: 'p', c1: '#0EA5E9', c2: '#65A30D', tagline: 'Some maps draw you.', overview: 'A girl follows her missing father’s hand-drawn maps to places that aren’t on any other chart.' },
+  { id: 'm18', title: 'Midnight Monsoon', year: 2026, date: 'Oct 9, 2026', genres: ['Thriller', 'Crime'], rating: 7.1, runtime: 109, cert: 'UA 13+', lang: 'Hindi', status: 'Released', tags: 'n', c1: '#3B82F6', c2: '#9333EA', tagline: 'One storm. One night. One way out.', overview: 'A cab driver and a stranded witness race across a flooded Mumbai before a killer finds them.' },
+  { id: 'm19', title: 'Satellite Hearts', year: 2027, date: 'Feb 12, 2027', genres: ['Romance', 'Science Fiction'], rating: null, runtime: 110, cert: 'U', lang: 'English', status: 'In Production', tags: 'u', c1: '#F472B6', c2: '#1D4ED8', tagline: 'Love at 36,000 kilometres.', overview: 'Two engineers fall for each other over the comms link between a ground station and a satellite only one of them can see.' },
+  { id: 'm20', title: 'The Brass Menagerie', year: 2026, date: 'Dec 25, 2026', genres: ['Animation', 'Adventure'], rating: null, runtime: 94, cert: 'U', lang: 'English', status: 'Post Production', tags: 'u', c1: '#FACC15', c2: '#B91C1C', tagline: 'Wind them up. Let them go.', overview: 'A clockmaker’s mechanical animals come to life on Christmas Eve and set out to find their missing key.' }
+];
+const SHOWS = [
+  { id: 't1', title: 'Signal & Noise', year: 2024, date: 'Apr 12, 2024', genres: ['Drama', 'Sci-Fi & Fantasy'], rating: 8.4, seasons: 3, eps: 8, network: 'Orbit+', status: 'Returning Series', cert: 'UA 16+', lang: 'English', kind: 'Scripted', tags: 'pt', c1: '#38BDF8', c2: '#7C3AED', tagline: 'Somebody out there is listening.', overview: 'A radio astronomer in the Atacama desert picks up a message addressed to her by name — and every season the signal gets closer.' },
+  { id: 't2', title: 'Chai & Chaos', year: 2025, date: 'Jan 17, 2025', genres: ['Comedy'], rating: 7.9, seasons: 2, eps: 10, network: 'Lumen TV', status: 'Returning Series', cert: 'UA 13+', lang: 'Hindi', kind: 'Scripted', tags: 'pa', c1: '#FB923C', c2: '#E11D48', tagline: 'Every order comes with drama.', overview: 'Four flatmates turn a failing Bengaluru tea stall into the city’s most chaotic start-up.' },
+  { id: 't3', title: 'The Ninth Precinct', year: 2022, date: 'Sep 9, 2022', genres: ['Crime', 'Drama'], rating: 8.1, seasons: 4, eps: 10, network: 'Northline', status: 'Ended', cert: 'A', lang: 'English', kind: 'Scripted', tags: 'p', c1: '#60A5FA', c2: '#334155', tagline: 'Nine floors. One secret.', overview: 'A night-shift detective unit polices a city district that officially doesn’t exist.' },
+  { id: 't4', title: 'Atlas Rising', year: 2026, date: 'Aug 7, 2026', genres: ['Sci-Fi & Fantasy', 'Action & Adventure'], rating: 7.6, seasons: 1, eps: 9, network: 'Orbit+', status: 'Returning Series', cert: 'UA 13+', lang: 'English', kind: 'Scripted', tags: 'pot', c1: '#F472B6', c2: '#2563EB', tagline: 'Hold up the sky.', overview: 'When Earth’s orbital elevator starts to fall, a crew of maintenance engineers becomes the planet’s last line of defence.' },
+  { id: 't5', title: 'Bloom & Bone', year: 2025, date: 'Mar 21, 2025', genres: ['Sci-Fi & Fantasy', 'Drama'], rating: 8.0, seasons: 2, eps: 8, network: 'Lumen TV', status: 'Returning Series', cert: 'UA 16+', lang: 'English', kind: 'Scripted', tags: 'pt', c1: '#A3E635', c2: '#9D174D', tagline: 'What grows here remembers.', overview: 'A botanist inherits a walled garden where every plant grows from a buried memory.' },
+  { id: 't6', title: 'Kitchen Galaxy', year: 2023, date: 'Jun 2, 2023', genres: ['Reality'], rating: 7.2, seasons: 3, eps: 12, network: 'Spice Channel', status: 'Returning Series', cert: 'U', lang: 'English', kind: 'Reality', tags: 'pa', c1: '#FACC15', c2: '#7C3AED', tagline: 'Cook like the universe is watching.', overview: 'Home cooks battle through themed rounds inspired by a different planet each week.' },
+  { id: 't7', title: 'Night Shift Diaries', year: 2025, date: 'Oct 3, 2025', genres: ['Drama'], rating: 7.8, seasons: 2, eps: 10, network: 'Northline', status: 'Returning Series', cert: 'UA 13+', lang: 'English', kind: 'Scripted', tags: 'po', c1: '#22D3EE', c2: '#0F766E', tagline: 'The city never sleeps. Neither do they.', overview: 'Interlinked stories of the people who keep a 24-hour hospital running after midnight.' },
+  { id: 't8', title: 'Pixel Pirates', year: 2026, date: 'Jul 4, 2026', genres: ['Animation', 'Kids'], rating: 8.2, seasons: 1, eps: 13, network: 'Kidoodle', status: 'Returning Series', cert: 'U', lang: 'English', kind: 'Scripted', tags: 'pat', c1: '#F97316', c2: '#06B6D4', tagline: 'Sail the seven screens.', overview: 'A crew of video-game sprites escapes their console to hunt for the legendary Golden Cartridge.' },
+  { id: 't9', title: 'Hush Valley', year: 2025, date: 'Oct 31, 2025', genres: ['Mystery', 'Drama'], rating: 7.5, seasons: 2, eps: 6, network: 'Lumen TV', status: 'Returning Series', cert: 'A', lang: 'English', kind: 'Scripted', tags: 'o', c1: '#94A3B8', c2: '#6D28D9', tagline: 'Keep your voice down.', overview: 'In a mountain town where speaking above a whisper is forbidden, a new schoolteacher asks why.' },
+  { id: 't10', title: 'The Tidewater Files', year: 2026, date: 'May 15, 2026', genres: ['Documentary'], rating: 8.6, seasons: 1, eps: 6, network: 'Orbit+', status: 'Ended', cert: 'U', lang: 'English', kind: 'Miniseries', tags: 'p', c1: '#2DD4BF', c2: '#1D4ED8', tagline: 'The coastline is changing. So are we.', overview: 'A six-part look at the people rebuilding life along a shifting coastline.' }
+];
+const PEOPLE = [
+  { id: 'p1', name: 'Aria Kapoor', dept: 'Acting', born: 'Mar 12, 1991', place: 'Mumbai, India', c1: '#FF3D7F', c2: '#7C3AED' },
+  { id: 'p2', name: 'Mateo Reyes', dept: 'Acting', born: 'Jul 3, 1987', place: 'Seville, Spain', c1: '#F59E0B', c2: '#DC2626' },
+  { id: 'p3', name: 'Lena Okafor', dept: 'Acting', born: 'Nov 21, 1993', place: 'Lagos, Nigeria', c1: '#22D3EE', c2: '#2563EB' },
+  { id: 'p4', name: 'Dev Malhotra', dept: 'Acting', born: 'Jan 30, 1985', place: 'New Delhi, India', c1: '#A3E635', c2: '#0F766E' },
+  { id: 'p5', name: 'Sofia Lindqvist', dept: 'Acting', born: 'May 8, 1990', place: 'Gothenburg, Sweden', c1: '#E879F9', c2: '#4C1D95' },
+  { id: 'p6', name: 'Kenji Arata', dept: 'Acting', born: 'Sep 14, 1982', place: 'Osaka, Japan', c1: '#F97316', c2: '#9D174D' },
+  { id: 'p7', name: 'Priya Raman', dept: 'Acting', born: 'Feb 2, 1995', place: 'Chennai, India', c1: '#FACC15', c2: '#B45309' },
+  { id: 'p8', name: 'Noah Bennett', dept: 'Acting', born: 'Aug 19, 1989', place: 'Toronto, Canada', c1: '#60A5FA', c2: '#1E3A8A' },
+  { id: 'p9', name: 'Zara Haddad', dept: 'Acting', born: 'Dec 5, 1992', place: 'Beirut, Lebanon', c1: '#FB7185', c2: '#7C2D12' },
+  { id: 'p10', name: 'Elias Moreau', dept: 'Acting', born: 'Apr 27, 1984', place: 'Lyon, France', c1: '#34D399', c2: '#1E40AF' },
+  { id: 'p11', name: 'Ishaan Verma', dept: 'Acting', born: 'Jun 11, 1997', place: 'Kochi, India', c1: '#F472B6', c2: '#0EA5E9' },
+  { id: 'p12', name: 'Maya Chen', dept: 'Acting', born: 'Oct 9, 1994', place: 'Vancouver, Canada', c1: '#818CF8', c2: '#BE185D' },
+  { id: 'p13', name: 'Leila Navarro', dept: 'Directing', born: 'Mar 3, 1979', place: 'Mexico City, Mexico', c1: '#2DD4BF', c2: '#6D28D9' },
+  { id: 'p14', name: 'Ruben Castillo', dept: 'Directing', born: 'Jan 22, 1975', place: 'Buenos Aires, Argentina', c1: '#FDBA74', c2: '#991B1B' },
+  { id: 'p15', name: 'Ananya Iyer', dept: 'Directing', born: 'Jul 29, 1983', place: 'Bengaluru, India', c1: '#C084FC', c2: '#0E7490' },
+  { id: 'p16', name: 'Theo Grant', dept: 'Directing', born: 'Feb 17, 1980', place: 'Manchester, UK', c1: '#93C5FD', c2: '#4338CA' }
+];
+const CHARS = ['Mira Das', 'Jonah Vale', 'Captain Reyes', 'Ilsa Brandt', 'The Courier', 'Dr. Anand Rao', 'Kit Moreno', 'Old Sam', 'Nadia Karim', 'Officer Bell', 'Rafe Okoro', 'Tara Singh', 'Lumen (voice)', 'Hal Pryce', 'June Mercer', 'Arjun Pillai'];
+const EPN = ['Low Tide', 'The Long Way Round', 'Static', 'Paper Moons', 'Small Hours', 'Undercurrent', 'The Signal', 'Glasshouse', 'Afterglow', 'Second Sunrise', 'Fault Lines', 'Homecoming', 'Echo Chamber', 'Night Market', 'The Quiet Part', 'Lanterns', 'Open Water', 'Wildcards', 'Daybreak', 'Borrowed Time'];
+const EPO = ['{a} follows a lead that points somewhere nobody expected.', '{a} and {b} are forced to work together when the plan falls apart.', 'A secret from the past resurfaces at the worst possible moment.', '{a} makes a choice that changes everything for {b}.', 'Old alliances crack as the stakes rise for {b}.', 'Everything comes to a head in a night nobody will forget.'];
+const KEYWORDS = ['found family', 'near future', 'ensemble cast', 'slow burn', 'coastal town', 'based on an original idea', 'strong female lead', 'neon noir', 'coming of age', 'monsoon'];
+const ALL = []; const BY = {};
+MOVIES.forEach(function (m) { m.type = 'movie'; ALL.push(m); });
+SHOWS.forEach(function (t) { t.type = 'tv'; ALL.push(t); });
+ALL.forEach(function (t, i) { t.idx = i; t.mo = i % 4; BY[t.id] = t; });
+PEOPLE.forEach(function (p, i) { p.type = 'person'; p.idx = i; p.known = []; BY[p.id] = p; });
+const ACTORS = PEOPLE.filter(function (p) { return p.dept === 'Acting'; });
+const DIRS = PEOPLE.filter(function (p) { return p.dept !== 'Acting'; });
+ALL.forEach(function (t, i) {
+  t.cast = [0, 5, 10, 15, 20].map(function (o, k) { return { pid: ACTORS[(i * 2 + o) % ACTORS.length].id, role: CHARS[(i * 3 + k) % CHARS.length] }; });
+  t.crew = DIRS[i % DIRS.length].id; t.writer = DIRS[(i + 1) % DIRS.length].id;
+  t.cast.forEach(function (c) { BY[c.pid].known.push({ id: t.id, role: c.role }); });
+  BY[t.crew].known.push({ id: t.id, role: t.type === 'movie' ? 'Director' : 'Creator' });
+});
+function ids(list, tag) { return list.filter(function (x) { return x.tags.indexOf(tag) >= 0; }).map(function (x) { return x.id; }); }
+function byRating(list) { return list.filter(function (x) { return x.rating != null; }).slice().sort(function (a, b) { return b.rating - a.rating; }).map(function (x) { return x.id; }); }
+const L = {
+  trendWeek: ['m1', 't1', 'm9', 'm3', 't4', 'm6', 't8', 'm13', 'm7', 't5'],
+  trendDay: ['m7', 't8', 'm14', 'm9', 't6', 'm11', 'm18', 't1', 'm13', 't7'],
+  popMovies: ids(MOVIES, 'p'), nowPlaying: ids(MOVIES, 'n'), upcoming: ids(MOVIES, 'u'), topMovies: byRating(MOVIES),
+  popTV: ids(SHOWS, 'p'), airing: ids(SHOWS, 'a'), onAir: ids(SHOWS, 'o'), topTV: byRating(SHOWS),
+  popPeople: ['p1', 'p3', 'p11', 'p2', 'p13', 'p7', 'p5', 'p4', 'p9', 'p15', 'p6', 'p12', 'p8', 'p14', 'p10', 'p16']
+};
+const HERO = ['m1', 't1', 'm9', 'm7', 't4'];
+const LISTS = {
+  movies: [['Popular', L.popMovies, 'What people are watching on TMDB this week'], ['Now playing', L.nowPlaying, 'In theatres near you'], ['Upcoming', L.upcoming, 'Coming soon to theatres'], ['Top rated', L.topMovies, 'Highest rated by the TMDB community']],
+  tv: [['Popular', L.popTV, 'The most-watched shows on TMDB right now'], ['Airing today', L.airing, 'New episodes out today'], ['On TV', L.onAir, 'Airing in the next 7 days'], ['Top rated', L.topTV, 'Highest rated by the TMDB community']]
+};
+const TRAILER_IDS = ['m15', 'm1', 't4', 'm16', 'm9', 't8', 'm19', 'm20'];
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      page: 'home', params: {}, stack: [], lists: { movies: 0, tv: 0 }, sort: 'pop', genres: {}, query: '', sq: 'all', qFocus: false,
+      watch: {}, fav: {}, rated: {}, signedIn: false, approving: false, modal: null, rateFor: null, rateVal: 7, hoverRate: null,
+      trailer: null, playing: true, cc: false, menu: null, mnav: false, hoverId: null, heroIdx: 0, heroPause: false, heroTick: 0,
+      trend: 'week', popType: 'movie', trHover: null, set: { glow: true, motion: false, haptics: true, autoplay: true, lang: 0, region: 0, adult: false },
+      seasonSel: 1, bioOpen: false, toast: null, libTab: 0, enter: 0
+    };
+    this.rowEls = {}; this.refFns = {}; this._ambKey = ''; this._ambFlip = 0;
+    this.setModalRef = this.setModalRef.bind(this);
+    this.onModalKey = this.onModalKey.bind(this);
+  }
+  componentDidMount() {
+    this.heroT = setInterval(() => {
+      const s = this.state;
+      if (s.page === 'home' && !s.heroPause && !s.modal) this.setState({ heroIdx: (s.heroIdx + 1) % HERO.length, heroTick: s.heroTick + 1 });
+    }, 8000);
+  }
+  componentWillUnmount() { clearInterval(this.heroT); clearTimeout(this.toastT); clearTimeout(this.apprT); }
+  setModalRef(el) { if (el && el !== this.modalEl) { this.modalEl = el; try { el.focus({ preventScroll: true }); } catch (err) {} } if (!el) this.modalEl = null; }
+  onModalKey(e) { if (e.key === 'Escape') { e.preventDefault(); this.closeModal(); } }
+  closeModal() { this.setState({ modal: null, approving: false, hoverRate: null }); }
+  rowRef(id) { if (!this.refFns[id]) this.refFns[id] = (el) => { this.rowEls[id] = el; }; return this.refFns[id]; }
+  scrollRow(id, dir) { const el = this.rowEls[id]; if (!el) return; try { el.scrollBy({ left: dir * Math.max(300, el.clientWidth * 0.8), behavior: this.state.set.motion ? 'auto' : 'smooth' }); } catch (err) { el.scrollLeft += dir * 600; } }
+  hap() { if (this.state.set.haptics) { try { if (navigator.vibrate) navigator.vibrate(10); } catch (err) {} } }
+  toast(text, d, sub) { this.setState({ toast: { text: text, d: d || IC.check, sub: sub || '' } }); clearTimeout(this.toastT); this.toastT = setTimeout(() => this.setState({ toast: null }), 2800); }
+  top() { try { window.scrollTo({ top: 0, behavior: 'auto' }); } catch (err) {} }
+  go(page, params, push) {
+    const s = this.state;
+    const stack = push ? s.stack.concat([{ page: s.page, params: s.params }]) : [];
+    this.setState({ page: page, params: params || {}, stack: stack, menu: null, mnav: false, hoverId: null, bioOpen: false, enter: s.enter + 1 });
+    this.top();
+  }
+  back() {
+    const s = this.state; if (!s.stack.length) { this.go('home', {}, false); return; }
+    const prev = s.stack[s.stack.length - 1];
+    this.setState({ page: prev.page, params: prev.params, stack: s.stack.slice(0, -1), hoverId: null, enter: s.enter + 1 }); this.top();
+  }
+  openTitle(id) { this.go('detail', { id: id }, true); }
+  openPerson(id) { this.go('person', { id: id }, true); }
+  openSeason(id, sn) { this.setState({ seasonSel: sn }); this.go('season', { id: id }, true); }
+  browse(kind, li) { const lists = Object.assign({}, this.state.lists); if (li != null) lists[kind] = li; this.setState({ lists: lists, genres: {}, sort: 'pop' }); this.go(kind, {}, false); }
+  play(t, label) { this.setState({ modal: 'trailer', trailer: { id: t.id, label: label }, playing: !!this.state.set.autoplay, menu: null }); }
+  toggle(kind, t) {
+    const s = this.state; const m = Object.assign({}, s[kind]); const on = !m[t.id];
+    if (on) m[t.id] = Date.now(); else delete m[t.id];
+    const patch = {}; patch[kind] = m; this.setState(patch); this.hap();
+    const name = kind === 'watch' ? 'Watchlist' : 'Favourites';
+    this.toast(on ? ('Added to ' + name) : ('Removed from ' + name), kind === 'watch' ? (on ? IC.check : IC.close) : IC.heart, t.title + (s.signedIn ? ' · synced to TMDB' : ' · saved in this browser'));
+  }
+  openRate(t) { this.setState({ modal: 'rate', rateFor: t.id, rateVal: this.state.rated[t.id] || 7, hoverRate: null }); }
+  submitRate() {
+    const s = this.state; const t = BY[s.rateFor]; if (!t) return;
+    const m = Object.assign({}, s.rated); m[t.id] = s.rateVal; this.setState({ rated: m, modal: null, hoverRate: null }); this.hap();
+    this.toast('Rated ' + s.rateVal.toFixed(1) + ' / 10', IC.star, t.title + (s.signedIn ? ' · synced to TMDB' : ' · saved in this browser'));
+  }
+  removeRate() { const s = this.state; const m = Object.assign({}, s.rated); delete m[s.rateFor]; this.setState({ rated: m, modal: null }); this.toast('Rating removed', IC.close, ''); }
+  approve() {
+    if (this.state.approving) return; this.setState({ approving: true }); clearTimeout(this.apprT);
+    this.apprT = setTimeout(() => { this.setState({ signedIn: true, approving: false, modal: null }); this.toast('Signed in as Harish', IC.check, 'Your library now syncs with TMDB'); }, 1500);
+  }
+  setSet(k, v) { const st = Object.assign({}, this.state.set); st[k] = v; this.setState({ set: st }); }
+  setQuery(q) {
+    const s = this.state; this.setState({ query: q });
+    if (q && s.page !== 'search') { this.setState({ stack: s.stack.concat([{ page: s.page, params: s.params }]), page: 'search', params: {}, menu: null, mnav: false, enter: s.enter + 1 }); this.top(); }
+  }
+
+  hoverable(id, glowColor) {
+    const s = this.state; const hov = s.hoverId === id;
+    return {
+      hov: hov ? 'hov' : '',
+      glow: hov ? (s.set.glow ? ('0 26px 60px -18px ' + glowColor + ', 0 0 0 2px rgba(255,255,255,0.85)') : '0 0 0 2px rgba(255,255,255,0.85)') : ('0 14px 34px -22px ' + glowColor + ', 0 0 0 1px rgba(255,255,255,0.06)'),
+      enter: () => { if (this.state.hoverId !== id) this.setState({ hoverId: id }); },
+      leave: () => { if (this.state.hoverId === id) this.setState({ hoverId: null }); }
+    };
+  }
+  card(t, k, badge) {
+    const s = this.state; const inW = !!s.watch[t.id]; const A = this.A;
+    return Object.assign(this.hoverable(t.id + (k || ''), t.c1), {
+      title: t.title, sub: t.rating != null ? t.date : ('Coming ' + t.date), art: posterArt(t), mo: 'mo' + t.mo, ring: ringOf(t.rating),
+      hasTag: t.type === 'tv' && !badge, badge: badge || '', hasBadge: !!badge,
+      open: () => this.openTitle(t.id), qa: () => this.toggle('watch', t),
+      qaLabel: inW ? 'Remove from watchlist' : 'Add to watchlist', qaD: inW ? IC.check : IC.plus, qaCls: inW ? 'on' : '', qaBg: inW ? A : 'rgba(7,6,15,0.72)', qaFg: inW ? '#14030C' : '#FFFFFF'
+    });
+  }
+  pcard(p, k, sub) {
+    return Object.assign(this.hoverable(p.id + (k || ''), p.c1), { title: p.name, sub: sub || (p.known.length ? BY[p.known[0].id].title : p.dept), art: personArt(p), ini: initials(p.name), open: () => this.openPerson(p.id) });
+  }
+  videos(t) {
+    const V = [['Official Trailer', 'Trailer'], ['Teaser', 'Teaser'], ['Behind the scenes', 'Featurette'], ['First 5 minutes', 'Clip']];
+    return V.map((v, i) => Object.assign(this.hoverable(t.id + 'v' + i, t.c1), { title: v[0], sub: v[1] + '  ·  ' + (1 + (t.idx + i) % 4) + ':' + String(10 + (t.idx * 7 + i * 13) % 49), art: backdropArt({ c1: i % 2 ? t.c2 : t.c1, c2: i % 2 ? t.c1 : t.c2 }), mo: 'mo' + ((t.mo + i + 1) % 4), open: () => this.play(t, v[0]), tap: () => this.play(t, v[0]) }));
+  }
+  recs(t) {
+    const same = ALL.filter(function (x) { return x.id !== t.id && x.type === t.type && x.genres.some(function (g) { return t.genres.indexOf(g) >= 0; }); });
+    const rest = ALL.filter(function (x) { return x.id !== t.id && same.indexOf(x) < 0 && x.type === t.type; });
+    return same.concat(rest).slice(0, 10);
+  }
+  reviews(t) {
+    if (t.rating == null) return [];
+    const A = [['reelrani', 'RR'], ['popcorn_protocol', 'PP'], ['framebyframe', 'FF'], ['latenightlens', 'LL']];
+    const lead = BY[t.cast[0].pid].name;
+    const T = ['Big-screen ' + t.genres[0].toLowerCase() + ' made with real confidence — the colour, the pacing and a final act that actually lands. It is the rare one I wanted to talk about on the way out.', 'A little uneven in the middle, but the cast carries it. ' + lead + ' is the reason to press play, and the last twenty minutes earn every bit of the build-up.', 'Gorgeous to look at and smarter than the trailer suggests. I would happily watch it again on a bigger screen.'];
+    return [0, 1].map(function (k) { const a = A[(t.idx + k) % A.length]; return { author: a[0], ini: a[1], date: t.date, rating: clamp(Math.round((t.rating + (k ? -0.8 : 0.4)) * 10) / 10, 1, 10).toFixed(1), text: T[(t.idx + k) % T.length] }; });
+  }
+  episodes(t, sn) {
+    const out = []; const a = t.cast[0].role, b = t.cast[1].role;
+    const start = new Date(t.year + sn - 1, (t.idx * 2) % 9, 3 + (t.idx % 20));
+    for (let e = 1; e <= t.eps; e++) {
+      const k = (t.idx * 7 + sn * 5 + e * 3) % EPN.length;
+      const d = new Date(start.getTime() + (e - 1) * 7 * 86400000);
+      const name = (sn === 1 && e === 1) ? 'Pilot' : (e === t.eps ? 'Finale: ' + EPN[k] : EPN[k]);
+      const r = clamp(Math.round(((t.rating || 7.5) - 0.7 + ((k * 13 + e * 7) % 15) / 10) * 10) / 10, 5.5, 9.8);
+      out.push({ n: e, name: name, rating: r.toFixed(1), meta: fmtDate(d) + '  ·  ' + ((t.kind === 'Reality' ? 44 : 48) + (k * 3) % 12) + 'm', overview: EPO[(k + e) % EPO.length].replace('{a}', a).replace('{b}', b), art: stillArt(t, e), mo: 'mo' + ((t.mo + e) % 4) });
+    }
+    return out;
+  }
+  bio(p) {
+    const k = p.known.slice(0, 2).map(function (x) { return BY[x.id].title; });
+    const more = p.dept === 'Acting' ? ' Their work moves easily between big-canvas genre films and small, intimate character drama, and they often return to work with the same directors. Off screen they are known for championing new writers and regional cinema.' : ' Their films are known for bold colour, patient pacing and large ensemble casts, often shot on location with first-time actors alongside stars.';
+    return p.name + ' is ' + (p.dept === 'Acting' ? 'an actor' : 'a filmmaker') + ' from ' + p.place + ', known for ' + k.join(' and ') + '.' + more + ' This is a sample biography; the live site reads it from TMDB in your content language.';
+  }
+  stdRow(id, title, kind, items, extra) {
+    return Object.assign({ id: id, title: title, isStd: true, isTrailers: false, isCta: false, isPeople: kind === 'people', isTitles: kind !== 'people', items: items, hasSeg: false, seg: [], setRef: this.rowRef(id), prev: () => this.scrollRow(id, -1), next: () => this.scrollRow(id, 1) }, extra || {});
+  }
+  segOf(opts, cur) { const A = this.A; return opts.map((o) => ({ label: o[1], on: o[0] === cur, bg: o[0] === cur ? A : 'rgba(0,0,0,0)', fg: o[0] === cur ? '#14030C' : 'rgba(244,242,255,0.85)', tap: o[2] })); }
+  chip(label, on, fn) { return { label: label, on: !!on, bg: on ? '#FFFFFF' : 'rgba(255,255,255,0.08)', fg: on ? '#0B0A16' : '#F4F2FF', tap: fn }; }
+
+  renderVals() {
+    const s = this.state; const A = this.props.accent || '#FF3D7F'; this.A = A;
+    const glowK = (this.props.glowStrength != null ? this.props.glowStrength : 70) / 100;
+    const pg = s.page;
+    const v = {
+      accent: A, rootCls: s.set.motion ? 'rm' : '', pageKey: 'k' + (s.enter % 2), back: () => this.back(), backLabel: 'Back',
+      is: { home: pg === 'home', detail: pg === 'detail', season: pg === 'season', person: pg === 'person', browse: pg === 'movies' || pg === 'tv' || pg === 'people' || pg === 'library', search: pg === 'search', settings: pg === 'settings', signin: s.modal === 'signin', rate: s.modal === 'rate', trailer: s.modal === 'trailer' },
+      home: { h: { ring: {} }, picks: [] }, det: { ring: {}, acts: [], crew: [], cast: [], reviews: [], videos: [], facts: [], keywords: [], season: {} },
+      sea: { chips: [], eps: [] }, per: { facts: [], known: [], credits: [] }, br: { tabs: [], genres: [], items: [] }, sr: { facets: [], list: [] }, st: { groups: [] },
+      rows: [], modal: { stars: [], more: [] }
+    };
+    if (s.stack.length) { const pv = s.stack[s.stack.length - 1]; v.backLabel = 'Back to ' + ({ home: 'Home', movies: 'Movies', tv: 'TV Shows', people: 'People', search: 'search', library: 'your library', settings: 'Settings' }[pv.page] || (pv.params.id && BY[pv.params.id] ? (BY[pv.params.id].title || BY[pv.params.id].name) : 'previous page')); }
+    let ref = null;
+
+    /* header */
+    const menuT = (m) => () => this.setState({ menu: this.state.menu === m ? null : m });
+    v.nav = {
+      home: () => this.go('home', {}, false), people: () => this.go('people', {}, false), library: () => this.go('library', {}, false),
+      toggleMovies: menuT('movies'), toggleTv: menuT('tv'), toggleAccount: menuT('account'), closeMenu: () => { if (this.state.menu) this.setState({ menu: null }); },
+      moviesOpen: s.menu === 'movies', tvOpen: s.menu === 'tv', accountOpen: s.menu === 'account',
+      moviesFg: pg === 'movies' ? A : '#F4F2FF', tvFg: pg === 'tv' ? A : '#F4F2FF', peopleFg: pg === 'people' ? A : '#F4F2FF', libraryFg: pg === 'library' ? A : '#F4F2FF',
+      movieItems: LISTS.movies.map((l, i) => ({ label: l[0], tap: () => this.browse('movies', i) })),
+      tvItems: LISTS.tv.map((l, i) => ({ label: l[0], tap: () => this.browse('tv', i) })),
+      accountItems: [['Watchlist', 0], ['Favourites', 1], ['Ratings', 2]].map((x) => ({ label: x[0], tap: () => { this.setState({ libTab: x[1] }); this.go('library', {}, false); } })).concat([{ label: 'Settings', tap: () => this.go('settings', {}, false) }, { label: 'Sign out', tap: () => { this.setState({ signedIn: false, menu: null }); this.toast('Signed out', IC.user, 'Your library stays in this browser'); } }]),
+      query: s.query, onQuery: (e) => this.setQuery(e.target.value), onFocus: () => this.setState({ qFocus: true }), onBlur: () => this.setState({ qFocus: false }), searchBorder: s.qFocus ? A : 'rgba(255,255,255,0.08)',
+      guest: !s.signedIn, signedIn: s.signedIn, signIn: () => this.setState({ modal: 'signin' }),
+      toggleMnav: () => this.setState({ mnav: !this.state.mnav }), mnavOpen: s.mnav, mnavCls: s.mnav ? 'open' : '',
+      mobileItems: [['Home', () => this.go('home', {}, false)], ['Movies', () => this.browse('movies', 0)], ['TV Shows', () => this.browse('tv', 0)], ['People', () => this.go('people', {}, false)], ['My Library', () => this.go('library', {}, false)], ['Settings', () => this.go('settings', {}, false)]].map(function (x) { return { label: x[0], tap: x[1] }; })
+    };
+    v.foot = {
+      browse: [['Popular movies', () => this.browse('movies', 0)], ['Upcoming', () => this.browse('movies', 2)], ['TV airing today', () => this.browse('tv', 1)], ['Popular people', () => this.go('people', {}, false)]].map(function (x) { return { label: x[0], tap: x[1] }; }),
+      you: [['Watchlist', () => { this.setState({ libTab: 0 }); this.go('library', {}, false); }], ['Ratings', () => { this.setState({ libTab: 2 }); this.go('library', {}, false); }], ['Settings', () => this.go('settings', {}, false)], [s.signedIn ? 'Signed in as Harish' : 'Sign in', () => { if (!this.state.signedIn) this.setState({ modal: 'signin' }); }]].map(function (x) { return { label: x[0], tap: x[1] }; })
+    };
+
+    if (pg === 'home') {
+      const h = BY[HERO[s.heroIdx]]; ref = h; const w = !!s.watch[h.id];
+      const tl = s.trend === 'day' ? L.trendDay : L.trendWeek; const rank = L.trendWeek.indexOf(h.id);
+      v.home = {
+        fx: 'f' + (s.heroTick % 2), tx: 't' + (s.heroTick % 2),
+        pause: () => this.setState({ heroPause: true }), resume: () => this.setState({ heroPause: false }),
+        h: {
+          bd: backdropArt(h), title: h.title, ring: ringOf(h.rating), overview: h.overview,
+          eyebrow: (h.type === 'tv' ? 'TV series' : 'Movie') + (rank >= 0 ? '  ·  #' + (rank + 1) + ' trending this week' : ''),
+          meta: (h.type === 'movie' ? [h.year, h.cert, fmtRuntime(h.runtime)] : [h.year, h.network, h.seasons + (h.seasons > 1 ? ' seasons' : ' season')]).concat([h.genres.join(' · ')]).join('   •   '),
+          trailer: () => this.play(h, 'Official Trailer'), watch: () => this.toggle('watch', h), watchLabel: w ? 'On your watchlist' : 'Add to watchlist', watchD: w ? IC.check : IC.plus, info: () => this.openTitle(h.id)
+        },
+        picks: HERO.map((id, i) => { const t = BY[id]; return { title: t.title, art: backdropArt(t), mo: 'mo' + t.mo, cls: i === s.heroIdx ? 'on' : '', barCls: i === s.heroIdx ? ('run' + (s.heroTick % 2) + (s.heroPause ? ' paused' : '')) : '', tap: () => this.setState({ heroIdx: i, heroTick: this.state.heroTick + 1 }) }; })
+      };
+      const trT = BY[s.trHover || TRAILER_IDS[0]];
+      v.rows = [
+        this.stdRow('trend', 'Trending', 'titles', tl.map((id) => this.card(BY[id], 'tr')), { hasSeg: true, seg: this.segOf([['day', 'Today', () => this.setState({ trend: 'day' })], ['week', 'This week', () => this.setState({ trend: 'week' })]], s.trend) }),
+        this.stdRow('pop', 'What’s popular', 'titles', (s.popType === 'tv' ? L.popTV : L.popMovies).map((id) => this.card(BY[id], 'po')), { hasSeg: true, seg: this.segOf([['movie', 'Movies', () => this.setState({ popType: 'movie' })], ['tv', 'On TV', () => this.setState({ popType: 'tv' })]], s.popType) }),
+        { id: 'trailers', title: 'Latest trailers', isStd: false, isTrailers: true, isCta: false, bg: backdropArt(trT), bgCls: '', setRef: this.rowRef('trailers'), prev: () => this.scrollRow('trailers', -1), next: () => this.scrollRow('trailers', 1),
+          items: TRAILER_IDS.map((id) => { const t = BY[id]; const o = this.hoverable('trl' + id, t.c1); const enter = o.enter; o.enter = () => { enter(); if (this.state.trHover !== id) this.setState({ trHover: id }); }; return Object.assign(o, { title: t.title, sub: 'Official Trailer', art: backdropArt(t), mo: 'mo' + t.mo, open: () => this.play(t, 'Official Trailer') }); }) },
+        this.stdRow('now', 'Now playing in theatres', 'titles', L.nowPlaying.map((id) => this.card(BY[id], 'np'))),
+        this.stdRow('up', 'Coming soon', 'titles', L.upcoming.map((id) => this.card(BY[id], 'up', BY[id].date.replace(/, \d{4}$/, '')))),
+        this.stdRow('people', 'Popular people', 'people', L.popPeople.slice(0, 12).map((id) => this.pcard(BY[id], 'pp'))),
+        this.stdRow('top', 'Top rated', 'titles', L.topMovies.map((id) => this.card(BY[id], 'tp')))
+      ];
+      if (!s.signedIn) v.rows.splice(3, 0, { id: 'cta', isStd: false, isTrailers: false, isCta: true, items: [], tap: () => this.setState({ modal: 'signin' }) });
+    }
+
+    if (pg === 'detail') {
+      const t = BY[s.params.id] || BY.m1; ref = t; const isTV = t.type === 'tv';
+      const w = !!s.watch[t.id], fv = !!s.fav[t.id], rt = s.rated[t.id];
+      v.det = {
+        title: t.title, year: t.year, cert: t.cert, date: t.date + ' (IN)', genres: t.genres.join(', '), length: isTV ? (t.seasons + (t.seasons > 1 ? ' seasons' : ' season') + ' · ' + t.network) : fmtRuntime(t.runtime),
+        bd: backdropArt(t), art: posterArt(t), c1: t.c1, mo: 'mo' + t.mo, ring: ringOf(t.rating), tagline: t.tagline, overview: t.overview,
+        trailer: () => this.play(t, 'Official Trailer'),
+        acts: [
+          { label: w ? 'Remove from watchlist' : 'Add to watchlist', d: IC.bookmark, icCls: w ? 'ic solid' : 'ic', bg: w ? A : '#1C1933', fg: w ? '#14030C' : '#FFFFFF', tap: () => this.toggle('watch', t) },
+          { label: fv ? 'Remove from favourites' : 'Mark as favourite', d: IC.heart, icCls: fv ? 'ic solid' : 'ic', bg: fv ? '#FF5C8A' : '#1C1933', fg: '#FFFFFF', tap: () => this.toggle('fav', t) },
+          { label: rt ? ('Your rating: ' + rt.toFixed(1)) : 'Rate it', d: IC.star, icCls: rt ? 'ic solid' : 'ic', bg: rt ? '#FFC24B' : '#1C1933', fg: rt ? '#1A1205' : '#FFFFFF', tap: () => this.openRate(t) }
+        ],
+        crew: [{ name: BY[t.crew].name, role: isTV ? 'Creator' : 'Director', tap: () => this.openPerson(t.crew) }, { name: BY[t.writer].name, role: 'Screenplay', tap: () => this.openPerson(t.writer) }, { name: BY[t.cast[0].pid].name, role: 'Producer', tap: () => this.openPerson(t.cast[0].pid) }],
+        cast: t.cast.map(function (c) { const p = BY[c.pid]; return { name: p.name, role: c.role, art: personArt(p), ini: initials(p.name), pid: p.id }; }).map((c) => Object.assign(c, { tap: () => this.openPerson(c.pid) })),
+        isTV: isTV,
+        season: isTV ? { title: 'Season ' + t.seasons, sub: (t.year + t.seasons - 1) + '  ·  ' + t.eps + ' episodes', desc: 'The latest season of ' + t.title + ' premiered in ' + (t.year + t.seasons - 1) + '.', art: posterArt({ c1: t.c2, c2: t.c1 }), mo: 'mo' + ((t.mo + 1) % 4), tap: () => this.openSeason(t.id, t.seasons) } : {},
+        reviews: this.reviews(t), noReviews: t.rating == null,
+        videos: this.videos(t),
+        facts: (isTV ? [['Status', t.status], ['Network', t.network], ['Type', t.kind], ['Original language', t.lang], ['Episodes', String(t.seasons * t.eps)]] : [['Status', t.status], ['Original language', t.lang], ['Runtime', fmtRuntime(t.runtime)], ['Certification', t.cert], ['Release date', t.date]]).map(function (x) { return { label: x[0], value: x[1] }; }),
+        keywords: [0, 3, 7].map(function (k) { return { label: KEYWORDS[(t.idx + k) % KEYWORDS.length] }; })
+      };
+      v.rows = [this.stdRow('recs', 'Recommendations', 'titles', this.recs(t).map((x) => this.card(x, 'rc')))];
+    }
+
+    if (pg === 'season') {
+      const t = BY[s.params.id] || SHOWS[0]; ref = t; const sel = clamp(s.seasonSel, 1, t.seasons);
+      v.sea = {
+        show: t.title + '  ·  ' + t.network, heading: 'Season ' + sel, art: posterArt(t), c1: t.c1, mo: 'mo' + t.mo,
+        chips: rng(t.seasons).map((i) => this.chip('Season ' + (i + 1), i + 1 === sel, () => this.setState({ seasonSel: i + 1 }))),
+        eps: this.episodes(t, sel).map((e) => Object.assign(e, { tap: () => this.play(t, 'S' + sel + ' E' + e.n + ' · ' + e.name) }))
+      };
+    }
+
+    if (pg === 'person') {
+      const p = BY[s.params.id] || PEOPLE[0]; ref = p;
+      v.per = {
+        name: p.name, ini: initials(p.name), art: personArt(p), c1: p.c1,
+        facts: [['Known for', p.dept], ['Credits', String(p.known.length)], ['Birthday', p.born], ['Place of birth', p.place]].map(function (x) { return { label: x[0], value: x[1] }; }),
+        bio: this.bio(p), bioCls: s.bioOpen ? 'open' : '', bioLabel: s.bioOpen ? 'Show less' : 'Read more', tapBio: () => this.setState({ bioOpen: !this.state.bioOpen }),
+        known: p.known.map(function (k) { return BY[k.id]; }).sort(function (a, b) { return (b.rating || 0) - (a.rating || 0); }).map((x) => this.card(x, 'kn')),
+        creditsTitle: p.dept === 'Acting' ? 'Acting' : 'Directing',
+        credits: p.known.map(function (k) { return { t: BY[k.id], role: k.role }; }).sort(function (a, b) { return b.t.year - a.t.year; }).map((k, i) => ({ first: i === 0 ? 'first' : '', year: k.t.year, title: k.t.title, role: (p.dept === 'Acting' ? 'as ' : '') + k.role, c1: k.t.c1, tap: () => this.openTitle(k.t.id) }))
+      };
+    }
+
+    if (v.is.browse) {
+      if (pg === 'people') {
+        v.br = { title: 'Popular people', sub: 'Trending actors and filmmakers on TMDB', tabs: [], hasFilters: false, isPeople: true, isTitles: false, items: L.popPeople.map((id) => this.pcard(BY[id], 'g')), count: L.popPeople.length + ' people', genres: [] };
+      } else if (pg === 'library') {
+        const defs = [['Watchlist', 'watch'], ['Favourites', 'fav'], ['Ratings', 'rated']]; const li = s.libTab; const m = s[defs[li][1]]; const keys = Object.keys(m).reverse();
+        v.br = {
+          title: 'My Library', sub: s.signedIn ? 'Signed in as Harish · synced with TMDB' : 'Saved in this browser · sign in to sync with TMDB', hasFilters: false, isPeople: false, isTitles: true,
+          tabs: defs.map((d, i) => this.chip(d[0] + ' · ' + Object.keys(s[d[1]]).length, i === li, () => this.setState({ libTab: i }))),
+          items: keys.map((id) => this.card(BY[id], 'lb', li === 2 ? ('★ ' + m[id].toFixed(1)) : '')), count: keys.length ? (keys.length + (keys.length === 1 ? ' title' : ' titles')) : '',
+          isEmpty: !keys.length, emptyT: li === 0 ? 'Your watchlist is empty' : li === 1 ? 'No favourites yet' : 'Nothing rated yet', emptyP: 'Use the bookmark, heart or star on any title and it will show up here.',
+          hasEmptyBtn: true, emptyBtn: 'Browse popular movies', emptyTap: () => this.browse('movies', 0), genres: []
+        };
+      } else {
+        const lists = LISTS[pg]; const li = clamp(s.lists[pg], 0, lists.length - 1);
+        const base = lists[li][1].map(function (id) { return BY[id]; });
+        const allG = []; base.forEach(function (t) { t.genres.forEach(function (g) { if (allG.indexOf(g) < 0) allG.push(g); }); });
+        const selG = Object.keys(s.genres).filter(function (g) { return s.genres[g] && allG.indexOf(g) >= 0; });
+        let list = selG.length ? base.filter(function (t) { return t.genres.some(function (g) { return selG.indexOf(g) >= 0; }); }) : base.slice();
+        if (s.sort === 'rating') list.sort(function (a, b) { return (b.rating || 0) - (a.rating || 0); });
+        else if (s.sort === 'date') list.sort(function (a, b) { return dateVal(b.date) - dateVal(a.date); });
+        else if (s.sort === 'title') list.sort(function (a, b) { return a.title.localeCompare(b.title); });
+        v.br = {
+          title: pg === 'movies' ? 'Movies' : 'TV Shows', sub: lists[li][2], hasFilters: true, isPeople: false, isTitles: true,
+          tabs: lists.map((l, i) => this.chip(l[0], i === li, () => { const ls = Object.assign({}, this.state.lists); ls[pg] = i; this.setState({ lists: ls, genres: {} }); })),
+          sort: s.sort, onSort: (e) => this.setState({ sort: e.target.value }),
+          genres: allG.map((g) => { const on = selG.indexOf(g) >= 0; return { label: g, on: on, bg: on ? A : 'rgba(255,255,255,0.08)', fg: on ? '#14030C' : '#F4F2FF', tap: () => { const gs = Object.assign({}, this.state.genres); gs[g] = !gs[g]; this.setState({ genres: gs }); } }; }),
+          hasGenreSel: selG.length > 0, clearGenres: () => this.setState({ genres: {} }),
+          items: list.map((t) => this.card(t, 'g')), count: list.length + (list.length === 1 ? ' title' : ' titles') + (selG.length ? ' · filtered by ' + selG.join(', ') : ''),
+          isEmpty: !list.length, emptyT: 'No titles match', emptyP: 'Try removing a genre filter.', hasEmptyBtn: false
+        };
+      }
+    }
+
+    if (pg === 'search') {
+      const q = s.query.trim().toLowerCase();
+      const pool = q ? ALL.concat(PEOPLE).filter(function (x) { return (x.title || x.name).toLowerCase().indexOf(q) >= 0; }) : L.trendWeek.map(function (id) { return BY[id]; });
+      const cnt = { all: pool.length, movie: 0, tv: 0, person: 0 }; pool.forEach(function (x) { cnt[x.type]++; });
+      const list = s.sq === 'all' ? pool : pool.filter(function (x) { return x.type === s.sq; });
+      v.sr = {
+        query: s.query, onQuery: (e) => this.setState({ query: e.target.value }), onFocus: () => this.setState({ qFocus: true }), onBlur: () => this.setState({ qFocus: false }), border: s.qFocus ? A : 'rgba(255,255,255,0.08)',
+        facets: [['all', 'All'], ['movie', 'Movies'], ['tv', 'TV shows'], ['person', 'People']].map((f) => ({ label: f[1], n: cnt[f[0]], on: s.sq === f[0], bg: s.sq === f[0] ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0)', tap: () => this.setState({ sq: f[0] }) })),
+        count: q ? (list.length + (list.length === 1 ? ' result' : ' results') + ' for “' + s.query.trim() + '”') : 'Trending searches this week',
+        noRes: !!q && !list.length,
+        list: list.map((x) => x.type === 'person'
+          ? { title: x.name, sub: 'Person  ·  ' + (x.dept === 'Acting' ? 'Actor' : 'Director'), overview: 'Known for ' + x.known.slice(0, 3).map(function (k) { return BY[k.id].title; }).join(', '), art: personArt(x), ini: initials(x.name), round: 'round', isPerson: true, isTitle: false, tap: () => this.openPerson(x.id) }
+          : { title: x.title, sub: (x.type === 'tv' ? 'TV series' : 'Movie') + '  ·  ' + x.date + (x.rating != null ? '  ·  ★ ' + x.rating.toFixed(1) : ''), overview: x.overview, art: posterArt(x), mo: 'mo' + x.mo, round: '', isPerson: false, isTitle: true, tap: () => this.openTitle(x.id) })
+      };
+    }
+
+    if (pg === 'settings') {
+      const st = s.set;
+      const tog = (k, label, d, desc, col) => ({ isTog: true, isSel: false, isBtn: false, label: label, d: d, desc: desc, on: !!st[k], swBg: st[k] ? A : 'rgba(255,255,255,0.2)', knob: st[k] ? 23 : 3, icBg: col + '33', icFg: col, tap: () => { this.setSet(k, !this.state.set[k]); this.hap(); } });
+      const sel = (k, id, label, d, col, opts, api) => ({ isTog: false, isSel: true, isBtn: false, id: id, label: label, d: d, icBg: col + '33', icFg: col, value: String(st[k]), api: api, isLang: k === 'lang', isRegion: k === 'region', options: opts.map(function (o, i) { return { value: String(i), label: o }; }), onChange: (e) => this.setSet(k, parseInt(e.target.value, 10)) });
+      const LANGS = ['English', 'हिन्दी · Hindi', 'தமிழ் · Tamil', 'മലയാളം · Malayalam', 'Español']; const LC = ['en-US', 'hi-IN', 'ta-IN', 'ml-IN', 'es-ES'];
+      const REG = ['India', 'United States', 'United Kingdom']; const RC = ['IN', 'US', 'GB'];
+      const groups = [
+        { title: 'Look and feel', rows: [tog('glow', 'Ambient glow', IC.glow, 'Pages and hovered cards pick up the poster’s colours', '#FFB020'), tog('motion', 'Reduce motion', IC.motion, 'No zooms, slides or cross-fades', '#22D3EE'), tog('autoplay', 'Autoplay trailers', IC.autoplay, 'Start playing as soon as a trailer opens', '#A3E635'), tog('haptics', 'Haptic taps on phones', IC.vib, 'A light vibration when you save or rate on a phone browser', '#FF3D7F')] },
+        { title: 'Content', rows: [sel('lang', 'set-lang', 'Content language', IC.globe, '#38BDF8', LANGS, 'language=' + LC[st.lang]), sel('region', 'set-region', 'Region', IC.globe, '#38BDF8', REG, 'region=' + RC[st.region]), tog('adult', 'Include adult titles', IC.shield, 'Off by default · include_adult=' + st.adult, '#94A3B8')] },
+        { title: 'Account', rows: [{ isTog: false, isSel: false, isBtn: true, label: s.signedIn ? 'Harish' : 'Not signed in', desc: s.signedIn ? 'TMDB account · watchlist, favourites and ratings sync' : 'Sign in to sync your library across TV, phone and web', d: IC.user, icBg: A + '33', icFg: A, btn: s.signedIn ? 'Sign out' : 'Sign in with TMDB', btnBg: s.signedIn ? 'rgba(255,255,255,0.1)' : A, btnFg: s.signedIn ? '#FFFFFF' : '#14030C', tap: () => { if (this.state.signedIn) { this.setState({ signedIn: false }); this.toast('Signed out', IC.user, ''); } else this.setState({ modal: 'signin' }); } }] }
+      ];
+      groups.forEach(function (g) { g.rows.forEach(function (r, i) { r.first = i === 0 ? 'first' : ''; }); });
+      v.st = { groups: groups };
+    }
+
+    /* modals */
+    const modalBase = { setRef: this.setModalRef, onKey: this.onModalKey, close: () => this.closeModal(), stars: [], more: [] };
+    if (s.modal === 'signin') v.modal = Object.assign(modalBase, { approving: s.approving, approveLabel: s.approving ? 'Waiting for TMDB…' : 'Continue to TMDB', approve: () => this.approve() });
+    if (s.modal === 'rate') {
+      const t = BY[s.rateFor] || BY.m1; const val = s.hoverRate != null ? s.hoverRate : s.rateVal;
+      const word = val >= 9 ? 'Masterpiece' : val >= 8 ? 'Great' : val >= 6.5 ? 'Good' : val >= 5 ? 'Fine' : val >= 3 ? 'Not great' : 'Not for me';
+      v.modal = Object.assign(modalBase, {
+        title: t.title, val: val.toFixed(1), word: word + (s.hoverRate != null ? ' · click to choose' : ''), canRemove: !!s.rated[s.rateFor],
+        unhover: () => this.setState({ hoverRate: null }), submit: () => this.submitRate(), remove: () => this.removeRate(),
+        stars: rng(5).map((i) => ({ w: Math.round(clamp((val - i * 2) / 2, 0, 1) * 44), labelL: (i * 2 + 1) + ' out of 10', labelR: (i * 2 + 2) + ' out of 10', tapL: () => this.setState({ rateVal: i * 2 + 1, hoverRate: null }), tapR: () => this.setState({ rateVal: i * 2 + 2, hoverRate: null }), hovL: () => this.setState({ hoverRate: i * 2 + 1 }), hovR: () => this.setState({ hoverRate: i * 2 + 2 }) }))
+      });
+    }
+    if (s.modal === 'trailer' && s.trailer) {
+      const t = BY[s.trailer.id] || BY.m1; if (!ref) ref = t;
+      v.modal = Object.assign(modalBase, {
+        kicker: t.title + '  ·  YouTube', label: s.trailer.label, art: backdropArt(t), centerCls: s.playing ? 'hide' : '', fillCls: s.playing ? '' : 'paused', state: s.playing ? 'Playing' : 'Paused', cc: s.cc,
+        toggle: () => this.setState({ playing: !this.state.playing }), toggleLabel: s.playing ? 'Pause' : 'Play', ppD: s.playing ? IC.pause : IC.play, ppCls: s.playing ? 'ic' : 'ic solid',
+        ccTap: () => this.setState({ cc: !this.state.cc }), ccBg: s.cc ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0)',
+        more: this.videos(t).filter(function (x) { return x.title !== s.trailer.label; })
+      });
+    }
+
+    let c1 = ref && ref.c1, c2 = ref && ref.c2;
+    if (!c1) { c1 = A; c2 = '#6D28D9'; }
+    const ak = c1 + c2; if (ak !== this._ambKey) { this._ambKey = ak; this._ambFlip = this._ambFlip ? 0 : 1; }
+    v.amb = { bg: 'radial-gradient(40% 50% at 72% 22%, ' + c1 + ' 0%, rgba(0,0,0,0) 70%), radial-gradient(36% 46% at 14% 60%, ' + c2 + ' 0%, rgba(0,0,0,0) 72%)', op: s.set.glow ? (0.45 * glowK).toFixed(2) : '0', cls: 'a' + this._ambFlip };
+    v.toast = s.toast ? { cls: 'in', text: s.toast.text, sub: s.toast.sub, d: s.toast.d } : { cls: '', text: '', sub: '', d: IC.check };
+    return v;
+  }
+}
+</script>
+</body>
+</html>

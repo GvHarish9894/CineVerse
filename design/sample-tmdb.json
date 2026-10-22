@@ -1,0 +1,3563 @@
+{
+  "_note": "Sample data in TMDB v3 response shape for previews and tests. Not real titles. poster_path/backdrop_path are null; the prototype draws gradient art from the _ui colours instead.",
+  "movies": [
+    {
+      "id": 1001,
+      "title": "Neon Tide",
+      "original_language": "en",
+      "overview": "When a coastal megacity floods overnight, a salvage diver discovers the water is carrying signals from a future that hasn’t happened yet.",
+      "tagline": "The ocean remembers everything.",
+      "release_date": "2026-03-13",
+      "runtime": 128,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 878,
+          "name": "Science Fiction"
+        },
+        {
+          "id": 53,
+          "name": "Thriller"
+        }
+      ],
+      "vote_average": 8.1,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Mira Das",
+            "order": 0
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "Jonah Vale",
+            "order": 1
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Captain Reyes",
+            "order": 2
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "Ilsa Brandt",
+            "order": 3
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "The Courier",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 13003,
+            "name": "Leila Navarro",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#FF3D7F",
+        "c2": "#6B21FF",
+        "certification_IN": "UA 13+",
+        "lists": "pt"
+      }
+    },
+    {
+      "id": 2001,
+      "title": "The Last Lantern",
+      "original_language": "en",
+      "overview": "A lamplighter’s apprentice must carry the last flame across a kingdom where night has stopped ending.",
+      "tagline": "Keep the light. Keep the way.",
+      "release_date": "2025-12-19",
+      "runtime": 141,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 14,
+          "name": "Fantasy"
+        },
+        {
+          "id": 12,
+          "name": "Adventure"
+        }
+      ],
+      "vote_average": 7.6,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Ilsa Brandt",
+            "order": 0
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "The Courier",
+            "order": 1
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Dr. Anand Rao",
+            "order": 2
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "Kit Moreno",
+            "order": 3
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Old Sam",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 14003,
+            "name": "Ruben Castillo",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#FFB020",
+        "c2": "#E0410B",
+        "certification_IN": "U",
+        "lists": "p"
+      }
+    },
+    {
+      "id": 3001,
+      "title": "Quiet Orbit",
+      "original_language": "en",
+      "overview": "An estranged mother and daughter share a cramped research station when a solar storm cuts them off from Earth.",
+      "tagline": "Two hundred miles up, nobody hears you apologise.",
+      "release_date": "2026-06-05",
+      "runtime": 117,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 878,
+          "name": "Science Fiction"
+        }
+      ],
+      "vote_average": 7.9,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Kit Moreno",
+            "order": 0
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "Old Sam",
+            "order": 1
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Nadia Karim",
+            "order": 2
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "Officer Bell",
+            "order": 3
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Rafe Okoro",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 15003,
+            "name": "Ananya Iyer",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#22D3EE",
+        "c2": "#1E3A8A",
+        "certification_IN": "U",
+        "lists": "pt"
+      }
+    },
+    {
+      "id": 4001,
+      "title": "Paper Tigers",
+      "original_language": "hi",
+      "overview": "Three retired stunt performers plan one last heist on the film studio that wrote them out of history.",
+      "tagline": "Bad plans. Worse partners.",
+      "release_date": "2025-08-08",
+      "runtime": 104,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 35,
+          "name": "Comedy"
+        }
+      ],
+      "vote_average": 6.9,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Officer Bell",
+            "order": 0
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "Rafe Okoro",
+            "order": 1
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Tara Singh",
+            "order": 2
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "Lumen (voice)",
+            "order": 3
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Hal Pryce",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 16003,
+            "name": "Theo Grant",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#F97316",
+        "c2": "#CA8A04",
+        "certification_IN": "UA 7+",
+        "lists": "p"
+      }
+    },
+    {
+      "id": 5001,
+      "title": "Velvet Static",
+      "original_language": "en",
+      "overview": "A late-night radio host falls for a caller who seems to know tomorrow’s headlines.",
+      "tagline": "Some frequencies only open at midnight.",
+      "release_date": "2026-02-14",
+      "runtime": 112,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 9648,
+          "name": "Mystery"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        }
+      ],
+      "vote_average": 7.3,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Lumen (voice)",
+            "order": 0
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "Hal Pryce",
+            "order": 1
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "June Mercer",
+            "order": 2
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "Arjun Pillai",
+            "order": 3
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Mira Das",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 13003,
+            "name": "Leila Navarro",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#A855F7",
+        "c2": "#EC4899",
+        "certification_IN": "UA 13+",
+        "lists": "p"
+      }
+    },
+    {
+      "id": 6001,
+      "title": "Ironbloom",
+      "original_language": "en",
+      "overview": "A battle mech designed to clear forests starts planting them instead, and its pilot has to choose a side.",
+      "tagline": "Grown for war. Built for spring.",
+      "release_date": "2025-11-21",
+      "runtime": 133,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 28,
+          "name": "Action"
+        },
+        {
+          "id": 878,
+          "name": "Science Fiction"
+        }
+      ],
+      "vote_average": 7.1,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Arjun Pillai",
+            "order": 0
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "Mira Das",
+            "order": 1
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Jonah Vale",
+            "order": 2
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "Captain Reyes",
+            "order": 3
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Ilsa Brandt",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 14003,
+            "name": "Ruben Castillo",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#10B981",
+        "c2": "#065F46",
+        "certification_IN": "UA 13+",
+        "lists": "pt"
+      }
+    },
+    {
+      "id": 7001,
+      "title": "Saffron Skies",
+      "original_language": "ml",
+      "overview": "A Kochi spice trader and a returning architect rebuild a crumbling family warehouse — and an old promise.",
+      "tagline": "Every monsoon brings someone home.",
+      "release_date": "2026-10-02",
+      "runtime": 126,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "vote_average": 7.8,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Captain Reyes",
+            "order": 0
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "Ilsa Brandt",
+            "order": 1
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "The Courier",
+            "order": 2
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "Dr. Anand Rao",
+            "order": 3
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Kit Moreno",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 15003,
+            "name": "Ananya Iyer",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#F59E0B",
+        "c2": "#DC2626",
+        "certification_IN": "U",
+        "lists": "nt"
+      }
+    },
+    {
+      "id": 8001,
+      "title": "Glass Harbor",
+      "original_language": "en",
+      "overview": "A detective returns to her island hometown to investigate a disappearance the whole community witnessed and nobody reported.",
+      "tagline": "Everyone can see in. No one sees out.",
+      "release_date": "2024-09-27",
+      "runtime": 119,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 53,
+          "name": "Thriller"
+        },
+        {
+          "id": 80,
+          "name": "Crime"
+        }
+      ],
+      "vote_average": 7.4,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Dr. Anand Rao",
+            "order": 0
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "Kit Moreno",
+            "order": 1
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Old Sam",
+            "order": 2
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "Nadia Karim",
+            "order": 3
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Officer Bell",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 16003,
+            "name": "Theo Grant",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#38BDF8",
+        "c2": "#0F766E",
+        "certification_IN": "A",
+        "lists": "p"
+      }
+    },
+    {
+      "id": 9001,
+      "title": "Moonlit Mechanics",
+      "original_language": "en",
+      "overview": "A tiny repair robot discovers the moon’s night-light is running out and rallies a garage full of misfits to fix it.",
+      "tagline": "Fixing the moon, one bolt at a time.",
+      "release_date": "2026-09-18",
+      "runtime": 98,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 16,
+          "name": "Animation"
+        },
+        {
+          "id": 10751,
+          "name": "Family"
+        }
+      ],
+      "vote_average": 8.3,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Nadia Karim",
+            "order": 0
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "Officer Bell",
+            "order": 1
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Rafe Okoro",
+            "order": 2
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "Tara Singh",
+            "order": 3
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Lumen (voice)",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 13003,
+            "name": "Leila Navarro",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#818CF8",
+        "c2": "#F472B6",
+        "certification_IN": "U",
+        "lists": "npt"
+      }
+    },
+    {
+      "id": 10001,
+      "title": "Red Meridian",
+      "original_language": "en",
+      "overview": "Along a disputed mountain border, two radio operators on opposite sides begin a forbidden correspondence.",
+      "tagline": "Two voices. One frequency. No ceasefire.",
+      "release_date": "2025-01-24",
+      "runtime": 152,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 10752,
+          "name": "War"
+        },
+        {
+          "id": 36,
+          "name": "History"
+        }
+      ],
+      "vote_average": 7.7,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Tara Singh",
+            "order": 0
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "Lumen (voice)",
+            "order": 1
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Hal Pryce",
+            "order": 2
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "June Mercer",
+            "order": 3
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Arjun Pillai",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 14003,
+            "name": "Ruben Castillo",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#EF4444",
+        "c2": "#7C2D12",
+        "certification_IN": "UA 16+",
+        "lists": ""
+      }
+    },
+    {
+      "id": 11001,
+      "title": "Afterparty Protocol",
+      "original_language": "en",
+      "overview": "A tech launch party becomes a locked-room mystery when the company’s new AI goes missing.",
+      "tagline": "Nobody leaves until someone confesses.",
+      "release_date": "2026-10-09",
+      "runtime": 101,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 35,
+          "name": "Comedy"
+        },
+        {
+          "id": 9648,
+          "name": "Mystery"
+        }
+      ],
+      "vote_average": 6.6,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "June Mercer",
+            "order": 0
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "Arjun Pillai",
+            "order": 1
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Mira Das",
+            "order": 2
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "Jonah Vale",
+            "order": 3
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Captain Reyes",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 15003,
+            "name": "Ananya Iyer",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#84CC16",
+        "c2": "#0EA5E9",
+        "certification_IN": "UA 13+",
+        "lists": "n"
+      }
+    },
+    {
+      "id": 12001,
+      "title": "Hollow Crown Road",
+      "original_language": "en",
+      "overview": "A stagecoach driver ferries a dying outlaw across the desert while three crews ride to collect the bounty.",
+      "tagline": "Every mile has a price.",
+      "release_date": "2025-07-11",
+      "runtime": 137,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 37,
+          "name": "Western"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "vote_average": 7.2,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Jonah Vale",
+            "order": 0
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "Captain Reyes",
+            "order": 1
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Ilsa Brandt",
+            "order": 2
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "The Courier",
+            "order": 3
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Dr. Anand Rao",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 16003,
+            "name": "Theo Grant",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#FB923C",
+        "c2": "#78350F",
+        "certification_IN": "A",
+        "lists": ""
+      }
+    },
+    {
+      "id": 13001,
+      "title": "Starling Season",
+      "original_language": "ta",
+      "overview": "A small-town teacher coaches an unlikely girls’ cricket team all the way to the state finals.",
+      "tagline": "Learn to fly in formation.",
+      "release_date": "2026-09-25",
+      "runtime": 121,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 10751,
+          "name": "Family"
+        }
+      ],
+      "vote_average": 8,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "The Courier",
+            "order": 0
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "Dr. Anand Rao",
+            "order": 1
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Kit Moreno",
+            "order": 2
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "Old Sam",
+            "order": 3
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Nadia Karim",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 13003,
+            "name": "Leila Navarro",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#2DD4BF",
+        "c2": "#4F46E5",
+        "certification_IN": "U",
+        "lists": "nt"
+      }
+    },
+    {
+      "id": 14001,
+      "title": "Undertow",
+      "original_language": "en",
+      "overview": "Five friends rent a lake house for the weekend and learn why the locals never go near the water.",
+      "tagline": "Don’t swim after dark.",
+      "release_date": "2026-10-16",
+      "runtime": 96,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 27,
+          "name": "Horror"
+        }
+      ],
+      "vote_average": 6.8,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Old Sam",
+            "order": 0
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "Nadia Karim",
+            "order": 1
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Officer Bell",
+            "order": 2
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "Rafe Okoro",
+            "order": 3
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Tara Singh",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 14003,
+            "name": "Ruben Castillo",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#64748B",
+        "c2": "#BE123C",
+        "certification_IN": "A",
+        "lists": "n"
+      }
+    },
+    {
+      "id": 15001,
+      "title": "Prism Heights",
+      "original_language": "en",
+      "overview": "A courier making a late delivery finds each floor of a skyscraper stuck in a different decade.",
+      "tagline": "Every floor is a different year.",
+      "release_date": "2026-11-27",
+      "runtime": 124,
+      "status": "Post Production",
+      "genres": [
+        {
+          "id": 878,
+          "name": "Science Fiction"
+        },
+        {
+          "id": 9648,
+          "name": "Mystery"
+        }
+      ],
+      "vote_average": null,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Rafe Okoro",
+            "order": 0
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "Tara Singh",
+            "order": 1
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Lumen (voice)",
+            "order": 2
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "Hal Pryce",
+            "order": 3
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "June Mercer",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 15003,
+            "name": "Ananya Iyer",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#E879F9",
+        "c2": "#0891B2",
+        "certification_IN": "UA 13+",
+        "lists": "u"
+      }
+    },
+    {
+      "id": 16001,
+      "title": "Wildfire Waltz",
+      "original_language": "en",
+      "overview": "A ballroom champion and a smoke-jumper are paired for a charity dance in a town waiting out fire season.",
+      "tagline": "Dance like the forest is listening.",
+      "release_date": "2026-12-11",
+      "runtime": 115,
+      "status": "Post Production",
+      "genres": [
+        {
+          "id": 10402,
+          "name": "Music"
+        },
+        {
+          "id": 10749,
+          "name": "Romance"
+        }
+      ],
+      "vote_average": null,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Hal Pryce",
+            "order": 0
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "June Mercer",
+            "order": 1
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Arjun Pillai",
+            "order": 2
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "Mira Das",
+            "order": 3
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Jonah Vale",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 16003,
+            "name": "Theo Grant",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#FB7185",
+        "c2": "#EA580C",
+        "certification_IN": "U",
+        "lists": "u"
+      }
+    },
+    {
+      "id": 17001,
+      "title": "The Cartographer’s Daughter",
+      "original_language": "en",
+      "overview": "A girl follows her missing father’s hand-drawn maps to places that aren’t on any other chart.",
+      "tagline": "Some maps draw you.",
+      "release_date": "2024-05-17",
+      "runtime": 138,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 12,
+          "name": "Adventure"
+        },
+        {
+          "id": 10751,
+          "name": "Family"
+        }
+      ],
+      "vote_average": 7.9,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Mira Das",
+            "order": 0
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "Jonah Vale",
+            "order": 1
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Captain Reyes",
+            "order": 2
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "Ilsa Brandt",
+            "order": 3
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "The Courier",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 13003,
+            "name": "Leila Navarro",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#0EA5E9",
+        "c2": "#65A30D",
+        "certification_IN": "U",
+        "lists": "p"
+      }
+    },
+    {
+      "id": 18001,
+      "title": "Midnight Monsoon",
+      "original_language": "hi",
+      "overview": "A cab driver and a stranded witness race across a flooded Mumbai before a killer finds them.",
+      "tagline": "One storm. One night. One way out.",
+      "release_date": "2026-10-09",
+      "runtime": 109,
+      "status": "Released",
+      "genres": [
+        {
+          "id": 53,
+          "name": "Thriller"
+        },
+        {
+          "id": 80,
+          "name": "Crime"
+        }
+      ],
+      "vote_average": 7.1,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Ilsa Brandt",
+            "order": 0
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "The Courier",
+            "order": 1
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Dr. Anand Rao",
+            "order": 2
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "Kit Moreno",
+            "order": 3
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Old Sam",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 14003,
+            "name": "Ruben Castillo",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#3B82F6",
+        "c2": "#9333EA",
+        "certification_IN": "UA 13+",
+        "lists": "n"
+      }
+    },
+    {
+      "id": 19001,
+      "title": "Satellite Hearts",
+      "original_language": "en",
+      "overview": "Two engineers fall for each other over the comms link between a ground station and a satellite only one of them can see.",
+      "tagline": "Love at 36,000 kilometres.",
+      "release_date": "2027-02-12",
+      "runtime": 110,
+      "status": "In Production",
+      "genres": [
+        {
+          "id": 10749,
+          "name": "Romance"
+        },
+        {
+          "id": 878,
+          "name": "Science Fiction"
+        }
+      ],
+      "vote_average": null,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Kit Moreno",
+            "order": 0
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "Old Sam",
+            "order": 1
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Nadia Karim",
+            "order": 2
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "Officer Bell",
+            "order": 3
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Rafe Okoro",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 15003,
+            "name": "Ananya Iyer",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#F472B6",
+        "c2": "#1D4ED8",
+        "certification_IN": "U",
+        "lists": "u"
+      }
+    },
+    {
+      "id": 20001,
+      "title": "The Brass Menagerie",
+      "original_language": "en",
+      "overview": "A clockmaker’s mechanical animals come to life on Christmas Eve and set out to find their missing key.",
+      "tagline": "Wind them up. Let them go.",
+      "release_date": "2026-12-25",
+      "runtime": 94,
+      "status": "Post Production",
+      "genres": [
+        {
+          "id": 16,
+          "name": "Animation"
+        },
+        {
+          "id": 12,
+          "name": "Adventure"
+        }
+      ],
+      "vote_average": null,
+      "poster_path": null,
+      "backdrop_path": null,
+      "credits": {
+        "cast": [
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Officer Bell",
+            "order": 0
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "Rafe Okoro",
+            "order": 1
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Tara Singh",
+            "order": 2
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "Lumen (voice)",
+            "order": 3
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Hal Pryce",
+            "order": 4
+          }
+        ],
+        "crew": [
+          {
+            "id": 16003,
+            "name": "Theo Grant",
+            "job": "Director"
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#FACC15",
+        "c2": "#B91C1C",
+        "certification_IN": "U",
+        "lists": "u"
+      }
+    }
+  ],
+  "tv": [
+    {
+      "id": 1002,
+      "name": "Signal & Noise",
+      "overview": "A radio astronomer in the Atacama desert picks up a message addressed to her by name — and every season the signal gets closer.",
+      "tagline": "Somebody out there is listening.",
+      "first_air_date": "2024-04-12",
+      "number_of_seasons": 3,
+      "number_of_episodes": 24,
+      "networks": [
+        {
+          "name": "Orbit+"
+        }
+      ],
+      "status": "Returning Series",
+      "type": "Scripted",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        },
+        {
+          "id": 10765,
+          "name": "Sci-Fi & Fantasy"
+        }
+      ],
+      "vote_average": 8.4,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 13003,
+          "name": "Leila Navarro"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Lumen (voice)",
+            "order": 0
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "Hal Pryce",
+            "order": 1
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "June Mercer",
+            "order": 2
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "Arjun Pillai",
+            "order": 3
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Mira Das",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#38BDF8",
+        "c2": "#7C3AED",
+        "certification_IN": "UA 16+",
+        "lists": "pt"
+      }
+    },
+    {
+      "id": 2002,
+      "name": "Chai & Chaos",
+      "overview": "Four flatmates turn a failing Bengaluru tea stall into the city’s most chaotic start-up.",
+      "tagline": "Every order comes with drama.",
+      "first_air_date": "2025-01-17",
+      "number_of_seasons": 2,
+      "number_of_episodes": 20,
+      "networks": [
+        {
+          "name": "Lumen TV"
+        }
+      ],
+      "status": "Returning Series",
+      "type": "Scripted",
+      "genres": [
+        {
+          "id": 35,
+          "name": "Comedy"
+        }
+      ],
+      "vote_average": 7.9,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 14003,
+          "name": "Ruben Castillo"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Arjun Pillai",
+            "order": 0
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "Mira Das",
+            "order": 1
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Jonah Vale",
+            "order": 2
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "Captain Reyes",
+            "order": 3
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Ilsa Brandt",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#FB923C",
+        "c2": "#E11D48",
+        "certification_IN": "UA 13+",
+        "lists": "pa"
+      }
+    },
+    {
+      "id": 3002,
+      "name": "The Ninth Precinct",
+      "overview": "A night-shift detective unit polices a city district that officially doesn’t exist.",
+      "tagline": "Nine floors. One secret.",
+      "first_air_date": "2022-09-09",
+      "number_of_seasons": 4,
+      "number_of_episodes": 40,
+      "networks": [
+        {
+          "name": "Northline"
+        }
+      ],
+      "status": "Ended",
+      "type": "Scripted",
+      "genres": [
+        {
+          "id": 80,
+          "name": "Crime"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "vote_average": 8.1,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 15003,
+          "name": "Ananya Iyer"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Captain Reyes",
+            "order": 0
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "Ilsa Brandt",
+            "order": 1
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "The Courier",
+            "order": 2
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "Dr. Anand Rao",
+            "order": 3
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Kit Moreno",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#60A5FA",
+        "c2": "#334155",
+        "certification_IN": "A",
+        "lists": "p"
+      }
+    },
+    {
+      "id": 4002,
+      "name": "Atlas Rising",
+      "overview": "When Earth’s orbital elevator starts to fall, a crew of maintenance engineers becomes the planet’s last line of defence.",
+      "tagline": "Hold up the sky.",
+      "first_air_date": "2026-08-07",
+      "number_of_seasons": 1,
+      "number_of_episodes": 9,
+      "networks": [
+        {
+          "name": "Orbit+"
+        }
+      ],
+      "status": "Returning Series",
+      "type": "Scripted",
+      "genres": [
+        {
+          "id": 10765,
+          "name": "Sci-Fi & Fantasy"
+        },
+        {
+          "id": 10759,
+          "name": "Action & Adventure"
+        }
+      ],
+      "vote_average": 7.6,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 16003,
+          "name": "Theo Grant"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Dr. Anand Rao",
+            "order": 0
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "Kit Moreno",
+            "order": 1
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Old Sam",
+            "order": 2
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "Nadia Karim",
+            "order": 3
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Officer Bell",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#F472B6",
+        "c2": "#2563EB",
+        "certification_IN": "UA 13+",
+        "lists": "pot"
+      }
+    },
+    {
+      "id": 5002,
+      "name": "Bloom & Bone",
+      "overview": "A botanist inherits a walled garden where every plant grows from a buried memory.",
+      "tagline": "What grows here remembers.",
+      "first_air_date": "2025-03-21",
+      "number_of_seasons": 2,
+      "number_of_episodes": 16,
+      "networks": [
+        {
+          "name": "Lumen TV"
+        }
+      ],
+      "status": "Returning Series",
+      "type": "Scripted",
+      "genres": [
+        {
+          "id": 10765,
+          "name": "Sci-Fi & Fantasy"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "vote_average": 8,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 13003,
+          "name": "Leila Navarro"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Nadia Karim",
+            "order": 0
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "Officer Bell",
+            "order": 1
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Rafe Okoro",
+            "order": 2
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "Tara Singh",
+            "order": 3
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Lumen (voice)",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#A3E635",
+        "c2": "#9D174D",
+        "certification_IN": "UA 16+",
+        "lists": "pt"
+      }
+    },
+    {
+      "id": 6002,
+      "name": "Kitchen Galaxy",
+      "overview": "Home cooks battle through themed rounds inspired by a different planet each week.",
+      "tagline": "Cook like the universe is watching.",
+      "first_air_date": "2023-06-02",
+      "number_of_seasons": 3,
+      "number_of_episodes": 36,
+      "networks": [
+        {
+          "name": "Spice Channel"
+        }
+      ],
+      "status": "Returning Series",
+      "type": "Reality",
+      "genres": [
+        {
+          "id": 10764,
+          "name": "Reality"
+        }
+      ],
+      "vote_average": 7.2,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 14003,
+          "name": "Ruben Castillo"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Tara Singh",
+            "order": 0
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "Lumen (voice)",
+            "order": 1
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Hal Pryce",
+            "order": 2
+          },
+          {
+            "id": 6003,
+            "name": "Kenji Arata",
+            "character": "June Mercer",
+            "order": 3
+          },
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Arjun Pillai",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#FACC15",
+        "c2": "#7C3AED",
+        "certification_IN": "U",
+        "lists": "pa"
+      }
+    },
+    {
+      "id": 7002,
+      "name": "Night Shift Diaries",
+      "overview": "Interlinked stories of the people who keep a 24-hour hospital running after midnight.",
+      "tagline": "The city never sleeps. Neither do they.",
+      "first_air_date": "2025-10-03",
+      "number_of_seasons": 2,
+      "number_of_episodes": 20,
+      "networks": [
+        {
+          "name": "Northline"
+        }
+      ],
+      "status": "Returning Series",
+      "type": "Scripted",
+      "genres": [
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "vote_average": 7.8,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 15003,
+          "name": "Ananya Iyer"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "June Mercer",
+            "order": 0
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "Arjun Pillai",
+            "order": 1
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Mira Das",
+            "order": 2
+          },
+          {
+            "id": 8003,
+            "name": "Noah Bennett",
+            "character": "Jonah Vale",
+            "order": 3
+          },
+          {
+            "id": 1003,
+            "name": "Aria Kapoor",
+            "character": "Captain Reyes",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#22D3EE",
+        "c2": "#0F766E",
+        "certification_IN": "UA 13+",
+        "lists": "po"
+      }
+    },
+    {
+      "id": 8002,
+      "name": "Pixel Pirates",
+      "overview": "A crew of video-game sprites escapes their console to hunt for the legendary Golden Cartridge.",
+      "tagline": "Sail the seven screens.",
+      "first_air_date": "2026-07-04",
+      "number_of_seasons": 1,
+      "number_of_episodes": 13,
+      "networks": [
+        {
+          "name": "Kidoodle"
+        }
+      ],
+      "status": "Returning Series",
+      "type": "Scripted",
+      "genres": [
+        {
+          "id": 16,
+          "name": "Animation"
+        },
+        {
+          "id": 10762,
+          "name": "Kids"
+        }
+      ],
+      "vote_average": 8.2,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 16003,
+          "name": "Theo Grant"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Jonah Vale",
+            "order": 0
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "Captain Reyes",
+            "order": 1
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Ilsa Brandt",
+            "order": 2
+          },
+          {
+            "id": 10003,
+            "name": "Elias Moreau",
+            "character": "The Courier",
+            "order": 3
+          },
+          {
+            "id": 3003,
+            "name": "Lena Okafor",
+            "character": "Dr. Anand Rao",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#F97316",
+        "c2": "#06B6D4",
+        "certification_IN": "U",
+        "lists": "pat"
+      }
+    },
+    {
+      "id": 9002,
+      "name": "Hush Valley",
+      "overview": "In a mountain town where speaking above a whisper is forbidden, a new schoolteacher asks why.",
+      "tagline": "Keep your voice down.",
+      "first_air_date": "2025-10-31",
+      "number_of_seasons": 2,
+      "number_of_episodes": 12,
+      "networks": [
+        {
+          "name": "Lumen TV"
+        }
+      ],
+      "status": "Returning Series",
+      "type": "Scripted",
+      "genres": [
+        {
+          "id": 9648,
+          "name": "Mystery"
+        },
+        {
+          "id": 18,
+          "name": "Drama"
+        }
+      ],
+      "vote_average": 7.5,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 13003,
+          "name": "Leila Navarro"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "The Courier",
+            "order": 0
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "Dr. Anand Rao",
+            "order": 1
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Kit Moreno",
+            "order": 2
+          },
+          {
+            "id": 12003,
+            "name": "Maya Chen",
+            "character": "Old Sam",
+            "order": 3
+          },
+          {
+            "id": 5003,
+            "name": "Sofia Lindqvist",
+            "character": "Nadia Karim",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#94A3B8",
+        "c2": "#6D28D9",
+        "certification_IN": "A",
+        "lists": "o"
+      }
+    },
+    {
+      "id": 10002,
+      "name": "The Tidewater Files",
+      "overview": "A six-part look at the people rebuilding life along a shifting coastline.",
+      "tagline": "The coastline is changing. So are we.",
+      "first_air_date": "2026-05-15",
+      "number_of_seasons": 1,
+      "number_of_episodes": 6,
+      "networks": [
+        {
+          "name": "Orbit+"
+        }
+      ],
+      "status": "Ended",
+      "type": "Miniseries",
+      "genres": [
+        {
+          "id": 99,
+          "name": "Documentary"
+        }
+      ],
+      "vote_average": 8.6,
+      "poster_path": null,
+      "backdrop_path": null,
+      "created_by": [
+        {
+          "id": 14003,
+          "name": "Ruben Castillo"
+        }
+      ],
+      "credits": {
+        "cast": [
+          {
+            "id": 11003,
+            "name": "Ishaan Verma",
+            "character": "Old Sam",
+            "order": 0
+          },
+          {
+            "id": 4003,
+            "name": "Dev Malhotra",
+            "character": "Nadia Karim",
+            "order": 1
+          },
+          {
+            "id": 9003,
+            "name": "Zara Haddad",
+            "character": "Officer Bell",
+            "order": 2
+          },
+          {
+            "id": 2003,
+            "name": "Mateo Reyes",
+            "character": "Rafe Okoro",
+            "order": 3
+          },
+          {
+            "id": 7003,
+            "name": "Priya Raman",
+            "character": "Tara Singh",
+            "order": 4
+          }
+        ]
+      },
+      "_ui": {
+        "c1": "#2DD4BF",
+        "c2": "#1D4ED8",
+        "certification_IN": "U",
+        "lists": "p"
+      }
+    }
+  ],
+  "people": [
+    {
+      "id": 1003,
+      "name": "Aria Kapoor",
+      "known_for_department": "Acting",
+      "birthday": "1991-03-12",
+      "place_of_birth": "Mumbai, India",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 1001,
+          "media_type": "movie",
+          "title": "Neon Tide",
+          "role": "Mira Das"
+        },
+        {
+          "id": 2001,
+          "media_type": "movie",
+          "title": "The Last Lantern",
+          "role": "Dr. Anand Rao"
+        },
+        {
+          "id": 3001,
+          "media_type": "movie",
+          "title": "Quiet Orbit",
+          "role": "Rafe Okoro"
+        },
+        {
+          "id": 7001,
+          "media_type": "movie",
+          "title": "Saffron Skies",
+          "role": "Captain Reyes"
+        },
+        {
+          "id": 8001,
+          "media_type": "movie",
+          "title": "Glass Harbor",
+          "role": "Old Sam"
+        },
+        {
+          "id": 9001,
+          "media_type": "movie",
+          "title": "Moonlit Mechanics",
+          "role": "Lumen (voice)"
+        },
+        {
+          "id": 13001,
+          "media_type": "movie",
+          "title": "Starling Season",
+          "role": "The Courier"
+        },
+        {
+          "id": 14001,
+          "media_type": "movie",
+          "title": "Undertow",
+          "role": "Officer Bell"
+        },
+        {
+          "id": 15001,
+          "media_type": "movie",
+          "title": "Prism Heights",
+          "role": "June Mercer"
+        },
+        {
+          "id": 19001,
+          "media_type": "movie",
+          "title": "Satellite Hearts",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 20001,
+          "media_type": "movie",
+          "title": "The Brass Menagerie",
+          "role": "Tara Singh"
+        },
+        {
+          "id": 1002,
+          "media_type": "tv",
+          "title": "Signal & Noise",
+          "role": "Mira Das"
+        },
+        {
+          "id": 5002,
+          "media_type": "tv",
+          "title": "Bloom & Bone",
+          "role": "Nadia Karim"
+        },
+        {
+          "id": 6002,
+          "media_type": "tv",
+          "title": "Kitchen Galaxy",
+          "role": "Hal Pryce"
+        },
+        {
+          "id": 7002,
+          "media_type": "tv",
+          "title": "Night Shift Diaries",
+          "role": "Captain Reyes"
+        }
+      ],
+      "_ui": {
+        "c1": "#FF3D7F",
+        "c2": "#7C3AED"
+      }
+    },
+    {
+      "id": 2003,
+      "name": "Mateo Reyes",
+      "known_for_department": "Acting",
+      "birthday": "1987-07-03",
+      "place_of_birth": "Seville, Spain",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 5001,
+          "media_type": "movie",
+          "title": "Velvet Static",
+          "role": "Hal Pryce"
+        },
+        {
+          "id": 6001,
+          "media_type": "movie",
+          "title": "Ironbloom",
+          "role": "Captain Reyes"
+        },
+        {
+          "id": 11001,
+          "media_type": "movie",
+          "title": "Afterparty Protocol",
+          "role": "Arjun Pillai"
+        },
+        {
+          "id": 12001,
+          "media_type": "movie",
+          "title": "Hollow Crown Road",
+          "role": "The Courier"
+        },
+        {
+          "id": 17001,
+          "media_type": "movie",
+          "title": "The Cartographer’s Daughter",
+          "role": "Jonah Vale"
+        },
+        {
+          "id": 18001,
+          "media_type": "movie",
+          "title": "Midnight Monsoon",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 3002,
+          "media_type": "tv",
+          "title": "The Ninth Precinct",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 4002,
+          "media_type": "tv",
+          "title": "Atlas Rising",
+          "role": "Nadia Karim"
+        },
+        {
+          "id": 9002,
+          "media_type": "tv",
+          "title": "Hush Valley",
+          "role": "Dr. Anand Rao"
+        },
+        {
+          "id": 10002,
+          "media_type": "tv",
+          "title": "The Tidewater Files",
+          "role": "Rafe Okoro"
+        }
+      ],
+      "_ui": {
+        "c1": "#F59E0B",
+        "c2": "#DC2626"
+      }
+    },
+    {
+      "id": 3003,
+      "name": "Lena Okafor",
+      "known_for_department": "Acting",
+      "birthday": "1993-11-21",
+      "place_of_birth": "Lagos, Nigeria",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 2001,
+          "media_type": "movie",
+          "title": "The Last Lantern",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 3001,
+          "media_type": "movie",
+          "title": "Quiet Orbit",
+          "role": "Nadia Karim"
+        },
+        {
+          "id": 4001,
+          "media_type": "movie",
+          "title": "Paper Tigers",
+          "role": "Hal Pryce"
+        },
+        {
+          "id": 8001,
+          "media_type": "movie",
+          "title": "Glass Harbor",
+          "role": "Dr. Anand Rao"
+        },
+        {
+          "id": 9001,
+          "media_type": "movie",
+          "title": "Moonlit Mechanics",
+          "role": "Rafe Okoro"
+        },
+        {
+          "id": 10001,
+          "media_type": "movie",
+          "title": "Red Meridian",
+          "role": "Arjun Pillai"
+        },
+        {
+          "id": 14001,
+          "media_type": "movie",
+          "title": "Undertow",
+          "role": "Old Sam"
+        },
+        {
+          "id": 15001,
+          "media_type": "movie",
+          "title": "Prism Heights",
+          "role": "Lumen (voice)"
+        },
+        {
+          "id": 16001,
+          "media_type": "movie",
+          "title": "Wildfire Waltz",
+          "role": "Jonah Vale"
+        },
+        {
+          "id": 20001,
+          "media_type": "movie",
+          "title": "The Brass Menagerie",
+          "role": "Officer Bell"
+        },
+        {
+          "id": 1002,
+          "media_type": "tv",
+          "title": "Signal & Noise",
+          "role": "June Mercer"
+        },
+        {
+          "id": 2002,
+          "media_type": "tv",
+          "title": "Chai & Chaos",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 6002,
+          "media_type": "tv",
+          "title": "Kitchen Galaxy",
+          "role": "Tara Singh"
+        },
+        {
+          "id": 7002,
+          "media_type": "tv",
+          "title": "Night Shift Diaries",
+          "role": "Mira Das"
+        },
+        {
+          "id": 8002,
+          "media_type": "tv",
+          "title": "Pixel Pirates",
+          "role": "Dr. Anand Rao"
+        }
+      ],
+      "_ui": {
+        "c1": "#22D3EE",
+        "c2": "#2563EB"
+      }
+    },
+    {
+      "id": 4003,
+      "name": "Dev Malhotra",
+      "known_for_department": "Acting",
+      "birthday": "1985-01-30",
+      "place_of_birth": "New Delhi, India",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 1001,
+          "media_type": "movie",
+          "title": "Neon Tide",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 6001,
+          "media_type": "movie",
+          "title": "Ironbloom",
+          "role": "Mira Das"
+        },
+        {
+          "id": 7001,
+          "media_type": "movie",
+          "title": "Saffron Skies",
+          "role": "Dr. Anand Rao"
+        },
+        {
+          "id": 12001,
+          "media_type": "movie",
+          "title": "Hollow Crown Road",
+          "role": "Captain Reyes"
+        },
+        {
+          "id": 13001,
+          "media_type": "movie",
+          "title": "Starling Season",
+          "role": "Old Sam"
+        },
+        {
+          "id": 18001,
+          "media_type": "movie",
+          "title": "Midnight Monsoon",
+          "role": "The Courier"
+        },
+        {
+          "id": 19001,
+          "media_type": "movie",
+          "title": "Satellite Hearts",
+          "role": "Officer Bell"
+        },
+        {
+          "id": 4002,
+          "media_type": "tv",
+          "title": "Atlas Rising",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 5002,
+          "media_type": "tv",
+          "title": "Bloom & Bone",
+          "role": "Tara Singh"
+        },
+        {
+          "id": 10002,
+          "media_type": "tv",
+          "title": "The Tidewater Files",
+          "role": "Nadia Karim"
+        }
+      ],
+      "_ui": {
+        "c1": "#A3E635",
+        "c2": "#0F766E"
+      }
+    },
+    {
+      "id": 5003,
+      "name": "Sofia Lindqvist",
+      "known_for_department": "Acting",
+      "birthday": "1990-05-08",
+      "place_of_birth": "Gothenburg, Sweden",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 3001,
+          "media_type": "movie",
+          "title": "Quiet Orbit",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 4001,
+          "media_type": "movie",
+          "title": "Paper Tigers",
+          "role": "Tara Singh"
+        },
+        {
+          "id": 5001,
+          "media_type": "movie",
+          "title": "Velvet Static",
+          "role": "Mira Das"
+        },
+        {
+          "id": 9001,
+          "media_type": "movie",
+          "title": "Moonlit Mechanics",
+          "role": "Nadia Karim"
+        },
+        {
+          "id": 10001,
+          "media_type": "movie",
+          "title": "Red Meridian",
+          "role": "Hal Pryce"
+        },
+        {
+          "id": 11001,
+          "media_type": "movie",
+          "title": "Afterparty Protocol",
+          "role": "Captain Reyes"
+        },
+        {
+          "id": 15001,
+          "media_type": "movie",
+          "title": "Prism Heights",
+          "role": "Rafe Okoro"
+        },
+        {
+          "id": 16001,
+          "media_type": "movie",
+          "title": "Wildfire Waltz",
+          "role": "Arjun Pillai"
+        },
+        {
+          "id": 17001,
+          "media_type": "movie",
+          "title": "The Cartographer’s Daughter",
+          "role": "The Courier"
+        },
+        {
+          "id": 1002,
+          "media_type": "tv",
+          "title": "Signal & Noise",
+          "role": "Lumen (voice)"
+        },
+        {
+          "id": 2002,
+          "media_type": "tv",
+          "title": "Chai & Chaos",
+          "role": "Jonah Vale"
+        },
+        {
+          "id": 3002,
+          "media_type": "tv",
+          "title": "The Ninth Precinct",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 7002,
+          "media_type": "tv",
+          "title": "Night Shift Diaries",
+          "role": "June Mercer"
+        },
+        {
+          "id": 8002,
+          "media_type": "tv",
+          "title": "Pixel Pirates",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 9002,
+          "media_type": "tv",
+          "title": "Hush Valley",
+          "role": "Nadia Karim"
+        }
+      ],
+      "_ui": {
+        "c1": "#E879F9",
+        "c2": "#4C1D95"
+      }
+    },
+    {
+      "id": 6003,
+      "name": "Kenji Arata",
+      "known_for_department": "Acting",
+      "birthday": "1982-09-14",
+      "place_of_birth": "Osaka, Japan",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 1001,
+          "media_type": "movie",
+          "title": "Neon Tide",
+          "role": "Jonah Vale"
+        },
+        {
+          "id": 2001,
+          "media_type": "movie",
+          "title": "The Last Lantern",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 7001,
+          "media_type": "movie",
+          "title": "Saffron Skies",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 8001,
+          "media_type": "movie",
+          "title": "Glass Harbor",
+          "role": "Nadia Karim"
+        },
+        {
+          "id": 13001,
+          "media_type": "movie",
+          "title": "Starling Season",
+          "role": "Dr. Anand Rao"
+        },
+        {
+          "id": 14001,
+          "media_type": "movie",
+          "title": "Undertow",
+          "role": "Rafe Okoro"
+        },
+        {
+          "id": 19001,
+          "media_type": "movie",
+          "title": "Satellite Hearts",
+          "role": "Old Sam"
+        },
+        {
+          "id": 20001,
+          "media_type": "movie",
+          "title": "The Brass Menagerie",
+          "role": "Lumen (voice)"
+        },
+        {
+          "id": 5002,
+          "media_type": "tv",
+          "title": "Bloom & Bone",
+          "role": "Officer Bell"
+        },
+        {
+          "id": 6002,
+          "media_type": "tv",
+          "title": "Kitchen Galaxy",
+          "role": "June Mercer"
+        }
+      ],
+      "_ui": {
+        "c1": "#F97316",
+        "c2": "#9D174D"
+      }
+    },
+    {
+      "id": 7003,
+      "name": "Priya Raman",
+      "known_for_department": "Acting",
+      "birthday": "1995-02-02",
+      "place_of_birth": "Chennai, India",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 4001,
+          "media_type": "movie",
+          "title": "Paper Tigers",
+          "role": "Officer Bell"
+        },
+        {
+          "id": 5001,
+          "media_type": "movie",
+          "title": "Velvet Static",
+          "role": "June Mercer"
+        },
+        {
+          "id": 6001,
+          "media_type": "movie",
+          "title": "Ironbloom",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 10001,
+          "media_type": "movie",
+          "title": "Red Meridian",
+          "role": "Tara Singh"
+        },
+        {
+          "id": 11001,
+          "media_type": "movie",
+          "title": "Afterparty Protocol",
+          "role": "Mira Das"
+        },
+        {
+          "id": 12001,
+          "media_type": "movie",
+          "title": "Hollow Crown Road",
+          "role": "Dr. Anand Rao"
+        },
+        {
+          "id": 16001,
+          "media_type": "movie",
+          "title": "Wildfire Waltz",
+          "role": "Hal Pryce"
+        },
+        {
+          "id": 17001,
+          "media_type": "movie",
+          "title": "The Cartographer’s Daughter",
+          "role": "Captain Reyes"
+        },
+        {
+          "id": 18001,
+          "media_type": "movie",
+          "title": "Midnight Monsoon",
+          "role": "Old Sam"
+        },
+        {
+          "id": 2002,
+          "media_type": "tv",
+          "title": "Chai & Chaos",
+          "role": "Arjun Pillai"
+        },
+        {
+          "id": 3002,
+          "media_type": "tv",
+          "title": "The Ninth Precinct",
+          "role": "The Courier"
+        },
+        {
+          "id": 4002,
+          "media_type": "tv",
+          "title": "Atlas Rising",
+          "role": "Officer Bell"
+        },
+        {
+          "id": 8002,
+          "media_type": "tv",
+          "title": "Pixel Pirates",
+          "role": "Jonah Vale"
+        },
+        {
+          "id": 9002,
+          "media_type": "tv",
+          "title": "Hush Valley",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 10002,
+          "media_type": "tv",
+          "title": "The Tidewater Files",
+          "role": "Tara Singh"
+        }
+      ],
+      "_ui": {
+        "c1": "#FACC15",
+        "c2": "#B45309"
+      }
+    },
+    {
+      "id": 8003,
+      "name": "Noah Bennett",
+      "known_for_department": "Acting",
+      "birthday": "1989-08-19",
+      "place_of_birth": "Toronto, Canada",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 2001,
+          "media_type": "movie",
+          "title": "The Last Lantern",
+          "role": "The Courier"
+        },
+        {
+          "id": 3001,
+          "media_type": "movie",
+          "title": "Quiet Orbit",
+          "role": "Officer Bell"
+        },
+        {
+          "id": 8001,
+          "media_type": "movie",
+          "title": "Glass Harbor",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 9001,
+          "media_type": "movie",
+          "title": "Moonlit Mechanics",
+          "role": "Tara Singh"
+        },
+        {
+          "id": 14001,
+          "media_type": "movie",
+          "title": "Undertow",
+          "role": "Nadia Karim"
+        },
+        {
+          "id": 15001,
+          "media_type": "movie",
+          "title": "Prism Heights",
+          "role": "Hal Pryce"
+        },
+        {
+          "id": 20001,
+          "media_type": "movie",
+          "title": "The Brass Menagerie",
+          "role": "Rafe Okoro"
+        },
+        {
+          "id": 1002,
+          "media_type": "tv",
+          "title": "Signal & Noise",
+          "role": "Arjun Pillai"
+        },
+        {
+          "id": 6002,
+          "media_type": "tv",
+          "title": "Kitchen Galaxy",
+          "role": "Lumen (voice)"
+        },
+        {
+          "id": 7002,
+          "media_type": "tv",
+          "title": "Night Shift Diaries",
+          "role": "Jonah Vale"
+        }
+      ],
+      "_ui": {
+        "c1": "#60A5FA",
+        "c2": "#1E3A8A"
+      }
+    },
+    {
+      "id": 9003,
+      "name": "Zara Haddad",
+      "known_for_department": "Acting",
+      "birthday": "1992-12-05",
+      "place_of_birth": "Beirut, Lebanon",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 1001,
+          "media_type": "movie",
+          "title": "Neon Tide",
+          "role": "The Courier"
+        },
+        {
+          "id": 5001,
+          "media_type": "movie",
+          "title": "Velvet Static",
+          "role": "Lumen (voice)"
+        },
+        {
+          "id": 6001,
+          "media_type": "movie",
+          "title": "Ironbloom",
+          "role": "Jonah Vale"
+        },
+        {
+          "id": 7001,
+          "media_type": "movie",
+          "title": "Saffron Skies",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 11001,
+          "media_type": "movie",
+          "title": "Afterparty Protocol",
+          "role": "June Mercer"
+        },
+        {
+          "id": 12001,
+          "media_type": "movie",
+          "title": "Hollow Crown Road",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 13001,
+          "media_type": "movie",
+          "title": "Starling Season",
+          "role": "Nadia Karim"
+        },
+        {
+          "id": 17001,
+          "media_type": "movie",
+          "title": "The Cartographer’s Daughter",
+          "role": "Mira Das"
+        },
+        {
+          "id": 18001,
+          "media_type": "movie",
+          "title": "Midnight Monsoon",
+          "role": "Dr. Anand Rao"
+        },
+        {
+          "id": 19001,
+          "media_type": "movie",
+          "title": "Satellite Hearts",
+          "role": "Rafe Okoro"
+        },
+        {
+          "id": 3002,
+          "media_type": "tv",
+          "title": "The Ninth Precinct",
+          "role": "Captain Reyes"
+        },
+        {
+          "id": 4002,
+          "media_type": "tv",
+          "title": "Atlas Rising",
+          "role": "Old Sam"
+        },
+        {
+          "id": 5002,
+          "media_type": "tv",
+          "title": "Bloom & Bone",
+          "role": "Lumen (voice)"
+        },
+        {
+          "id": 9002,
+          "media_type": "tv",
+          "title": "Hush Valley",
+          "role": "The Courier"
+        },
+        {
+          "id": 10002,
+          "media_type": "tv",
+          "title": "The Tidewater Files",
+          "role": "Officer Bell"
+        }
+      ],
+      "_ui": {
+        "c1": "#FB7185",
+        "c2": "#7C2D12"
+      }
+    },
+    {
+      "id": 10003,
+      "name": "Elias Moreau",
+      "known_for_department": "Acting",
+      "birthday": "1984-04-27",
+      "place_of_birth": "Lyon, France",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 3001,
+          "media_type": "movie",
+          "title": "Quiet Orbit",
+          "role": "Old Sam"
+        },
+        {
+          "id": 4001,
+          "media_type": "movie",
+          "title": "Paper Tigers",
+          "role": "Lumen (voice)"
+        },
+        {
+          "id": 9001,
+          "media_type": "movie",
+          "title": "Moonlit Mechanics",
+          "role": "Officer Bell"
+        },
+        {
+          "id": 10001,
+          "media_type": "movie",
+          "title": "Red Meridian",
+          "role": "June Mercer"
+        },
+        {
+          "id": 15001,
+          "media_type": "movie",
+          "title": "Prism Heights",
+          "role": "Tara Singh"
+        },
+        {
+          "id": 16001,
+          "media_type": "movie",
+          "title": "Wildfire Waltz",
+          "role": "Mira Das"
+        },
+        {
+          "id": 1002,
+          "media_type": "tv",
+          "title": "Signal & Noise",
+          "role": "Hal Pryce"
+        },
+        {
+          "id": 2002,
+          "media_type": "tv",
+          "title": "Chai & Chaos",
+          "role": "Captain Reyes"
+        },
+        {
+          "id": 7002,
+          "media_type": "tv",
+          "title": "Night Shift Diaries",
+          "role": "Arjun Pillai"
+        },
+        {
+          "id": 8002,
+          "media_type": "tv",
+          "title": "Pixel Pirates",
+          "role": "The Courier"
+        }
+      ],
+      "_ui": {
+        "c1": "#34D399",
+        "c2": "#1E40AF"
+      }
+    },
+    {
+      "id": 11003,
+      "name": "Ishaan Verma",
+      "known_for_department": "Acting",
+      "birthday": "1997-06-11",
+      "place_of_birth": "Kochi, India",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 1001,
+          "media_type": "movie",
+          "title": "Neon Tide",
+          "role": "Captain Reyes"
+        },
+        {
+          "id": 2001,
+          "media_type": "movie",
+          "title": "The Last Lantern",
+          "role": "Old Sam"
+        },
+        {
+          "id": 6001,
+          "media_type": "movie",
+          "title": "Ironbloom",
+          "role": "Arjun Pillai"
+        },
+        {
+          "id": 7001,
+          "media_type": "movie",
+          "title": "Saffron Skies",
+          "role": "The Courier"
+        },
+        {
+          "id": 8001,
+          "media_type": "movie",
+          "title": "Glass Harbor",
+          "role": "Officer Bell"
+        },
+        {
+          "id": 12001,
+          "media_type": "movie",
+          "title": "Hollow Crown Road",
+          "role": "Jonah Vale"
+        },
+        {
+          "id": 13001,
+          "media_type": "movie",
+          "title": "Starling Season",
+          "role": "Kit Moreno"
+        },
+        {
+          "id": 14001,
+          "media_type": "movie",
+          "title": "Undertow",
+          "role": "Tara Singh"
+        },
+        {
+          "id": 18001,
+          "media_type": "movie",
+          "title": "Midnight Monsoon",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 19001,
+          "media_type": "movie",
+          "title": "Satellite Hearts",
+          "role": "Nadia Karim"
+        },
+        {
+          "id": 20001,
+          "media_type": "movie",
+          "title": "The Brass Menagerie",
+          "role": "Hal Pryce"
+        },
+        {
+          "id": 4002,
+          "media_type": "tv",
+          "title": "Atlas Rising",
+          "role": "Dr. Anand Rao"
+        },
+        {
+          "id": 5002,
+          "media_type": "tv",
+          "title": "Bloom & Bone",
+          "role": "Rafe Okoro"
+        },
+        {
+          "id": 6002,
+          "media_type": "tv",
+          "title": "Kitchen Galaxy",
+          "role": "Arjun Pillai"
+        },
+        {
+          "id": 10002,
+          "media_type": "tv",
+          "title": "The Tidewater Files",
+          "role": "Old Sam"
+        }
+      ],
+      "_ui": {
+        "c1": "#F472B6",
+        "c2": "#0EA5E9"
+      }
+    },
+    {
+      "id": 12003,
+      "name": "Maya Chen",
+      "known_for_department": "Acting",
+      "birthday": "1994-10-09",
+      "place_of_birth": "Vancouver, Canada",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 4001,
+          "media_type": "movie",
+          "title": "Paper Tigers",
+          "role": "Rafe Okoro"
+        },
+        {
+          "id": 5001,
+          "media_type": "movie",
+          "title": "Velvet Static",
+          "role": "Arjun Pillai"
+        },
+        {
+          "id": 10001,
+          "media_type": "movie",
+          "title": "Red Meridian",
+          "role": "Lumen (voice)"
+        },
+        {
+          "id": 11001,
+          "media_type": "movie",
+          "title": "Afterparty Protocol",
+          "role": "Jonah Vale"
+        },
+        {
+          "id": 16001,
+          "media_type": "movie",
+          "title": "Wildfire Waltz",
+          "role": "June Mercer"
+        },
+        {
+          "id": 17001,
+          "media_type": "movie",
+          "title": "The Cartographer’s Daughter",
+          "role": "Ilsa Brandt"
+        },
+        {
+          "id": 2002,
+          "media_type": "tv",
+          "title": "Chai & Chaos",
+          "role": "Mira Das"
+        },
+        {
+          "id": 3002,
+          "media_type": "tv",
+          "title": "The Ninth Precinct",
+          "role": "Dr. Anand Rao"
+        },
+        {
+          "id": 8002,
+          "media_type": "tv",
+          "title": "Pixel Pirates",
+          "role": "Captain Reyes"
+        },
+        {
+          "id": 9002,
+          "media_type": "tv",
+          "title": "Hush Valley",
+          "role": "Old Sam"
+        }
+      ],
+      "_ui": {
+        "c1": "#818CF8",
+        "c2": "#BE185D"
+      }
+    },
+    {
+      "id": 13003,
+      "name": "Leila Navarro",
+      "known_for_department": "Directing",
+      "birthday": "1979-03-03",
+      "place_of_birth": "Mexico City, Mexico",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 1001,
+          "media_type": "movie",
+          "title": "Neon Tide",
+          "role": "Director"
+        },
+        {
+          "id": 5001,
+          "media_type": "movie",
+          "title": "Velvet Static",
+          "role": "Director"
+        },
+        {
+          "id": 9001,
+          "media_type": "movie",
+          "title": "Moonlit Mechanics",
+          "role": "Director"
+        },
+        {
+          "id": 13001,
+          "media_type": "movie",
+          "title": "Starling Season",
+          "role": "Director"
+        },
+        {
+          "id": 17001,
+          "media_type": "movie",
+          "title": "The Cartographer’s Daughter",
+          "role": "Director"
+        },
+        {
+          "id": 1002,
+          "media_type": "tv",
+          "title": "Signal & Noise",
+          "role": "Creator"
+        },
+        {
+          "id": 5002,
+          "media_type": "tv",
+          "title": "Bloom & Bone",
+          "role": "Creator"
+        },
+        {
+          "id": 9002,
+          "media_type": "tv",
+          "title": "Hush Valley",
+          "role": "Creator"
+        }
+      ],
+      "_ui": {
+        "c1": "#2DD4BF",
+        "c2": "#6D28D9"
+      }
+    },
+    {
+      "id": 14003,
+      "name": "Ruben Castillo",
+      "known_for_department": "Directing",
+      "birthday": "1975-01-22",
+      "place_of_birth": "Buenos Aires, Argentina",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 2001,
+          "media_type": "movie",
+          "title": "The Last Lantern",
+          "role": "Director"
+        },
+        {
+          "id": 6001,
+          "media_type": "movie",
+          "title": "Ironbloom",
+          "role": "Director"
+        },
+        {
+          "id": 10001,
+          "media_type": "movie",
+          "title": "Red Meridian",
+          "role": "Director"
+        },
+        {
+          "id": 14001,
+          "media_type": "movie",
+          "title": "Undertow",
+          "role": "Director"
+        },
+        {
+          "id": 18001,
+          "media_type": "movie",
+          "title": "Midnight Monsoon",
+          "role": "Director"
+        },
+        {
+          "id": 2002,
+          "media_type": "tv",
+          "title": "Chai & Chaos",
+          "role": "Creator"
+        },
+        {
+          "id": 6002,
+          "media_type": "tv",
+          "title": "Kitchen Galaxy",
+          "role": "Creator"
+        },
+        {
+          "id": 10002,
+          "media_type": "tv",
+          "title": "The Tidewater Files",
+          "role": "Creator"
+        }
+      ],
+      "_ui": {
+        "c1": "#FDBA74",
+        "c2": "#991B1B"
+      }
+    },
+    {
+      "id": 15003,
+      "name": "Ananya Iyer",
+      "known_for_department": "Directing",
+      "birthday": "1983-07-29",
+      "place_of_birth": "Bengaluru, India",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 3001,
+          "media_type": "movie",
+          "title": "Quiet Orbit",
+          "role": "Director"
+        },
+        {
+          "id": 7001,
+          "media_type": "movie",
+          "title": "Saffron Skies",
+          "role": "Director"
+        },
+        {
+          "id": 11001,
+          "media_type": "movie",
+          "title": "Afterparty Protocol",
+          "role": "Director"
+        },
+        {
+          "id": 15001,
+          "media_type": "movie",
+          "title": "Prism Heights",
+          "role": "Director"
+        },
+        {
+          "id": 19001,
+          "media_type": "movie",
+          "title": "Satellite Hearts",
+          "role": "Director"
+        },
+        {
+          "id": 3002,
+          "media_type": "tv",
+          "title": "The Ninth Precinct",
+          "role": "Creator"
+        },
+        {
+          "id": 7002,
+          "media_type": "tv",
+          "title": "Night Shift Diaries",
+          "role": "Creator"
+        }
+      ],
+      "_ui": {
+        "c1": "#C084FC",
+        "c2": "#0E7490"
+      }
+    },
+    {
+      "id": 16003,
+      "name": "Theo Grant",
+      "known_for_department": "Directing",
+      "birthday": "1980-02-17",
+      "place_of_birth": "Manchester, UK",
+      "profile_path": null,
+      "known_for": [
+        {
+          "id": 4001,
+          "media_type": "movie",
+          "title": "Paper Tigers",
+          "role": "Director"
+        },
+        {
+          "id": 8001,
+          "media_type": "movie",
+          "title": "Glass Harbor",
+          "role": "Director"
+        },
+        {
+          "id": 12001,
+          "media_type": "movie",
+          "title": "Hollow Crown Road",
+          "role": "Director"
+        },
+        {
+          "id": 16001,
+          "media_type": "movie",
+          "title": "Wildfire Waltz",
+          "role": "Director"
+        },
+        {
+          "id": 20001,
+          "media_type": "movie",
+          "title": "The Brass Menagerie",
+          "role": "Director"
+        },
+        {
+          "id": 4002,
+          "media_type": "tv",
+          "title": "Atlas Rising",
+          "role": "Creator"
+        },
+        {
+          "id": 8002,
+          "media_type": "tv",
+          "title": "Pixel Pirates",
+          "role": "Creator"
+        }
+      ],
+      "_ui": {
+        "c1": "#93C5FD",
+        "c2": "#4338CA"
+      }
+    }
+  ],
+  "lists": {
+    "trendWeek": [
+      1001,
+      1002,
+      9001,
+      3001,
+      4002,
+      6001,
+      8002,
+      13001,
+      7001,
+      5002
+    ],
+    "trendDay": [
+      7001,
+      8002,
+      14001,
+      9001,
+      6002,
+      11001,
+      18001,
+      1002,
+      13001,
+      7002
+    ],
+    "popMovies": [
+      1001,
+      2001,
+      3001,
+      4001,
+      5001,
+      6001,
+      8001,
+      9001,
+      17001
+    ],
+    "nowPlaying": [
+      7001,
+      9001,
+      11001,
+      13001,
+      14001,
+      18001
+    ],
+    "upcoming": [
+      15001,
+      16001,
+      19001,
+      20001
+    ],
+    "topMovies": [
+      9001,
+      1001,
+      13001,
+      3001,
+      17001,
+      7001,
+      10001,
+      2001,
+      8001,
+      5001,
+      12001,
+      6001,
+      18001,
+      4001,
+      14001,
+      11001
+    ],
+    "popTV": [
+      1002,
+      2002,
+      3002,
+      4002,
+      5002,
+      6002,
+      7002,
+      8002,
+      10002
+    ],
+    "airing": [
+      2002,
+      6002,
+      8002
+    ],
+    "onAir": [
+      4002,
+      7002,
+      9002
+    ],
+    "topTV": [
+      10002,
+      1002,
+      8002,
+      3002,
+      5002,
+      2002,
+      7002,
+      4002,
+      9002,
+      6002
+    ],
+    "popPeople": [
+      1003,
+      3003,
+      11003,
+      2003,
+      13003,
+      7003,
+      5003,
+      4003,
+      9003,
+      15003,
+      6003,
+      12003,
+      8003,
+      14003,
+      10003,
+      16003
+    ]
+  }
+}
