@@ -35,7 +35,13 @@ tvApp/src/main/java/com/techgv/cineverse/
 ├─ domain/    Title, Person, Detail, Season, Episode, Review, LibraryState, MediaRef …
 └─ ui/        nav (AppNav, NavRail, routes), components (cards, dialogs, focus memory, toasts),
               home, browse, search, detail, person, season, player, library, login, settings, about, feedback
+shared/       KMP library (android, iosArm64, iosSimulatorArm64, wasmJs, jvm) — P0 smoke only so far
+composeApp/   KMP Compose UI library (android, iOS framework `ComposeApp`, wasm `main()`)
+androidApp/   phone app (com.techgv.cineverse.mobile), consumes composeApp
+iosApp/       Xcode project hosting the ComposeApp framework
+server/       Ktor JVM server (`GET /healthz`)
 docs/IMPLEMENTATION_SPEC.md   normative spec (TMDB endpoint map, auth flow, per-screen rules, decisions)
+docs/KMP_ARCHITECTURE_PLAN.md Kotlin Multiplatform migration plan; docs/TOOLCHAIN.md pinned versions
 SHELL_CHANGES.md              integration record: shell contract, merge log, follow-ups, open gates
 ```
 
@@ -46,12 +52,12 @@ SHELL_CHANGES.md              integration record: shell contract, merge log, fol
    TMDB_READ_ACCESS_TOKEN=<your v4 "API Read Access Token" from https://www.themoviedb.org/settings/api>
    ```
    The build still compiles without it (empty token → API calls fail with a visible error).
-2. **Android SDK** — set `ANDROID_HOME` (e.g. `~/Library/Android/sdk`). Requires AGP 9 / Kotlin 2.2 (see
-   `gradle/libs.versions.toml`).
+2. **Android SDK** — set `ANDROID_HOME` (e.g. `~/Library/Android/sdk`). Requires AGP 9 / Kotlin 2.3 (see
+   `docs/TOOLCHAIN.md`).
 3. **Build & run**
    ```bash
-   ./gradlew assembleDebug
-   ./gradlew installDebug          # to a running Android TV emulator or device
+   ./gradlew :tvApp:assembleDebug
+   ./gradlew :tvApp:installDebug   # to a running Android TV emulator or device
    ```
    An Android TV emulator image (API 36, 1080p) is the primary dev target; a Google TV AVD named
    `CineVerse_TV_1080p_API36` was used throughout development.
@@ -59,13 +65,14 @@ SHELL_CHANGES.md              integration record: shell contract, merge log, fol
 ## Testing
 
 ```bash
-./gradlew lint testDebugUnitTest                 # ~200 JVM tests
-./gradlew assembleDebugAndroidTest
+./gradlew :tvApp:lint :tvApp:testDebugUnitTest   # ~200 JVM tests
+./gradlew :tvApp:assembleDebugAndroidTest
 adb -s <serial> shell am instrument -w -e package com.techgv.cineverse.ui \
     com.techgv.cineverse.test/androidx.test.runner.AndroidJUnitRunner   # ~38 D-pad tests
 ```
 
-CI (`.github/workflows/android.yml`) runs `assembleDebug lint testDebugUnitTest`.
+CI: `.github/workflows/tv-linux.yml` (TV build, lint, unit tests, release build),
+`shared-server-linux.yml` (shared tests, server, wasm secret scan) and `mobile-macos.yml` (iOS + phone builds).
 
 Debug builds log HTTP headers only; a bounded 2 KB body preview can be enabled with
 `adb shell setprop log.tag.TmdbHttp VERBOSE` (auth bodies, tokens and `session_id` are always redacted).
