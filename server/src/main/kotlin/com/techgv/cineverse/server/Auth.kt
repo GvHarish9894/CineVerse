@@ -10,6 +10,7 @@ import io.ktor.http.renderSetCookieHeader
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.log
 import io.ktor.server.plugins.ratelimit.rateLimit
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
@@ -44,8 +45,11 @@ data class AuthSession(
 
 val SIGNED_OUT = AuthSession(signedIn = false, accountObjectId = null, displayName = null, sessionGeneration = 0)
 
-/** A pending sign-in, bound to the browser that started it by [binding] (the attempt cookie). */
-class AuthAttempt(val id: String, val binding: String, val requestToken: String, val createdAt: Long) {
+/**
+ * A pending sign-in, bound to the browser that started it by [binding] (the attempt cookie) and valid only while
+ * that browser's auth [epoch] is unchanged (see [AuthStore.supersede]).
+ */
+class AuthAttempt(val id: String, val binding: String, val epoch: Long, val requestToken: String, val createdAt: Long) {
     override fun toString() = "AuthAttempt(redacted)"
 }
 
@@ -72,22 +76,52 @@ class AuthStore(private val config: ServerConfig, private val nowMillis: () -> L
     private val sessions = ConcurrentHashMap<String, UserSession>()
     private val attempts = ConcurrentHashMap<String, AuthAttempt>()
     private val generations = AtomicLong(0)
+    private val attemptTtl = config.attemptTtl.inWholeMilliseconds
 
-    fun newAttempt(requestToken: String, id: String, binding: String): AuthAttempt {
+    private class BrowserEpoch(val epoch: Long, val touchedAt: Long)
+
+    /** Auth-transition epoch per browser, keyed by its attempt-cookie binding. Guarded by `this`. */
+    private val browserEpochs = HashMap<String, BrowserEpoch>()
+
+    /** Reuses the browser's [existingBinding] while the server still knows it, so one epoch covers all its attempts. */
+    @Synchronized
+    fun newAttempt(requestToken: String, id: String, existingBinding: String?): AuthAttempt {
         val now = nowMillis()
-        attempts.values.removeIf { now - it.createdAt >= config.attemptTtl.inWholeMilliseconds }
-        return AuthAttempt(id, binding, requestToken, now).also { attempts[id] = it }
+        attempts.values.removeIf { now - it.createdAt >= attemptTtl }
+        // Untouched for a whole attempt TTL: every attempt under that binding has expired.
+        browserEpochs.values.removeIf { now - it.touchedAt >= attemptTtl }
+        val binding = existingBinding?.takeIf { it in browserEpochs } ?: randomId()
+        val epoch = browserEpochs[binding]?.epoch ?: 0
+        browserEpochs[binding] = BrowserEpoch(epoch, now)
+        return AuthAttempt(id, binding, epoch, requestToken, now).also { attempts[id] = it }
     }
 
-    fun attempt(id: String): AuthAttempt? = attempts[id]?.takeIf {
-        nowMillis() - it.createdAt < config.attemptTtl.inWholeMilliseconds
+    fun attempt(id: String): AuthAttempt? = attempts[id]?.takeIf { nowMillis() - it.createdAt < attemptTtl }
+
+    /** Logout, cancel or a committed sign-in: every outstanding (pending or in-flight) attempt of the browser dies. */
+    @Synchronized
+    fun supersede(binding: String) {
+        val current = browserEpochs[binding] ?: return
+        browserEpochs[binding] = BrowserEpoch(current.epoch + 1, nowMillis())
+    }
+
+    @Synchronized
+    fun isCurrent(attempt: AuthAttempt) =
+        browserEpochs[attempt.binding]?.epoch == attempt.epoch && nowMillis() - attempt.createdAt < attemptTtl
+
+    /** Creates the session unless [attempt] was superseded meanwhile; atomic with [supersede], no I/O inside. */
+    @Synchronized
+    fun commitSignIn(attempt: AuthAttempt, tokens: AccessTokenDto, sessionId: String, account: AccountDto): UserSession? {
+        if (!isCurrent(attempt)) return null
+        supersede(attempt.binding)
+        return createSession(tokens, sessionId, account)
     }
 
     /** Atomically takes [attempt] so concurrent callbacks never exchange one request token twice. */
     fun claim(attempt: AuthAttempt) = attempts.remove(attempt.id, attempt)
     fun restore(attempt: AuthAttempt) { attempts.putIfAbsent(attempt.id, attempt) }
 
-    fun createSession(tokens: AccessTokenDto, sessionId: String, account: AccountDto): UserSession {
+    private fun createSession(tokens: AccessTokenDto, sessionId: String, account: AccountDto): UserSession {
         val now = nowMillis()
         sessions.values.removeIf { now >= it.expiresAt }
         val session = UserSession(
@@ -187,7 +221,7 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
                 val redirectTo = "${config.publicOrigin}/api/auth/callback?attempt=$id"
                 val upstream = tmdb.call(HttpMethod.Post, "4/auth/request_token", body = buildJsonObject { put("redirect_to", redirectTo) })
                 if (!upstream.ok) throw classify(TmdbOperation.Catalog, upstream)
-                val attempt = store.newAttempt(upstream.decode<RequestTokenDto>().requestToken, id, randomId())
+                val attempt = store.newAttempt(upstream.decode<RequestTokenDto>().requestToken, id, call.request.cookies[ATTEMPT_COOKIE])
                 call.setCookie(cookies.attempt(attempt.binding))
                 val approveUrl = "https://www.themoviedb.org/auth/access?request_token=" + attempt.requestToken.encodeURLParameter()
                 call.respondJson(apiJson.encodeToString(StartResponse(approveUrl, attempt.id)))
@@ -200,6 +234,10 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
                 val binding = call.request.cookies[ATTEMPT_COOKIE]
                 if (binding == null || !constantTimeEquals(binding, attempt.binding)) {
                     throw ApiError(HttpStatusCode.Forbidden, "attempt_mismatch")
+                }
+                if (!store.isCurrent(attempt)) {
+                    store.claim(attempt)
+                    throw ApiError(HttpStatusCode.Conflict, ATTEMPT_SUPERSEDED)
                 }
                 if (!store.claim(attempt)) throw ApiError(HttpStatusCode.Gone, "attempt_expired")
 
@@ -230,11 +268,15 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
                     throw e
                 }
 
+                // Logout / cancel / another sign-in of this browser while TMDB was answering wins over this one.
+                val session = store.commitSignIn(attempt, tokens, sessionId, account) ?: run {
+                    revoke(call, tmdb, tokens.accessToken, sessionId)
+                    throw ApiError(HttpStatusCode.Conflict, ATTEMPT_SUPERSEDED)
+                }
                 // Rotation: a previous session in this browser is ended, never reused.
                 call.request.cookies[SESSION_COOKIE]?.let(store::removeSession)?.let {
                     revoke(call, tmdb, it.userAccessToken, it.sessionId)
                 }
-                val session = store.createSession(tokens, sessionId, account)
                 call.setCookie(cookies.session(session.id))
                 call.setCookie(cookies.csrf(randomId()))
                 call.setCookie(cookies.clearAttempt())
@@ -243,15 +285,25 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
 
             post("/api/auth/logout") {
                 call.requireCsrf(config)
+                call.request.cookies[ATTEMPT_COOKIE]?.let(store::supersede)
                 // Local sign-out first; remote revocation is best effort and never blocks it.
                 val session = call.request.cookies[SESSION_COOKIE]?.let(store::removeSession)
                 call.setCookie(cookies.clearSession())
                 if (session != null) revoke(call, tmdb, session.userAccessToken, session.sessionId)
                 call.respondSession(SIGNED_OUT)
             }
+
+            // "Not now": ends every pending or in-flight sign-in of this browser; an existing session stays.
+            post("/api/auth/cancel") {
+                call.requireCsrf(config)
+                call.request.cookies[ATTEMPT_COOKIE]?.let(store::supersede)
+                call.respond(HttpStatusCode.NoContent)
+            }
         }
     }
 }
+
+const val ATTEMPT_SUPERSEDED = "attempt_superseded"
 
 /** Best-effort, bounded (5 s) revocation (spec §4.2). Failures are logged without any token value. */
 private suspend fun revoke(call: ApplicationCall, tmdb: Tmdb, userAccessToken: String, sessionId: String?) {

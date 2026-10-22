@@ -47,7 +47,8 @@ The image runs as a non-root user on a JRE 21; TLS is terminated in front of it 
 | `GET /api/session` | — | `AuthSession` JSON; issues the `cv_csrf` cookie if missing |
 | `POST /api/auth/start` | CSRF | creates a v4 request token; `{approveUrl, attemptId}` + attempt cookie |
 | `GET /api/auth/callback?attempt=` | attempt cookie | TMDB redirect target; exchange → convert → account; sets `cv_session`; 302 to `${PUBLIC_ORIGIN}/?signedIn=1` |
-| `POST /api/auth/logout` | CSRF | local sign-out, then best-effort TMDB revocation; returns signed-out `AuthSession` |
+| `POST /api/auth/logout` | CSRF | local sign-out + cancels this browser's pending sign-ins, then best-effort TMDB revocation; returns signed-out `AuthSession` |
+| `POST /api/auth/cancel[?attempt=]` | CSRF | "Not now": cancels every pending/in-flight sign-in of this browser; the current session stays; `204` |
 | `GET /api/account/{movie\|tv}/{watchlist\|favorites\|rated}?page&sort_by&language` | session | v4 account list (user token) |
 | `GET /api/account/states/{movie\|tv}/{id}` | session | v3 `account_states` |
 | `POST /api/account/watchlist` `{"media_type","media_id","watchlist"}` | session + CSRF + binding | v3 write |
@@ -85,6 +86,7 @@ never relayed. TMDB codes map per spec §3.3:
 | exchange other 4xx | 403 | `denied` |
 | attempt unknown/expired/used | 410 | `attempt_expired` |
 | attempt cookie mismatch | 403 | `attempt_mismatch` |
+| logout / cancel / another sign-in of this browser happened first (or the attempt expired mid-callback) | 409 | `attempt_superseded` (nothing kept, tokens revoked) |
 | convert/account failed after exchange | 502 | `sign_in_failed` (nothing kept, tokens revoked) |
 | no session cookie | 401 | `not_signed_in` |
 | expired/unknown session, TMDB 3/14/17/37/35/36 | 401 + cleared cookie | `session_expired` |
@@ -104,7 +106,10 @@ never relayed. TMDB codes map per spec §3.3:
    `Origin`. On `403 csrf_token`, call `/api/session` once and retry (nothing reached TMDB).
 3. Sign-in: `POST /api/auth/start` → open `approveUrl` in a new tab. TMDB redirects that tab to the callback, which
    lands on `/?signedIn=1` signed in; that tab broadcasts `{sessionGeneration}` and the original tab refetches
-   `/api/session`. `409 not_approved` means "not approved yet".
+   `/api/session`. `409 not_approved` means "not approved yet". "Not now"/close: `POST /api/auth/cancel?attempt=…`
+   (or simply `POST /api/auth/logout`); both invalidate every outstanding attempt of this browser, including a
+   callback already talking to TMDB, which then ends in `409 attempt_superseded` without signing in. Any
+   completed sign-in also supersedes the browser's other attempts.
 4. Account writes send `X-CV-Expected-Session-Generation` and `X-CV-Expected-Account` (= `accountObjectId`) from
    the `AuthSession` the screen is showing; `409 stale_session` → refetch the session and drop the action.
    `401 session_expired` → signed out ("Sign-in expired"). Writes are never retried by the server.
@@ -126,7 +131,10 @@ never relayed. TMDB codes map per spec §3.3:
 - **Sign-in.** The attempt id travels in `redirect_to`; a separate random binding secret lives in the
   `cv_auth_attempt` cookie (HttpOnly, Path=/api/auth, 15 min). The callback must present both, so an approved
   request token can't be redeemed by another browser (login CSRF). The callback is only a hint: the token
-  exchange decides. Attempts are single-use and expire after 15 min.
+  exchange decides. Attempts are single-use and expire after 15 min. The binding is kept per browser across
+  attempts and carries an auth epoch: logout, cancel and every committed sign-in bump it, and the callback
+  re-checks it (atomically with creating the session) after `/3/account` answers — a superseded attempt keeps
+  nothing and revokes what it just obtained. Logout never waits on a callback's upstream calls.
 - **CSRF.** Every state-changing route requires `Origin` ∈ {`PUBLIC_ORIGIN`, `CORS_ORIGIN`}, rejects
   `Sec-Fetch-Site` other than same-origin/same-site, requires `X-CV-CSRF` == `cv_csrf` cookie (double submit;
   cookie is SameSite=Strict), and writes require `application/json`. CORS is off unless `CORS_ORIGIN` is set.
