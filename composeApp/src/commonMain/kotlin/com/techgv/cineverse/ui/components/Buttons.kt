@@ -13,7 +13,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -67,6 +73,7 @@ fun PillButton(
     icon: ImageVector? = null,
     small: Boolean = false,
     haptic: HapticKind = HapticKind.Select,
+    enabled: Boolean = true,
 ) {
     val web = LocalShellStyle.current == ShellStyle.Web
     val source = remember { MutableInteractionSource() }
@@ -75,8 +82,9 @@ fun PillButton(
     Row(
         modifier
             .minimumInteractiveComponentSize()
-            .then(if (variant == ButtonVariant.Accent) Modifier.dropShadow(shape, Shadow(30.dp, Tokens.Colors.Accent, (-10).dp, DpOffset(0.dp, 12.dp))) else Modifier)
-            .cvClickable(onClick, haptic = haptic, focusShape = shape, pressedScale = if (web) 0.97f else Tokens.Motion.PressScale, interactionSource = source)
+            .disabledAlpha(enabled)
+            .then(if (variant == ButtonVariant.Accent && enabled) Modifier.dropShadow(shape, Shadow(30.dp, Tokens.Colors.Accent, (-10).dp, DpOffset(0.dp, 12.dp))) else Modifier)
+            .cvClickable(onClick, haptic = haptic, focusShape = shape, pressedScale = if (web) 0.97f else Tokens.Motion.PressScale, enabled = enabled, interactionSource = source)
             .clip(shape)
             .background(variant.container.hovered(hovered))
             .heightIn(min = if (small) 38.dp else 46.dp)
@@ -91,8 +99,9 @@ fun PillButton(
 
 /**
  * Round icon button: mobile `.glassbtn` 40dp over art, `.btn.round` 46dp, web `.circ` 50dp / `.arrow` 40dp.
- * Visual size [diameter]; the touch target is always ≥ 48dp.
+ * Visual size [diameter]; the touch target is always ≥ 48dp. Web: hovering shows [contentDescription] as a tooltip.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoundIconButton(
     icon: ImageVector,
@@ -103,19 +112,37 @@ fun RoundIconButton(
     container: Color = Color(12, 10, 24).copy(alpha = 0.55f),
     content: Color = Color.White,
     haptic: HapticKind = HapticKind.Tap,
+    enabled: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
-    Box(
-        modifier
-            .minimumInteractiveComponentSize()
-            .cvClickable(onClick, haptic = haptic, focusShape = CircleShape, interactionSource = source)
-            .semantics { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(Modifier.size(diameter).clip(CircleShape).background(container.hovered(hovered)), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
+    val button = @Composable {
+        Box(
+            modifier
+                .sizeIn(minWidth = MinTouchTarget, minHeight = MinTouchTarget)
+                .cvClickable(onClick, haptic = haptic, focusShape = CircleShape, enabled = enabled, interactionSource = source)
+                .semantics { this.contentDescription = contentDescription },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.size(diameter).disabledAlpha(enabled).clip(CircleShape).background(container.hovered(hovered)), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
+            }
         }
+    }
+    if (LocalShellStyle.current == ShellStyle.Web) {
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+            // `.tip`: white, dark text, radius 8, 12.5 semibold.
+            tooltip = {
+                PlainTooltip(shape = RoundedCornerShape(8.dp), containerColor = Color.White, contentColor = Tokens.Colors.OnFocus) {
+                    Text(contentDescription, style = bodyStyle(12.5.sp, FontWeight.SemiBold))
+                }
+            },
+            state = rememberTooltipState(),
+            content = button,
+        )
+    } else {
+        button()
     }
 }
 
@@ -129,11 +156,13 @@ fun ActionTile(
     container: Color = Color.White.copy(alpha = 0.08f),
     content: Color = Tokens.Colors.TextPrimary,
     haptic: HapticKind = HapticKind.Select,
+    enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(18.dp)
     Column(
         modifier
-            .cvClickable(onClick, haptic = haptic, focusShape = shape)
+            .disabledAlpha(enabled)
+            .cvClickable(onClick, haptic = haptic, focusShape = shape, enabled = enabled)
             .clip(shape)
             .background(container)
             .heightIn(min = 66.dp)

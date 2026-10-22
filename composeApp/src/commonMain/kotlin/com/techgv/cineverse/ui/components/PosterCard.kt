@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,7 +65,7 @@ import com.techgv.cineverse.ui.theme.displayStyle
 
 /** The web card's hover quick action (watchlist + / ✓). [active] = already on the list. */
 @Immutable
-data class QuickAction(val active: Boolean, val label: String, val onToggle: () -> Unit)
+data class QuickAction(val active: Boolean, val label: String, val enabled: Boolean = true, val onToggle: () -> Unit)
 
 /** Poster width per kit: mobile 118, web 180 (140 under the web kit's ≤ 640 breakpoint). */
 @Composable
@@ -160,36 +161,41 @@ fun PosterCard(
                 )
             }
         }
-        if (quickAction != null) QuickActionButton(quickAction, cardActive = active, lift = lift)
+        if (quickAction != null) QuickActionButton(quickAction, cardActive = active, lift = lift, reduceMotion = reduceMotion)
     }
 }
 
+/** 38dp disc inside a 48dp target (5dp + 5dp = the kit's 10dp inset); focus ring and click live on the target. */
 @Composable
-private fun BoxScope.QuickActionButton(action: QuickAction, cardActive: Boolean, lift: Float) {
+private fun BoxScope.QuickActionButton(action: QuickAction, cardActive: Boolean, lift: Float, reduceMotion: Boolean) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     val hovered by source.collectIsHoveredAsState()
     AnimatedVisibility(
         visible = cardActive || focused || hovered || action.active,
-        enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.8f),
-        exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.8f),
-        modifier = Modifier.align(Alignment.TopEnd).padding(10.dp).graphicsLayer { translationY = -6.dp.toPx() * lift },
+        enter = if (reduceMotion) fadeIn(tween(200)) else fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.8f),
+        exit = if (reduceMotion) fadeOut(tween(200)) else fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.8f),
+        modifier = Modifier.align(Alignment.TopEnd).padding(5.dp).graphicsLayer { translationY = -6.dp.toPx() * lift },
     ) {
         Box(
             Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(if (action.active) Tokens.Colors.Accent else Tokens.Colors.Background.copy(alpha = 0.72f))
-                .cvClickable(action.onToggle, haptic = HapticKind.Select, onClickLabel = action.label, focusShape = CircleShape, interactionSource = source)
+                .sizeIn(minWidth = MinTouchTarget, minHeight = MinTouchTarget)
+                .cvClickable(action.onToggle, haptic = HapticKind.Select, onClickLabel = action.label, focusShape = CircleShape, enabled = action.enabled, interactionSource = source)
                 .semantics { contentDescription = action.label },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                if (action.active) CvIcons.Check else CvIcons.Plus,
-                contentDescription = null,
-                tint = if (action.active) Tokens.Colors.OnAccent else Color.White,
-                modifier = Modifier.size(20.dp),
-            )
+            Box(
+                Modifier.size(38.dp).disabledAlpha(action.enabled).clip(CircleShape)
+                    .background(if (action.active) Tokens.Colors.Accent else Tokens.Colors.Background.copy(alpha = 0.72f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (action.active) CvIcons.Check else CvIcons.Plus,
+                    contentDescription = null,
+                    tint = if (action.active) Tokens.Colors.OnAccent else Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }

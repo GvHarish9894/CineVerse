@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Shape
@@ -25,6 +26,8 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.techgv.cineverse.ui.design.Tokens
@@ -34,6 +37,12 @@ import com.techgv.cineverse.ui.theme.LocalReduceMotion
 
 /** cubic-bezier(.2,.8,.2,1): the kits' standard "emphasized" curve (tap, hover lift, enter). */
 val EmphasizedEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
+
+/** Minimum touch target: controls with a smaller visual sit inside a box at least this big. */
+val MinTouchTarget = 48.dp
+
+/** Disabled controls fade to Material's 38% (semantics come from `cvClickable(enabled = false)`). */
+fun Modifier.disabledAlpha(enabled: Boolean): Modifier = if (enabled) this else alpha(0.38f)
 
 /** Keyboard focus ring from the web kit: 2px white outline, 3px outside the element, following its [shape]. */
 fun Modifier.focusRing(interactionSource: InteractionSource, shape: Shape): Modifier = composed {
@@ -61,8 +70,9 @@ fun Modifier.pressScale(interactionSource: InteractionSource, pressedScale: Floa
 }
 
 /**
- * The house clickable: press-scale, keyboard focus ring, hover tracking, haptic and semantics role in one place.
- * Pass [interactionSource] when the caller also reacts to hover/focus (cards).
+ * The house clickable: press-scale, keyboard focus ring, hover tracking, hand cursor, haptic and semantics role in
+ * one place. Disabled: not focusable, no click/haptic, announced as disabled. Pass [interactionSource] when the
+ * caller also reacts to hover/focus (cards).
  */
 fun Modifier.cvClickable(
     onClick: () -> Unit,
@@ -79,6 +89,7 @@ fun Modifier.cvClickable(
     pressScale(source, pressedScale)
         .focusRing(source, focusShape)
         .hoverable(source, enabled)
+        .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
         .clickable(source, indication = null, enabled = enabled, onClickLabel = onClickLabel, role = role) {
             haptic?.let(haptics::perform)
             onClick()

@@ -30,7 +30,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetState
+import androidx.compose.material3.SheetValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
@@ -40,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -115,14 +117,38 @@ fun AmbientGlow(palette: ArtPalette, modifier: Modifier = Modifier, strength: Fl
 
 /**
  * Bottom sheet (`.sheet`): raised surface, 30dp top radius, 40×5 handle, scrim rgba(5,4,12,.62), drag-to-dismiss and
- * scrim tap close (Material 3 ModalBottomSheet underneath).
+ * scrim tap close (Material 3 ModalBottomSheet underneath). Under reduce motion it appears and disappears in place
+ * (scrim fade only): it starts expanded, and every close path (scrim, drag, back) is reported when the sheet is
+ * asked to hide, instead of sliding it down first.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CvBottomSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val reduceMotion = LocalReduceMotion.current
+    val density = LocalDensity.current
+    val dismiss by rememberUpdatedState(onDismissRequest)
+    val sheetState = remember(reduceMotion, density) {
+        var dismissed = false
+        SheetState(
+            skipPartiallyExpanded = true,
+            // BottomSheetDefaults' (internal) thresholds.
+            positionalThreshold = { with(density) { 56.dp.toPx() } },
+            velocityThreshold = { with(density) { 125.dp.toPx() } },
+            initialValue = if (reduceMotion) SheetValue.Expanded else SheetValue.Hidden,
+            confirmValueChange = { target ->
+                val closeInPlace = reduceMotion && target == SheetValue.Hidden
+                if (closeInPlace && !dismissed) {
+                    dismissed = true
+                    dismiss()
+                }
+                !closeInPlace
+            },
+        )
+    }
     ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        // Under reduce motion confirmValueChange already reported the close.
+        onDismissRequest = { if (!reduceMotion) onDismissRequest() },
+        sheetState = sheetState,
         shape = RoundedCornerShape(topStart = Tokens.Radius.Sheet, topEnd = Tokens.Radius.Sheet),
         containerColor = Tokens.Colors.SurfaceSheet,
         contentColor = Tokens.Colors.TextPrimary,

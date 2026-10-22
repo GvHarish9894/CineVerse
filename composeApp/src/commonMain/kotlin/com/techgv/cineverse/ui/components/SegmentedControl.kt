@@ -63,24 +63,29 @@ fun SegmentedControl(
         else -> 34.dp
     }
     val reduceMotion = LocalReduceMotion.current
-    BoxWithConstraints(modifier.clip(outer).background(Color.White.copy(alpha = 0.08f)).padding(4.dp)) {
-        val segmentWidth = maxWidth / options.size
+    // Mobile: each option is a ≥ 48dp touch target; the drawn track stays segment + 2 × 4dp, centred in it.
+    val optionMinHeight = if (web) segmentHeight else maxOf(MinTouchTarget, segmentHeight + 8.dp)
+    val trackInset = if (web) 0.dp else (optionMinHeight - segmentHeight - 8.dp) / 2
+    // Mobile options span the whole target, so their label padding also covers the track inset + track padding.
+    val labelPaddingV = if (web) 4.dp else 4.dp + trackInset + 4.dp
+    BoxWithConstraints(modifier) {
+        val segmentWidth = (maxWidth - 8.dp) / options.size
         val pillOffset by animateDpAsState(
             segmentWidth * selectedIndex,
             if (reduceMotion) snap() else spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow),
             label = "segmentPill",
         )
-        Box(Modifier.matchParentSize()) {
+        Box(Modifier.matchParentSize().padding(vertical = trackInset).clip(outer).background(Color.White.copy(alpha = 0.08f)).padding(4.dp)) {
             Box(Modifier.offset(x = pillOffset).width(segmentWidth).fillMaxHeight().clip(inner).background(Tokens.Colors.Accent))
         }
-        Row(Modifier.fillMaxWidth().selectableGroup()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = if (web) 4.dp else 0.dp).selectableGroup()) {
             options.forEachIndexed { index, label ->
                 val selected = index == selectedIndex
                 val color by animateColorAsState(if (selected) Tokens.Colors.OnAccent else Tokens.Colors.TextPrimary.copy(alpha = 0.82f), label = "segmentText")
                 Box(
                     Modifier
                         .weight(1f)
-                        .heightIn(min = segmentHeight)
+                        .heightIn(min = optionMinHeight)
                         .cvClickable({ if (!selected) onSelect(index) }, role = Role.Tab, haptic = HapticKind.Tick, focusShape = inner)
                         .semantics { this.selected = selected },
                     contentAlignment = Alignment.Center,
@@ -92,7 +97,7 @@ fun SegmentedControl(
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = labelPaddingV),
                     )
                 }
             }
