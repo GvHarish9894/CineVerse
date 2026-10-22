@@ -23,3 +23,19 @@ Supervisor-approved items are marked ✔. Code: `composeApp/src/commonMain/kotli
 
 Static instances from the Google Fonts CSS API (`fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Inter:wght@400;500;600;700`,
 default optical size), SIL Open Font License 1.1 (`composeApp/licenses/OFL-*.txt`), downloaded 2026-10-22. Recorded in `docs/TOOLCHAIN.md`.
+
+## Browser acceptance
+
+Gallery (`wasmJsBrowserDistribution` production bundle, plus the dev server for Chrome), checked 2026-10-23:
+
+- **Chrome**: production and development builds render with a clean console at 1440 and 390 wide (only WebGL driver info lines).
+- **Firefox 158** (headless): renders with a clean console.
+- **Safari**: the production bundle loads and runs. Safari fetched both `.wasm` modules and then the font and
+  `sample-tmdb.json` resources that the running Kotlin code requests. We have no accessibility-tree dump, no keyboard
+  events and no screenshot, because macOS blocked automation from the agent host: Apple Events to System Events
+  timed out (-1712) behind unanswered consent prompts, `AXIsProcessTrusted()` is false, and Screen Recording is
+  denied (`screencapture` could not create an image). The console is also unavailable, because Safari's remote
+  automation is a user setting and stays off. No setting or prompt was changed. Keyboard behaviour (Tab order, Esc
+  on dialog and sheet, focus return) is covered by the headless-browser Compose UI tests (`DialogFocusTest`,
+  `SheetDismissTest`). To check Safari by hand: Tab through the gallery, open the dialog and press Esc, then check
+  that focus is back on "Open dialog".
