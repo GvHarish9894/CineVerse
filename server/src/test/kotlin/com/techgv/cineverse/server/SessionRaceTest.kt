@@ -16,7 +16,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
-import java.io.File
+import io.ktor.server.application.plugin
+import io.ktor.server.routing.HttpMethodRouteSelector
+import io.ktor.server.routing.PathSegmentConstantRouteSelector
+import io.ktor.server.routing.PathSegmentParameterRouteSelector
+import io.ktor.server.routing.PathSegmentTailcardRouteSelector
+import io.ktor.server.routing.RoutingNode
+import io.ktor.server.routing.RoutingRoot
+import io.ktor.server.routing.getAllRoutes
+import io.ktor.server.testing.testApplication
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
@@ -119,7 +127,7 @@ class SessionRaceTest {
                 assertEquals(HttpStatusCode.Unauthorized, response.status)
                 // Tagged with the ended session so the client can tell it is not the one it shows now.
                 assertEquals(
-                    """{"error":"session_expired","status_code":35,"sessionGeneration":${a.sessionGeneration},"accountObjectId":"AOID-A"}""",
+                    """{"error":"session_expired","status_code":35,"sessionGeneration":"${a.sessionGeneration}","accountObjectId":"AOID-A"}""",
                     response.bodyAsText(),
                 )
             }
@@ -289,26 +297,51 @@ class SessionRaceTest {
         }
     }
 
-    /** Source-level guard: `POST /api/auth/logout` is the only route that can delete `cv_session`. */
+    /** Every registered route except `POST /api/auth/logout`, hit with an expired or unknown cookie, never deletes `cv_session`. */
     @Test
     fun onlyLogoutDeletesTheSessionCookie() {
-        val sources = File("src/main/kotlin").walk().filter { it.extension == "kt" }.toList()
-        assertTrue(sources.isNotEmpty())
-        val deletions = sources.flatMap { file ->
-            file.readLines().filter { "clearSession" in it || "maxAge = 0" in it }.map { file.name to it.trim() }
+        val fake = FakeTmdb()
+        val clock = TestClock()
+        lateinit var routes: List<RoutingNode>
+        testApplication {
+            application {
+                cineVerse(testConfig(), fake.engine, clock::now)
+                routes = plugin(RoutingRoot).getAllRoutes()
+            }
+            startApplication()
+            val samples = mapOf("media" to "movie", "list" to "watchlist", "id" to "550", "path" to "configuration")
+            val requests = routes.flatMap { route ->
+                val chain = generateSequence(route) { it.parent }.toList().asReversed()
+                val path = chain.mapNotNull { node ->
+                    when (val selector = node.selector) {
+                        is PathSegmentConstantRouteSelector -> selector.value
+                        is PathSegmentParameterRouteSelector -> samples.getValue(selector.name)
+                        is PathSegmentTailcardRouteSelector -> samples[selector.name] ?: "unknown"
+                        else -> null
+                    }
+                }.joinToString("/", prefix = "/")
+                val method = chain.firstNotNullOfOrNull { (it.selector as? HttpMethodRouteSelector)?.method }
+                (method?.let(::listOf) ?: listOf(HttpMethod.Get, HttpMethod.Post, HttpMethod.Delete)).map { it to path }
+            }.distinct()
+            val logout = HttpMethod.Post to "/api/auth/logout"
+            assertTrue(logout in requests && (HttpMethod.Get to "/api/session") in requests, requests.toString())
+
+            val expiredTab = browser()
+            val expired = expiredTab.signIn(fake, "A")
+            clock.advanceMinutes(31L * 24 * 60)
+            val unknownTab = browser().also { it.get("/api/session"); it.cookies[SESSION_COOKIE] = randomId() }
+            for (tab in listOf(expiredTab, unknownTab)) {
+                for ((method, path) in requests - logout) {
+                    tab.send(method, path, json = "{}".takeIf { method != HttpMethod.Get }, session = expired)
+                    assertTrue(
+                        tab.lastSetCookies.none { it.name == SESSION_COOKIE && it.maxAge == 0 },
+                        "$method $path must not delete cv_session",
+                    )
+                }
+                assertEquals(HttpStatusCode.OK, tab.send(logout.first, logout.second).status)
+                assertTrue(tab.lastSetCookies.any { it.name == SESSION_COOKIE && it.maxAge == 0 }, "logout deletes cv_session")
+            }
         }
-        assertEquals(
-            listOf(
-                "Auth.kt" to "fun clearSession() = session(\"\").copy(maxAge = 0, expires = GMTDate.START)",
-                "Auth.kt" to "fun clearAttempt() = attempt(\"\").copy(maxAge = 0, expires = GMTDate.START)",
-                "Auth.kt" to "call.setCookie(cookies.clearSession()) // the only cv_session deletion; see SessionLookup",
-            ),
-            deletions,
-        )
-        val auth = sources.single { it.name == "Auth.kt" }.readText()
-        val logout = auth.indexOf("post(\"/api/auth/logout\")")
-        val nextRoute = Regex("""\n\s*(get|post)\(""").find(auth, logout + 1)!!.range.first
-        assertTrue(auth.indexOf("cookies.clearSession()") in logout until nextRoute, "the call sits in the logout handler")
     }
 
     @Test

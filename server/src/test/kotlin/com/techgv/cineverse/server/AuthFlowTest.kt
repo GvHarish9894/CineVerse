@@ -55,7 +55,11 @@ class AuthFlowTest {
             assertEquals("SID-A", fake.last(HttpMethod.Get, "/3/account").url.parameters["session_id"])
 
             val sessionJson = browser.get("/api/session").bodyAsText()
-            assertEquals("""{"signedIn":true,"accountObjectId":"AOID-A","displayName":"Alice","sessionGeneration":1}""", sessionJson)
+            // sessionGeneration: an opaque 64-bit value as a decimal string (JS-safe).
+            assertTrue(
+                Regex("""\{"signedIn":true,"accountObjectId":"AOID-A","displayName":"Alice","sessionGeneration":"-?\d+"}""").matches(sessionJson),
+                sessionJson,
+            )
             listOf("UAT-A", "SID-A", sessionCookie.value, READ_TOKEN).forEach { assertFalse(sessionJson.contains(it)) }
 
             // The attempt is single-use.
@@ -186,7 +190,7 @@ class AuthFlowTest {
             val second = browser.signIn(fake, "B")
             val newCookie = browser.cookies.getValue(SESSION_COOKIE)
             assertNotEquals(oldCookie, newCookie)
-            assertTrue(second.sessionGeneration > first.sessionGeneration)
+            assertNotEquals(first.sessionGeneration, second.sessionGeneration)
             assertEquals("AOID-B", second.accountObjectId)
             // The replaced session is dead server-side and its TMDB credentials were revoked.
             browser.cookies[SESSION_COOKIE] = oldCookie
@@ -260,5 +264,22 @@ class AuthFlowTest {
             assertEquals(0, fake.calls(HttpMethod.Post, "/4/auth/request_token"))
             assertNotNull(browser.cookies[CSRF_COOKIE])
         }
+    }
+
+    /** Generations are unique per [AuthStore] instance (i.e. per server run), not just within one. */
+    @Test
+    fun twoAuthStoresNeverShareAGeneration() {
+        fun generations(): Set<Long> {
+            val store = AuthStore(testConfig()) { 1_000_000L }
+            var binding: String? = null
+            val generations = List(10_000) {
+                val attempt = store.newAttempt("RT", randomId(), binding, null).also { binding = it.binding }
+                store.commitSignIn(attempt, AccessTokenDto("UAT-A", "AOID-A"), "SID-A", AccountDto(101, "alice"), null)!!.session.generation
+            }
+            return generations.toSet().also { assertEquals(10_000, it.size) }
+        }
+        val first = generations()
+        assertTrue(first.intersect(generations()).isEmpty())
+        assertFalse(0L in first, "0 is the signed-out generation")
     }
 }

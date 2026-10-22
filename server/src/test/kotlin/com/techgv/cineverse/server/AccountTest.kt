@@ -121,6 +121,23 @@ class AccountTest {
         }
     }
 
+    /** Sessions live in memory: after a restart, the same account's new session must not accept a pre-restart binding. */
+    @Test
+    fun bindingFromBeforeARestartIsStale() {
+        val before = FakeTmdb()
+        lateinit var oldIdentity: AuthSession
+        serverTest(before) { oldIdentity = browser().signIn(before, "A") }
+        val after = FakeTmdb() // a fresh application + AuthStore
+        serverTest(after) {
+            val tab = browser()
+            assertEquals(oldIdentity.accountObjectId, tab.signIn(after, "A").accountObjectId)
+            val staleWrite = tab.send(HttpMethod.Post, "/api/account/watchlist", watchlistBody, session = oldIdentity)
+            assertEquals(HttpStatusCode.Conflict, staleWrite.status)
+            assertEquals("""{"error":"stale_session"}""", staleWrite.bodyAsText())
+            assertEquals(0, after.calls(HttpMethod.Post, "/3/account/101/watchlist"))
+        }
+    }
+
     @Test
     fun csrfIsEnforcedOnEveryMutation() {
         val fake = FakeTmdb()
@@ -179,7 +196,7 @@ class AccountTest {
             val response = alice.get("/api/account/movie/rated")
             assertEquals(HttpStatusCode.Unauthorized, response.status)
             assertEquals(
-                """{"error":"session_expired","status_code":35,"sessionGeneration":${a.sessionGeneration},"accountObjectId":"AOID-A"}""",
+                """{"error":"session_expired","status_code":35,"sessionGeneration":"${a.sessionGeneration}","accountObjectId":"AOID-A"}""",
                 response.bodyAsText(),
             )
             assertEquals(cookie, alice.cookies[SESSION_COOKIE], "a 401 never sends a cookie deletion")

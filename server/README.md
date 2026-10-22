@@ -46,7 +46,7 @@ clients pick their own IP and escape every per-IP limit).
 |---|---|---|
 | `GET /healthz` | — | liveness, `ok` |
 | `GET /api/tmdb/{v3 path}` | — | allow-listed catalog read → `https://api.themoviedb.org/3/{path}` with the read token |
-| `GET /api/session` | — | `AuthSession` JSON; issues the `cv_csrf` cookie if missing. Also the **sync** path: the only route besides logout that clears `cv_session` (see "Cookie deletion") |
+| `GET /api/session` | — | `AuthSession` JSON; emits no `cv_session` Set-Cookie header (never sets or deletes it, whatever cookie is presented); still issues the `cv_csrf` cookie if missing (see "Cookie deletion") |
 | `POST /api/auth/start` | CSRF | creates a v4 request token; `{approveUrl, attemptId}` + attempt cookie |
 | `GET /api/auth/callback?attempt=` | attempt cookie | TMDB redirect target; exchange → convert → account; sets `cv_session`; 302 to `${PUBLIC_ORIGIN}/?signedIn=1` |
 | `POST /api/auth/logout` | CSRF | local sign-out of this browser's current session (also one a running callback committed but has not delivered yet) + cancels its pending sign-ins, then best-effort TMDB revocation; clears `cv_session`; returns signed-out `AuthSession` |
@@ -91,7 +91,7 @@ never relayed. TMDB codes map per spec §3.3:
 | logout / cancel / another sign-in of this browser happened first (or the attempt expired mid-callback), or a logout ended the new session while the callback was still revoking the old one | 409 | `attempt_superseded` (nothing kept, tokens revoked, no `cv_session` set) |
 | convert/account failed after exchange | 502 | `sign_in_failed` (nothing kept, tokens revoked) |
 | no session cookie | 401 | `not_signed_in` |
-| TMDB 3/14/17/37/35/36 on an account call | 401 | `session_expired` + `sessionGeneration`, `accountObjectId` of the ended session; never a cookie deletion |
+| TMDB 3/14/17/37/35/36 on an account call | 401 | `session_expired` + `sessionGeneration` (string), `accountObjectId` of the ended session; never a cookie deletion |
 | session expired (TTL) / unknown cookie | 401 | `session_expired`; never a cookie deletion |
 | CSRF Origin / Fetch-Metadata | 403 | `csrf_origin` |
 | CSRF token | 403 | `csrf_token` |
@@ -105,8 +105,12 @@ never relayed. TMDB codes map per spec §3.3:
 ## For the web app (P9)
 
 1. On start, on `visibilitychange`/focus and on any `BroadcastChannel` message: `GET /api/session` →
-   `{"signedIn":true,"accountObjectId":"…","displayName":"Alice","sessionGeneration":7}` (signed out:
-   `{"signedIn":false,"accountObjectId":null,"displayName":null,"sessionGeneration":0}`). This also sets `cv_csrf`.
+   `{"signedIn":true,"accountObjectId":"…","displayName":"Alice","sessionGeneration":"-6917529027641081855"}` (signed out:
+   `{"signedIn":false,"accountObjectId":null,"displayName":null,"sessionGeneration":"0"}`). This also sets `cv_csrf`
+   when it is missing. `sessionGeneration` is an opaque signed 64-bit value sent as a decimal **string** (JSON numbers
+   above 2^53 lose precision in JS): keep it as a string (or `Long`), compare it only for equality, never parse it for
+   ordering or arithmetic. Its high 32 bits are random per server run, so a value from before a restart does not
+   match a new session (`409 stale_session`).
 2. Every POST/DELETE sends `X-CV-CSRF: <cv_csrf cookie value>` (read from `document.cookie`); the browser adds
    `Origin`. On `403 csrf_token`, call `/api/session` once and retry (nothing reached TMDB).
 3. Sign-in: `POST /api/auth/start` → open `approveUrl` in a new tab. TMDB redirects that tab to the callback, which
@@ -115,8 +119,8 @@ never relayed. TMDB codes map per spec §3.3:
    (or simply `POST /api/auth/logout`); both invalidate every outstanding attempt of this browser, including a
    callback already talking to TMDB, which then ends in `409 attempt_superseded` without signing in. Any
    completed sign-in also supersedes the browser's other attempts.
-4. Account writes send `X-CV-Expected-Session-Generation` and `X-CV-Expected-Account` (= `accountObjectId`) from
-   the `AuthSession` the screen is showing; `409 stale_session` → refetch the session and drop the action.
+4. Account writes send `X-CV-Expected-Session-Generation` (the `sessionGeneration` string verbatim) and
+   `X-CV-Expected-Account` (= `accountObjectId`) from the `AuthSession` the screen is showing; `409 stale_session` → refetch the session and drop the action.
    `401 session_expired` → always call `GET /api/session` and render what it returns: `{signedIn:false}` →
    signed out ("Sign-in expired"); a newer session → it was a late answer for a replaced session, keep going.
    Neither response touches `cv_session` (see "Cookie deletion").

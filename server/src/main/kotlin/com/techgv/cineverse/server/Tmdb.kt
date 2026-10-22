@@ -18,6 +18,7 @@ import io.ktor.http.takeFrom
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.LongAsStringSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -107,7 +108,8 @@ class ApiError(
 data class ErrorBody(
     val error: String,
     @SerialName("status_code") val statusCode: Int? = null,
-    val sessionGeneration: Long? = null,
+    /** Decimal string, like [AuthSession.sessionGeneration]. */
+    @Serializable(with = LongAsStringSerializer::class) val sessionGeneration: Long? = null,
     val accountObjectId: String? = null,
 )
 

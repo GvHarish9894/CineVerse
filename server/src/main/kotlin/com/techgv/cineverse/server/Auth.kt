@@ -19,6 +19,7 @@ import io.ktor.server.routing.post
 import io.ktor.util.date.GMTDate
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.LongAsStringSerializer
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.security.SecureRandom
@@ -34,13 +35,16 @@ private val random = SecureRandom()
 /** 256-bit opaque identifier (base64url). */
 fun randomId(): String = ByteArray(32).also(random::nextBytes).let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
 
-/** The only identity the browser ever sees (plan §3). Never carries tokens. */
+/**
+ * The only identity the browser ever sees (plan §3). Never carries tokens. [sessionGeneration] is an opaque 64-bit
+ * value, a decimal JSON string on the wire (JS numbers lose precision above 2^53); clients only compare it for equality.
+ */
 @Serializable
 data class AuthSession(
     val signedIn: Boolean,
     val accountObjectId: String?,
     val displayName: String?,
-    val sessionGeneration: Long,
+    @Serializable(with = LongAsStringSerializer::class) val sessionGeneration: Long,
 )
 
 val SIGNED_OUT = AuthSession(signedIn = false, accountObjectId = null, displayName = null, sessionGeneration = 0)
@@ -76,6 +80,9 @@ class AuthStore(private val config: ServerConfig, private val nowMillis: () -> L
     private val sessions = ConcurrentHashMap<String, UserSession>()
     private val attempts = ConcurrentHashMap<String, AuthAttempt>()
     private val generations = AtomicLong(0)
+
+    /** Random per store instance: generations never repeat across restarts and cannot be predicted from a previous run. */
+    private val bootNonce = random.nextInt().toLong() shl 32
     private val attemptTtl = config.attemptTtl.inWholeMilliseconds
 
     /**
@@ -169,7 +176,7 @@ class AuthStore(private val config: ServerConfig, private val nowMillis: () -> L
         owners.values.removeIf { now >= it.expiresAt }
         val session = UserSession(
             id = randomId(),
-            generation = generations.incrementAndGet(),
+            generation = bootNonce or (generations.incrementAndGet() and 0xFFFF_FFFFL),
             accountObjectId = tokens.accountObjectId,
             accountId = account.id,
             displayName = account.name?.takeIf { it.isNotBlank() } ?: account.username,
