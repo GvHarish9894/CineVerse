@@ -1,0 +1,21 @@
+name: TV (Linux)
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      # No secrets.properties in CI: BuildConfig.TMDB_READ_ACCESS_TOKEN builds as "".
+      - run: ./gradlew :tvApp:assembleDebug :tvApp:lint :tvApp:testDebugUnitTest :tvApp:assembleRelease

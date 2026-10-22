@@ -1,0 +1,29 @@
+name: Mobile (macOS)
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Pinned Xcode (docs/TOOLCHAIN.md); the job fails if the runner image does not ship it.
+  DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+
+jobs:
+  mobile:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version | grep -q "^Xcode 27.1$"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      # No secrets.properties: the native read token builds as "" in androidApp and iosApp.
+      - run: ./gradlew :shared:iosSimulatorArm64Test :composeApp:linkDebugFrameworkIosSimulatorArm64 :androidApp:assembleDebug
+      - run: >
+          xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
