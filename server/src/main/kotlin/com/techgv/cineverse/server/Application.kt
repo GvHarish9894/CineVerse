@@ -1,24 +1,68 @@
 package com.techgv.cineverse.server
 
+import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.engine.java.Java
+import io.ktor.http.HttpMethod
 import io.ktor.server.application.Application
-import io.ktor.server.application.log
+import io.ktor.server.application.ApplicationStopped
+import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.http.content.staticFiles
+import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.plugins.forwardedheaders.XForwardedHeaders
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import java.io.File
+import kotlin.system.exitProcess
 
 fun main() {
-    val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
-    embeddedServer(CIO, port = port, module = Application::module).start(wait = true)
+    val config = try {
+        ServerConfig.fromEnv()
+    } catch (e: IllegalArgumentException) {
+        System.err.println("Invalid configuration: ${e.message}")
+        exitProcess(1)
+    }
+    embeddedServer(CIO, port = config.port) { cineVerse(config) }.start(wait = true)
 }
 
-fun Application.module() {
-    // The TMDB token lives only in the server environment (never in the wasm bundle); the proxy uses it from P6.
-    if (System.getenv("TMDB_READ_ACCESS_TOKEN").isNullOrBlank()) {
-        log.warn("TMDB_READ_ACCESS_TOKEN is not set; TMDB proxy calls will fail")
+/**
+ * Same-origin layout: the wasm bundle under `/` (when [ServerConfig.staticDir] is set) and the API under `/api`.
+ * [upstreamEngine] and [nowMillis] are replaced in tests (fake TMDB, controllable clock).
+ */
+fun Application.cineVerse(
+    config: ServerConfig,
+    upstreamEngine: HttpClientEngine = Java.create(),
+    nowMillis: () -> Long = System::currentTimeMillis,
+) {
+    if (config.trustProxy) install(XForwardedHeaders) { useLastProxy() }
+    config.corsOrigin?.takeIf { it != config.publicOrigin }?.let { origin ->
+        install(CORS) {
+            allowOrigins { it == origin }
+            allowCredentials = true
+            allowMethod(HttpMethod.Delete)
+            listOf("Content-Type", CSRF_HEADER, EXPECTED_GENERATION_HEADER, EXPECTED_ACCOUNT_HEADER).forEach(::allowHeader)
+        }
     }
+    installSecurity(config)
+
+    val tmdb = Tmdb(tmdbHttpClient(upstreamEngine), config.readToken, config.upstreamConcurrency)
+    monitor.subscribe(ApplicationStopped) { tmdb.close() }
+    val cache = CatalogCache(maxEntries = 1_000, nowMillis)
+    val missBudget = ClientBudget(config.catalogMissesPerMinute, burst = config.catalogMissesPerMinute * 2, nowMillis)
+    val store = AuthStore(config, nowMillis)
+    val cookies = Cookies(config)
+    val sessions = SessionLookup(store)
+
     routing {
         get("/healthz") { call.respondText("ok") }
+        catalogRoutes(tmdb, cache, missBudget)
+        authRoutes(config, tmdb, store, cookies, sessions)
+        accountRoutes(config, tmdb, sessions)
+        // Any other /api request (path, method) is rejected, never served the web bundle.
+        route("/api/{...}") { handle { throw NOT_ALLOWED } }
+        config.staticDir?.let { dir -> staticFiles("/", File(dir)) { default("index.html") } }
     }
 }

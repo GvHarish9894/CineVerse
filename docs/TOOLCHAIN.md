@@ -32,7 +32,7 @@ Pinned by the P0 smoke build (plan §6/§7), not assumed. Every version below is
 | Navigation Compose (KMP) | `org.jetbrains.androidx.navigation:navigation-compose:2.9.2` | 2.9.2; on Android → `androidx.navigation:navigation-compose` 2.9.7 |
 | Ktor client | `io.ktor:ktor-client-{core,content-negotiation,mock}`, `ktor-serialization-kotlinx-json:3.6.0` | 3.6.0 |
 | Ktor engines | `ktor-client-okhttp` (android), `-darwin` (ios), `-java` (jvm), `-js` (wasmJs) `:3.6.0` | 3.6.0 |
-| Ktor server | `io.ktor:ktor-server-{core,cio,test-host}:3.6.0`, `org.slf4j:slf4j-simple:2.0.19` | 3.6.0 / slf4j 2.0.19 |
+| Ktor server | `io.ktor:ktor-server-{core,cio,rate-limit,cors,forwarded-header,test-host}:3.6.0` (+ `ktor-client-java`/`-mock` for the TMDB upstream/tests), `org.slf4j:slf4j-simple:2.0.19` | 3.6.0 / slf4j 2.0.19 |
 | Coil | `io.coil-kt.coil3:coil-compose`, `coil-network-ktor3:3.4.0` (same `coil` pin as `tvApp`) | 3.4.0 |
 | Room (nonWeb only) | `androidx.room:room-runtime:2.8.5` (same pin as `tvApp`) | 2.8.5 |
 | SQLite bundled driver (P1; `shared` jvm/iOS **tests** only) | `androidx.sqlite:sqlite-bundled:2.6.2` — the `androidx.sqlite` version Room 2.8.5 already resolves | 2.6.2 |

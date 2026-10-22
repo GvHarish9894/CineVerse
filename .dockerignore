@@ -1,0 +1,9 @@
+*
+!gradlew
+!gradle/
+!settings.gradle.kts
+!build.gradle.kts
+!gradle.properties
+!server/
+server/build/
+server/.gradle/
