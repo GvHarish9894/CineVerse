@@ -33,3 +33,5 @@ jobs:
       - run: >
           xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+# Re-registered after the P0 merge (GitHub did not index workflows added in merge commit dd2c8ab).

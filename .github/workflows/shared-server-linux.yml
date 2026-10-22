@@ -50,3 +50,5 @@ jobs:
       # The sentinel goes where the native read token lives; it must not appear in any wasm/js/map output.
       - run: echo "TMDB_READ_ACCESS_TOKEN=SENTINEL_TMDB_TOKEN_DO_NOT_SHIP" > secrets.properties
       - run: ./gradlew :composeApp:checkWasmHasNoSecrets
+
+# Re-registered after the P0 merge (GitHub did not index workflows added in merge commit dd2c8ab).

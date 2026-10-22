@@ -19,3 +19,5 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # No secrets.properties in CI: BuildConfig.TMDB_READ_ACCESS_TOKEN builds as "".
       - run: ./gradlew :tvApp:assembleDebug :tvApp:lint :tvApp:testDebugUnitTest :tvApp:assembleRelease
+
+# Re-registered after the P0 merge (GitHub did not index workflows added in merge commit dd2c8ab).
