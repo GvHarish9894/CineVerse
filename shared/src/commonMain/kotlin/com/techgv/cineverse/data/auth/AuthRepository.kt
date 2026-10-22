@@ -7,7 +7,9 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * The signed-in identity common code binds to (plan §3); `null` = guest. Equality = one sign-in: every new sign-in
- * gets a larger [sessionGeneration], so a result or write bound to an older session never matches the current one.
+ * gets a DISTINCT [sessionGeneration], so a result or write bound to an older session never matches the current one.
+ * The contract is opaque identity / equality only: never order, compare numerically or convert to a JS Number.
+ * (The native implementation happens to count up; the web proxy sends it as a decimal string of a signed 64-bit value.)
  * Never carries tokens or session ids (those stay native, or on the server for web).
  * Wire form (server `/api/session`, P9): `{"signedIn": false}` ↔ `null`; signed in ↔ these fields.
  */

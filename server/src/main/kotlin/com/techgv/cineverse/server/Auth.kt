@@ -81,7 +81,7 @@ class AuthStore(private val config: ServerConfig, private val nowMillis: () -> L
     private val attempts = ConcurrentHashMap<String, AuthAttempt>()
     private val generations = AtomicLong(0)
 
-    /** Random per store instance: generations never repeat across restarts and cannot be predicted from a previous run. */
+    /** Random 32-bit nonce per store instance: makes generations distinct across restarts with high probability (~1/2^32 per pair of runs; the low 32-bit counter wraps after 2^32 sign-ins) and unpredictable from a previous run. Adequate for the single-instance prototype; not an unlimited-lifetime guarantee. */
     private val bootNonce = random.nextInt().toLong() shl 32
     private val attemptTtl = config.attemptTtl.inWholeMilliseconds
 
