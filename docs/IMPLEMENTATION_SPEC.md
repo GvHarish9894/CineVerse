@@ -29,14 +29,14 @@ and this document differ, this document wins and the difference is called out as
 **Out of scope for v1**: on-screen remote, interaction HUD, sample data, episode playback (TMDB has none),
 player captions toggle (not exposed by the chosen player, see §7.10), watch-provider info.
 
-**Platform**: Compose + `androidx.tv.material3`, Kotlin 2.2, AGP 9, D-pad only.
+**Platform**: Compose + `androidx.tv.material3`, Kotlin 2.3, AGP 9, D-pad only.
 `minSdk` — see decision D8.
 
 ---
 
 ## 1. Architecture
 
-Single module `app`, package `com.techgv.cineverse`. Manual DI (`AppContainer` built in `Application`),
+Module `tvApp`, package `com.techgv.cineverse`. Manual DI (`AppContainer` built in `Application`),
 no Hilt. ViewModels get `SavedStateHandle` via `viewModel(factory = …)`; UI collects with
 `collectAsStateWithLifecycle()`.
 
