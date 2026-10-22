@@ -1,11 +1,14 @@
-name: Android CI
+name: TV (Linux)
 
 on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  tv:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,4 +18,4 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       # No secrets.properties in CI: BuildConfig.TMDB_READ_ACCESS_TOKEN builds as "".
-      - run: ./gradlew assembleDebug lint testDebugUnitTest
+      - run: ./gradlew :tvApp:assembleDebug :tvApp:lint :tvApp:testDebugUnitTest :tvApp:assembleRelease

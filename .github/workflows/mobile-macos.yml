@@ -1,0 +1,35 @@
+name: Mobile (macOS)
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Pinned to the Xcode shipped by the macos-26 (Apple silicon) runner image — see docs/TOOLCHAIN.md.
+  # Hosted runners do not ship Xcode 27.x; local development uses 27.1. Both build the same iOS 16 target.
+  XCODE_VERSION: "26.6"
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+
+jobs:
+  mobile:
+    # macos-26 is the Apple-silicon image (required for iosSimulatorArm64Test).
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify pinned Xcode is present on the runner image
+        run: |
+          test -d "$DEVELOPER_DIR" || { echo "Xcode $XCODE_VERSION not on this runner image; update the pin (docs/TOOLCHAIN.md)"; ls /Applications | grep -i xcode; exit 1; }
+          xcodebuild -version | grep -q "^Xcode $XCODE_VERSION" && uname -m | grep -q arm64
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      # No secrets.properties: the native read token builds as "" in androidApp and iosApp.
+      - run: ./gradlew :shared:iosSimulatorArm64Test :composeApp:linkDebugFrameworkIosSimulatorArm64 :androidApp:assembleDebug
+      - run: >
+          xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build

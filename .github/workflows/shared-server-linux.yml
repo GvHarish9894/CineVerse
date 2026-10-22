@@ -1,0 +1,52 @@
+name: Shared, server and web (Linux)
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shared:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      # iOS targets are configured but skipped on Linux; they are tested in mobile-macos.yml.
+      - run: ./gradlew :shared:jvmTest :shared:testDebugUnitTest :shared:compileKotlinWasmJs :shared:wasmJsBrowserTest
+      - name: Room never reaches the wasm dependency graph
+        run: test "$(./gradlew -q :shared:dependencies --configuration wasmJsRuntimeClasspath | grep -c room)" = 0
+
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew :server:test
+      - name: /healthz answers
+        run: |
+          PORT=8080 ./gradlew :server:run &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8080/healthz && exit 0; sleep 2; done
+          exit 1
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      # The sentinel goes where the native read token lives; it must not appear in any wasm/js/map output.
+      - run: echo "TMDB_READ_ACCESS_TOKEN=SENTINEL_TMDB_TOKEN_DO_NOT_SHIP" > secrets.properties
+      - run: ./gradlew :composeApp:checkWasmHasNoSecrets
