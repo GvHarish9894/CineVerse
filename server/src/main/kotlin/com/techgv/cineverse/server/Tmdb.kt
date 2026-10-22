@@ -81,16 +81,26 @@ class Tmdb(private val http: HttpClient, private val readToken: String) {
 /** Which row of the spec §3.3 table applies. */
 enum class TmdbOperation { Catalog, Session, UserToken, AccessTokenExchange }
 
-/** A sanitized client-facing error: `{"error": code, "status_code": tmdbStatusCode}`. */
+/**
+ * A sanitized client-facing error: `{"error": code, "status_code": tmdbStatusCode}`, plus the ended session's
+ * `sessionGeneration`/`accountObjectId` on a TMDB-reported `session_expired`.
+ */
 class ApiError(
     val status: HttpStatusCode,
     val code: String,
     val tmdbStatusCode: Int? = null,
     val retryAfter: String? = null,
+    val sessionGeneration: Long? = null,
+    val accountObjectId: String? = null,
 ) : Exception(code, null, false, false)
 
 @Serializable
-data class ErrorBody(val error: String, @SerialName("status_code") val statusCode: Int? = null)
+data class ErrorBody(
+    val error: String,
+    @SerialName("status_code") val statusCode: Int? = null,
+    val sessionGeneration: Long? = null,
+    val accountObjectId: String? = null,
+)
 
 private val appKeyCodes = setOf(7, 10)
 private val sessionInvalidCodes = setOf(3, 14, 17, 37, 35, 36)

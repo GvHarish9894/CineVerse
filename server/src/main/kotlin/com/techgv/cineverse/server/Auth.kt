@@ -138,14 +138,21 @@ class AuthStore(private val config: ServerConfig, private val nowMillis: () -> L
         return session
     }
 
-    fun session(id: String): UserSession? {
+    /** The live session for [id]. An expired one is removed, and [expired] runs for the caller that removed it. */
+    fun session(id: String, expired: () -> Unit = {}): UserSession? {
         val session = sessions[id] ?: return null
         if (nowMillis() < session.expiresAt) return session
-        sessions.remove(id, session)
+        if (sessions.remove(id, session)) expired()
         return null
     }
 
+    /** [session] is still the stored, unexpired record for its id (same generation and account). */
+    fun isLive(session: UserSession) = sessions[session.id] === session && nowMillis() < session.expiresAt
+
     fun removeSession(id: String): UserSession? = sessions.remove(id)
+
+    /** True only for the caller that actually removed [session]. */
+    fun removeSession(session: UserSession): Boolean = sessions.remove(session.id, session)
 }
 
 class Cookies(private val config: ServerConfig) {
@@ -178,11 +185,15 @@ fun ApplicationCall.setCookie(c: Cookie) = response.headers.append(
     ),
 )
 
-/** Session state of a request; a stale/unknown cookie is cleared on the response. */
+/**
+ * Session state of a request. Only the request that ends a still-stored session clears `cv_session`: a session
+ * already gone (replaced by a sign-in in this browser, logged out, or unknown) leaves the cookie alone, because a
+ * late response must never delete the newer cookie of the same browser.
+ */
 class SessionLookup(private val store: AuthStore, private val cookies: Cookies) {
     fun current(call: ApplicationCall): UserSession? {
         val id = call.request.cookies[SESSION_COOKIE]?.takeIf { it.isNotEmpty() } ?: return null
-        return store.session(id) ?: null.also { call.setCookie(cookies.clearSession()) }
+        return store.session(id) { call.setCookie(cookies.clearSession()) }
     }
 
     fun require(call: ApplicationCall): UserSession {
@@ -190,11 +201,16 @@ class SessionLookup(private val store: AuthStore, private val cookies: Cookies) 
         return current(call) ?: throw ApiError(HttpStatusCode.Unauthorized, if (hadCookie) SESSION_EXPIRED else "not_signed_in")
     }
 
-    /** Local sign-out (cookie + server-side entry) after TMDB reported the session invalid. */
-    fun expire(call: ApplicationCall, session: UserSession) {
-        store.removeSession(session.id)
-        call.setCookie(cookies.clearSession())
+    /** TMDB reported [session] invalid: ends it locally; the 401 names the ended session for the client. */
+    fun expired(call: ApplicationCall, session: UserSession, tmdbStatusCode: Int?): ApiError {
+        if (store.removeSession(session)) call.setCookie(cookies.clearSession())
+        return ApiError(
+            HttpStatusCode.Unauthorized, SESSION_EXPIRED, tmdbStatusCode,
+            sessionGeneration = session.generation, accountObjectId = session.accountObjectId,
+        )
     }
+
+    fun isLive(session: UserSession) = store.isLive(session)
 }
 
 suspend fun ApplicationCall.respondJson(text: String, status: HttpStatusCode = HttpStatusCode.OK) =

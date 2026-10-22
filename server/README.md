@@ -89,7 +89,8 @@ never relayed. TMDB codes map per spec §3.3:
 | logout / cancel / another sign-in of this browser happened first (or the attempt expired mid-callback) | 409 | `attempt_superseded` (nothing kept, tokens revoked) |
 | convert/account failed after exchange | 502 | `sign_in_failed` (nothing kept, tokens revoked) |
 | no session cookie | 401 | `not_signed_in` |
-| expired/unknown session, TMDB 3/14/17/37/35/36 | 401 + cleared cookie | `session_expired` |
+| TMDB 3/14/17/37/35/36 on an account call | 401 | `session_expired` + `sessionGeneration`, `accountObjectId` of the ended session; cookie cleared only if this request ended a still-current session |
+| session expired (TTL) / unknown cookie | 401 | `session_expired` (TTL: cookie cleared; unknown: cookie left alone) |
 | CSRF Origin / Fetch-Metadata | 403 | `csrf_origin` |
 | CSRF token | 403 | `csrf_token` |
 | missing binding headers | 400 | `missing_session_binding` |
@@ -112,7 +113,9 @@ never relayed. TMDB codes map per spec §3.3:
    completed sign-in also supersedes the browser's other attempts.
 4. Account writes send `X-CV-Expected-Session-Generation` and `X-CV-Expected-Account` (= `accountObjectId`) from
    the `AuthSession` the screen is showing; `409 stale_session` → refetch the session and drop the action.
-   `401 session_expired` → signed out ("Sign-in expired"). Writes are never retried by the server.
+   `401 session_expired` → signed out ("Sign-in expired") — but if the body's `sessionGeneration` is older than
+   the `AuthSession` currently shown, it is a late answer for a replaced session: refetch `/api/session` instead
+   of signing out. Writes are never retried by the server.
 5. Send `credentials: "include"` only when using `CORS_ORIGIN` in dev; same-origin needs nothing.
 
 ## Security model

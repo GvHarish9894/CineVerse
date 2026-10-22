@@ -84,4 +84,39 @@ class SessionRaceTest {
             assertEquals("AOID-B", browser.signIn(fake, "B").accountObjectId)
         }
     }
+
+    @Test
+    fun expiredResponseFromOldSessionCannotClearNewSessionCookie() {
+        val fake = FakeTmdb()
+        val reached = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        fake.overrides["GET /4/account/AOID-A/movie/rated"] = {
+            reached.countDown()
+            check(release.await(10, TimeUnit.SECONDS))
+            tmdbError(401, 35)
+        }
+        serverTest(fake) {
+            val activeTab = browser()
+            val a = activeTab.signIn(fake, "A")
+            val oldTab = browser().also { it.cookies.putAll(activeTab.cookies) }
+            coroutineScope {
+                val read = async(Dispatchers.IO) { oldTab.get("/api/account/movie/rated") }
+                try {
+                    check(reached.await(10, TimeUnit.SECONDS))
+                    assertEquals("AOID-B", activeTab.signIn(fake, "B").accountObjectId)
+                } finally { release.countDown() }
+                val response = read.await()
+                assertEquals(HttpStatusCode.Unauthorized, response.status)
+                // Tagged with the ended session so the client can tell it is not the one it shows now.
+                assertEquals(
+                    """{"error":"session_expired","status_code":35,"sessionGeneration":${a.sessionGeneration},"accountObjectId":"AOID-A"}""",
+                    response.bodyAsText(),
+                )
+            }
+            assertTrue(oldTab.lastSetCookies.none { it.name == SESSION_COOKIE && it.maxAge == 0 },
+                "Late A response sends Set-Cookie that removes already-current B cookie in the shared browser jar")
+            assertEquals("AOID-B", activeTab.session().accountObjectId)
+            assertEquals(HttpStatusCode.OK, activeTab.get("/api/account/movie/rated").status)
+        }
+    }
 }

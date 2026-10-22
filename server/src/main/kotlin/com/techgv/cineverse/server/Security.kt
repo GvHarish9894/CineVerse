@@ -115,7 +115,8 @@ private val SecurityHeaders = createApplicationPlugin("SecurityHeaders", ::Secur
 
 suspend fun ApplicationCall.respondError(e: ApiError) {
     e.retryAfter?.let { response.header(HttpHeaders.RetryAfter, it) }
-    respondText(apiJson.encodeToString(ErrorBody(e.code, e.tmdbStatusCode)), ContentType.Application.Json, e.status)
+    val body = ErrorBody(e.code, e.tmdbStatusCode, e.sessionGeneration, e.accountObjectId)
+    respondText(apiJson.encodeToString(body), ContentType.Application.Json, e.status)
 }
 
 /**

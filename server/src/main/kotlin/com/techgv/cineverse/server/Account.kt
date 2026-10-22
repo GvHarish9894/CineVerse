@@ -48,12 +48,11 @@ private fun validTitle(mediaType: String, mediaId: Int) {
  * account, sent exactly once.
  */
 fun Route.accountRoutes(config: ServerConfig, tmdb: Tmdb, sessions: SessionLookup) {
-    /** Relays a TMDB account response; TMDB saying the session is gone signs this browser out locally. */
+    /** Relays a TMDB account response; TMDB saying the session is gone ends that session locally. */
     suspend fun RoutingContext.relay(operation: TmdbOperation, session: UserSession, upstream: Upstream) {
         if (upstream.ok) return call.respondJson(upstream.body, HttpStatusCode.fromValue(upstream.status))
         val error = classify(operation, upstream)
-        if (error.code == SESSION_EXPIRED) sessions.expire(call, session)
-        throw error
+        throw if (error.code == SESSION_EXPIRED) sessions.expired(call, session, error.tmdbStatusCode) else error
     }
 
     /** Mutation preconditions, in order: CSRF, signed in, request bound to this exact session. */

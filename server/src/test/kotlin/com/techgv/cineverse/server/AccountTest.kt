@@ -171,18 +171,22 @@ class AccountTest {
         val fake = FakeTmdb()
         serverTest(fake) {
             val alice = browser()
-            alice.signIn(fake, "A")
+            val a = alice.signIn(fake, "A")
             val cookie = alice.cookies.getValue(SESSION_COOKIE)
             fake.overrides["GET /4/account/AOID-A/movie/rated"] = { tmdbError(401, 35) }
             val response = alice.get("/api/account/movie/rated")
             assertEquals(HttpStatusCode.Unauthorized, response.status)
-            assertEquals("""{"error":"session_expired","status_code":35}""", response.bodyAsText())
+            assertEquals(
+                """{"error":"session_expired","status_code":35,"sessionGeneration":${a.sessionGeneration},"accountObjectId":"AOID-A"}""",
+                response.bodyAsText(),
+            )
             assertFalse(SESSION_COOKIE in alice.cookies)
-            // The server-side session is gone too: replaying the cookie gives session_expired.
+            // The server-side session is gone too: replaying the cookie gives session_expired, and since this
+            // request did not end the session, its response leaves whatever cookie the browser has now alone.
             alice.cookies[SESSION_COOKIE] = cookie
             val replay = alice.get("/api/account/movie/rated")
             assertEquals("""{"error":"session_expired"}""", replay.bodyAsText())
-            assertEquals(0, alice.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
+            assertTrue(alice.lastSetCookies.none { it.name == SESSION_COOKIE })
         }
     }
 
@@ -210,7 +214,9 @@ class AccountTest {
             assertEquals(HttpStatusCode.Unauthorized, guest.send(HttpMethod.Delete, "/api/account/rating/movie/1").status)
             guest.cookies[SESSION_COOKIE] = "forged"
             assertEquals("""{"error":"session_expired"}""", guest.get("/api/account/movie/watchlist").bodyAsText())
-            assertFalse(SESSION_COOKIE in guest.cookies)
+            assertEquals(SIGNED_OUT, guest.session())
+            // Unknown cookie: possibly a late request of a replaced session, so no deletion cookie is sent.
+            assertTrue(guest.lastSetCookies.none { it.name == SESSION_COOKIE })
             assertTrue(fake.requests.none { it.path.contains("account") })
         }
     }
