@@ -30,7 +30,7 @@ app looks the same on 720p, 1080p and 4K panels.
 ## Project layout
 
 ```
-app/src/main/java/com/techgv/cineverse/
+tvApp/src/main/java/com/techgv/cineverse/
 ├─ data/      tmdb (API, DTOs, repository, cache), auth, library (Room + account), settings
 ├─ domain/    Title, Person, Detail, Season, Episode, Review, LibraryState, MediaRef …
 └─ ui/        nav (AppNav, NavRail, routes), components (cards, dialogs, focus memory, toasts),

@@ -139,7 +139,7 @@ the title + text (titles) or initials (people). The image `OkHttpClient` carries
 ```
 TMDB_READ_ACCESS_TOKEN=   # v4 "API Read Access Token"
 ```
-`app/build.gradle.kts` reads it into `BuildConfig.TMDB_READ_ACCESS_TOKEN` (`buildFeatures.buildConfig = true`).
+`tvApp/build.gradle.kts` reads it into `BuildConfig.TMDB_READ_ACCESS_TOKEN` (`buildFeatures.buildConfig = true`).
 The read token is extractable from the APK; this is accepted client-key risk (rotate if abused; a backend
 proxy is the only real fix and is out of scope).
 

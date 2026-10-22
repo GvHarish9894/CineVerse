@@ -23,4 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Cine Verse"
-include(":app")
+include(":tvApp")
