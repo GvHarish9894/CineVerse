@@ -15,7 +15,7 @@ Pinned by the P0 smoke build (plan §6/§7), not assumed. Every version below is
 | Kotlin | 2.3.21 (multiplatform, jvm, compose compiler, serialization) | `kotlin` |
 | KSP | 2.3.12 (KSP2; Room compiler in `shared`: `kspAndroid`/`kspJvm`/`kspIosArm64`/`kspIosSimulatorArm64`, since P1) | `ksp` |
 | Compose Multiplatform | 1.11.1 (Gradle plugin `org.jetbrains.compose`) | `composeMultiplatform` |
-| Android SDK | compileSdk / targetSdk 37; minSdk: `tvApp` 36 (unchanged, D8 pending), `androidApp`/`composeApp`/`shared` 26 | module build files |
+| Android SDK | compileSdk / targetSdk 37; minSdk: `tvApp` 28 (D8, lowered in P3 with a minSdk-28 lint pass), `androidApp`/`composeApp`/`shared` 26 | module build files |
 | Java bytecode | `tvApp`/`androidApp` Java 11; `server` toolchain 21 | module build files |
 | Xcode | CI: **26.6** (17F113, default of the `macos-26` Apple-silicon runner image; hosted runners do not ship 27.x — checked against actions/runner-images `macos-26-arm64-Readme.md`). Local: 27.1 (27A9275). Both target iOS 16.0 | `mobile-macos.yml` (`XCODE_VERSION`, `DEVELOPER_DIR`) |
 | iOS deployment target | 16.0, Apple-silicon simulator only (no `iosX64`; `x86_64` excluded for simulator builds) | `iosApp.xcodeproj` |

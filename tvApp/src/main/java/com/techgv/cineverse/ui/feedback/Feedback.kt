@@ -1,6 +1,7 @@
 package com.techgv.cineverse.ui.feedback
 
 import android.media.AudioManager
+import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.HapticFeedbackConstants
@@ -85,7 +86,9 @@ class AndroidFeedback(
     }
 
     override fun confirm() {
-        haptics { view.performHapticFeedback(HapticFeedbackConstants.CONFIRM) }
+        // CONFIRM is API 30+; on 28-29 (minSdk 28) the closest older constant.
+        val constant = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY
+        haptics { view.performHapticFeedback(constant) }
         sound(AudioManager.FX_KEY_CLICK)
     }
 

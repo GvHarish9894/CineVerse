@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         applicationId = "com.techgv.cineverse"
-        minSdk = 36
+        minSdk = 28
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
