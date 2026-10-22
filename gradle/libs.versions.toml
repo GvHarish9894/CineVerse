@@ -16,7 +16,7 @@ okhttp = "5.5.0"
 coil = "3.4.0"
 datastore = "1.2.1"
 room = "2.8.5"
-# androidx.sqlite version Room 2.8.5 resolves; bundled driver for shared jvm/iOS Room tests
+# androidx.sqlite version Room 2.8.5 resolves; bundled driver for shared jvm/iOS Room (main since P5) and tests
 sqlite = "2.6.2"
 youtubePlayer = "13.0.0"
 palette = "1.0.0"

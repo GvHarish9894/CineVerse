@@ -52,8 +52,8 @@ kotlin {
             api(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.atomicfu)
             api(libs.kotlinx.datetime)
-            // Declared only (P0 tuple); wired at composition roots in P5.
-            implementation(libs.koin.core)
+            // Koin modules in di/; api so the composition roots (tvApp, composeApp) can start Koin.
+            api(libs.koin.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -65,21 +65,18 @@ kotlin {
             // Guest library + import ledger (library.db). Must never reach wasmJs.
             api(libs.androidx.room.runtime)
         }
-        // Room's bundled SQLite driver for the jvm / iOS database tests (Android uses the framework SQLite).
-        jvmTest.dependencies {
-            implementation(libs.androidx.sqlite.bundled)
-        }
-        iosTest.dependencies {
-            implementation(libs.androidx.sqlite.bundled)
-        }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
+            // preferencesDataStore(): one DataStore per file per process, at the TV's v1 paths.
+            implementation(libs.androidx.datastore.preferences)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+            implementation(libs.androidx.sqlite.bundled)
         }
         jvmMain.dependencies {
             implementation(libs.ktor.client.java)
+            implementation(libs.androidx.sqlite.bundled)
         }
         wasmJsMain.dependencies {
             implementation(libs.ktor.client.js)

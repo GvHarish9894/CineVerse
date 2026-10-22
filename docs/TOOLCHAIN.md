@@ -35,14 +35,14 @@ Pinned by the P0 smoke build (plan §6/§7), not assumed. Every version below is
 | Ktor server | `io.ktor:ktor-server-{core,cio,test-host}:3.6.0`, `org.slf4j:slf4j-simple:2.0.19` | 3.6.0 / slf4j 2.0.19 |
 | Coil | `io.coil-kt.coil3:coil-compose`, `coil-network-ktor3:3.4.0` (same `coil` pin as `tvApp`) | 3.4.0 |
 | Room (nonWeb only) | `androidx.room:room-runtime:2.8.5` (same pin as `tvApp`) | 2.8.5 |
-| SQLite bundled driver (P1; `shared` jvm/iOS **tests** only) | `androidx.sqlite:sqlite-bundled:2.6.2` — the `androidx.sqlite` version Room 2.8.5 already resolves | 2.6.2 |
+| SQLite bundled driver (P1 jvm/iOS tests; P5 also jvm/iOS main, Room's driver there) | `androidx.sqlite:sqlite-bundled:2.6.2` — the `androidx.sqlite` version Room 2.8.5 already resolves | 2.6.2 |
 | DataStore (nonWeb only) | `androidx.datastore:datastore-preferences-core:1.2.1` (same `datastore` pin as `tvApp`) | 1.2.1 |
 | atomicfu | `org.jetbrains.kotlinx:atomicfu:0.33.0` (library only, no Gradle plugin) | 0.33.0 |
 | kotlinx-datetime | `org.jetbrains.kotlinx:kotlinx-datetime:0.8.0-0.6.x-compat` | 0.8.0-0.6.x-compat (Ktor 3.6.0's `ktor-openapi-schema` requires the compat flavour; plain 0.8.0 is upgraded to it) |
 | kotlinx-coroutines | `org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0` (catalog `kotlinxCoroutines`, also `tvApp`'s `coroutines-test`) | 1.11.0 |
 | kotlinx-serialization | transitive via Ktor | 1.11.0 (`tvApp` keeps its own 1.9.0 declaration) |
 | kotlinx-browser | `org.jetbrains.kotlinx:kotlinx-browser:0.5.0` (wasmJs) | 0.5.0 |
-| Koin | `io.insert-koin:koin-core:4.2.2` — declared only; wiring is P5 | 4.2.2 |
+| Koin | `io.insert-koin:koin-core:4.2.2` (`api` of `shared`; P5 wires the composition roots, `shared/.../di/`) | 4.2.2 |
 
 `tvApp` dependencies are unchanged except `kotlinx-coroutines-test` 1.10.2 → 1.11.0 (test classpath only, shared
 catalog key). Nothing in `tvApp` was downgraded; `tvApp` does not depend on `shared` yet (P1). When it does,
