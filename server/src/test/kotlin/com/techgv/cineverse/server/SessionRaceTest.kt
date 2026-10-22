@@ -1,6 +1,11 @@
 package com.techgv.cineverse.server
 
 import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.runInterruptible
+import io.ktor.utils.io.writeStringUtf8
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.http.content.OutgoingContent
+import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
@@ -117,6 +122,48 @@ class SessionRaceTest {
                 "Late A response sends Set-Cookie that removes already-current B cookie in the shared browser jar")
             assertEquals("AOID-B", activeTab.session().accountObjectId)
             assertEquals(HttpStatusCode.OK, activeTab.get("/api/account/movie/rated").status)
+        }
+    }
+
+    @Test
+    fun writeRevalidatesTheSessionAfterItsBodyArrives() {
+        val interruptions = mapOf<String, suspend (Browser, FakeTmdb, TestClock) -> Unit>(
+            "logout" to { tab, _, _ -> assertEquals(HttpStatusCode.OK, tab.send(HttpMethod.Post, "/api/auth/logout").status) },
+            "expiry" to { _, _, clock -> clock.advanceMinutes(30L * 24 * 60) },
+            "sign-in as B" to { tab, fake, _ -> tab.signIn(fake, "B") },
+        )
+        for ((name, interrupt) in interruptions) {
+            val fake = FakeTmdb()
+            val clock = TestClock()
+            serverTest(fake, clock = clock) {
+                val writer = browser()
+                val a = writer.signIn(fake, "A")
+                val otherTab = browser().also { it.cookies.putAll(writer.cookies) }
+                val sessionChecked = CountDownLatch(1)
+                val bodyRelease = CountDownLatch(1)
+                val slowBody = object : OutgoingContent.WriteChannelContent() {
+                    override val contentType = ContentType.Application.Json
+                    override suspend fun writeTo(channel: ByteWriteChannel) {
+                        runInterruptible(Dispatchers.IO) { check(bodyRelease.await(10, TimeUnit.SECONDS)) }
+                        channel.writeStringUtf8("""{"media_type":"movie","media_id":550,"watchlist":true}""")
+                    }
+                }
+                coroutineScope {
+                    clock.onRead = { sessionChecked.countDown() } // the write's session lookup, before its body
+                    val write = async(Dispatchers.IO) {
+                        writer.send(HttpMethod.Post, "/api/account/watchlist", session = a, content = slowBody)
+                    }
+                    try {
+                        check(sessionChecked.await(10, TimeUnit.SECONDS))
+                        clock.onRead = null
+                        interrupt(otherTab, fake, clock)
+                    } finally { bodyRelease.countDown() }
+                    val response = write.await()
+                    assertEquals(HttpStatusCode.Conflict, response.status, name)
+                    assertEquals("""{"error":"stale_session"}""", response.bodyAsText(), name)
+                }
+                assertTrue(fake.requests.none { it.path.endsWith("/watchlist") && it.method == HttpMethod.Post }, name)
+            }
         }
     }
 }

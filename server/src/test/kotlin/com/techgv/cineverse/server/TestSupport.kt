@@ -50,7 +50,11 @@ fun testConfig(
 
 class TestClock(start: Long = 1_000_000L) {
     private val now = AtomicLong(start)
-    fun now() = now.get()
+
+    /** Runs on every server clock read (lets a test see that a request reached its session lookup). */
+    @Volatile var onRead: (() -> Unit)? = null
+
+    fun now() = now.get().also { onRead?.invoke() }
     fun advanceMinutes(minutes: Long) = now.addAndGet(minutes * 60_000)
 }
 
@@ -146,6 +150,7 @@ class Browser(private val client: HttpClient) {
         csrf: String? = null,
         headers: Map<String, String> = emptyMap(),
         session: AuthSession? = null,
+        content: OutgoingContent? = null,
     ): HttpResponse {
         val response = client.request(path) {
             this.method = method
@@ -163,6 +168,7 @@ class Browser(private val client: HttpClient) {
                 contentType(ContentType.Application.Json)
                 setBody(json)
             }
+            content?.let(::setBody)
         }
         lastSetCookies = response.headers.getAll(HttpHeaders.SetCookie).orEmpty().map(::parseServerSetCookieHeader)
         lastSetCookies.forEach { if (it.maxAge == 0) cookies.remove(it.name) else cookies[it.name] = it.value }

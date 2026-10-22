@@ -142,7 +142,9 @@ never relayed. TMDB codes map per spec §3.3:
   `Sec-Fetch-Site` other than same-origin/same-site, requires `X-CV-CSRF` == `cv_csrf` cookie (double submit;
   cookie is SameSite=Strict), and writes require `application/json`. CORS is off unless `CORS_ORIGIN` is set.
 - **Identity binding.** Writes carry the expected session generation + account; a tab still showing account A
-  after another tab switched the cookie to B gets `409 stale_session`.
+  after another tab switched the cookie to B gets `409 stale_session`. The session is checked again after the
+  body has arrived, immediately before the TMDB call: a logout, expiry or re-sign-in meanwhile is also
+  `409 stale_session` and nothing is sent (never retargeted to the new session).
 - **Rate limits** (per minute): auth routes 20 per client IP and 20 per session; writes 120 per IP and 60 per
   session. Catalog reads are protected by the cache, not throttled.
 - **Headers.** `nosniff`, `X-Frame-Options: DENY`, CSP `frame-ancestors 'none'` (API: `default-src 'none'`),

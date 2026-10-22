@@ -68,8 +68,11 @@ fun Route.accountRoutes(config: ServerConfig, tmdb: Tmdb, sessions: SessionLooku
         return session
     }
 
-    suspend fun RoutingContext.write(session: UserSession, method: HttpMethod, path: String, body: JsonObject?) =
+    suspend fun RoutingContext.write(session: UserSession, method: HttpMethod, path: String, body: JsonObject?) {
+        // The body was read after [boundSession]: a logout, expiry or rotation meanwhile stops the write here.
+        if (!sessions.isLive(session)) throw ApiError(HttpStatusCode.Conflict, "stale_session")
         relay(TmdbOperation.Session, session, tmdb.call(method, path, listOf("session_id" to session.sessionId), body))
+    }
 
     get("/api/account/{media}/{list}") {
         val session = sessions.require(call)
