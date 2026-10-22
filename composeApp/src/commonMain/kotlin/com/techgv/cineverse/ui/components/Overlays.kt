@@ -119,14 +119,16 @@ fun AmbientGlow(palette: ArtPalette, modifier: Modifier = Modifier, strength: Fl
  * Bottom sheet (`.sheet`): raised surface, 30dp top radius, 40×5 handle, scrim rgba(5,4,12,.62), drag-to-dismiss and
  * scrim tap close (Material 3 ModalBottomSheet underneath). Under reduce motion it appears and disappears in place
  * (scrim fade only): it starts expanded, and every close path (scrim, drag, back) is reported when the sheet is
- * asked to hide, instead of sliding it down first.
+ * asked to hide, instead of sliding it down first. Esc (pressed inside the sheet) reports the close directly, as
+ * [CvDialog] does. On close, focus returns to [restoreFocus] (attach it to the trigger).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CvBottomSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun CvBottomSheet(onDismissRequest: () -> Unit, restoreFocus: FocusRequester? = null, content: @Composable ColumnScope.() -> Unit) {
     val reduceMotion = LocalReduceMotion.current
     val density = LocalDensity.current
     val dismiss by rememberUpdatedState(onDismissRequest)
+    DisposableEffect(restoreFocus) { onDispose { restoreFocus?.let { runCatching { it.requestFocus() } } } }
     val sheetState = remember(reduceMotion, density) {
         var dismissed = false
         SheetState(
@@ -157,7 +159,15 @@ fun CvBottomSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope
             Box(Modifier.padding(top = 10.dp, bottom = 18.dp).size(40.dp, 5.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = 0.25f)))
         },
     ) {
-        Column(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = 38.dp), content = content)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .onPreviewKeyEvent { event ->
+                    (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismissRequest() }
+                }
+                .padding(start = 22.dp, end = 22.dp, bottom = 38.dp),
+            content = content,
+        )
     }
 }
 

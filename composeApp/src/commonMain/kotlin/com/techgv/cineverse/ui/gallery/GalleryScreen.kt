@@ -409,14 +409,15 @@ private fun OverlaysDemo(title: PreviewTitle) = Pad {
     val toasts = LocalToasts.current
     var sheet by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf(false) }
+    val sheetTrigger = remember { FocusRequester() }
     val dialogTrigger = remember { FocusRequester() }
     FlowRow(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        PillButton("Open sheet", { sheet = true }, variant = ButtonVariant.Ghost)
+        PillButton("Open sheet", { sheet = true }, Modifier.focusRequester(sheetTrigger), variant = ButtonVariant.Ghost)
         PillButton("Open dialog", { dialog = true }, Modifier.focusRequester(dialogTrigger), variant = ButtonVariant.Ghost)
         PillButton("Show toast", { toasts.show(ToastMessage("Rated 8.0 / 10", "${title.name} · saved on this device", CvIcons.StarFilled)) }, variant = ButtonVariant.Ghost)
     }
     if (sheet) {
-        CvBottomSheet(onDismissRequest = { sheet = false }) {
+        CvBottomSheet(onDismissRequest = { sheet = false }, restoreFocus = sheetTrigger) {
             OverlayHeading("Your TMDB account", "Sign in to sync")
             Text("Watchlist, favourites and ratings follow you to every device.", style = bodyStyle(14.5.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.78f), modifier = Modifier.padding(top = 8.dp))
             Row(Modifier.padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
