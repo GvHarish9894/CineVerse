@@ -9,11 +9,14 @@ import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
@@ -220,24 +223,92 @@ class SessionRaceTest {
     }
 
     @Test
-    fun syncClearsAGenuinelyStaleCookie() {
+    fun staleCookieOnSessionSyncIsSignedOutWithoutSetCookie() {
         val fake = FakeTmdb()
-        serverTest(fake) {
-            // TMDB ends A: the 401 leaves the cookie alone; the client's follow-up sync clears it.
+        val clock = TestClock()
+        serverTest(fake, clock = clock) {
+            // TMDB ends A: neither the 401 nor the follow-up sync touches the cookie.
             val tab = browser()
             tab.signIn(fake, "A")
+            val staleA = tab.cookies.getValue(SESSION_COOKIE)
             fake.overrides["GET /4/account/AOID-A/movie/rated"] = { tmdbError(401, 35) }
             assertEquals(HttpStatusCode.Unauthorized, tab.get("/api/account/movie/rated").status)
+            val sync = tab.get("/api/session")
+            assertEquals(SIGNED_OUT, Json.decodeFromString<AuthSession>(sync.bodyAsText()))
+            assertEquals("private, no-store", sync.headers[HttpHeaders.CacheControl])
             assertTrue(tab.lastSetCookies.none { it.name == SESSION_COOKIE })
-            assertEquals(SIGNED_OUT, tab.session())
-            assertEquals(0, tab.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
-            assertFalse(SESSION_COOKIE in tab.cookies)
+            assertEquals(staleA, tab.cookies[SESSION_COOKIE], "the harmless stale cookie stays")
+            // The next sign-in overwrites it.
+            assertEquals("AOID-B", tab.signIn(fake, "B").accountObjectId)
+            assertTrue(tab.cookies.getValue(SESSION_COOKIE) != staleA)
 
-            // A forged/unknown cookie belongs to no browser state: cleared.
+            // Forged/unknown and TTL-expired cookies: signed out, no Set-Cookie either.
             val forged = browser().also { it.cookies[SESSION_COOKIE] = "forged" }
             assertEquals(SIGNED_OUT, forged.session())
-            assertEquals(0, forged.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
+            assertTrue(forged.lastSetCookies.none { it.name == SESSION_COOKIE })
+            clock.advanceMinutes(30L * 24 * 60)
+            assertEquals(SIGNED_OUT, tab.session())
+            assertTrue(tab.lastSetCookies.none { it.name == SESSION_COOKIE })
         }
+    }
+
+    @Test
+    fun syncDeletionAlreadyPreparedCannotDeleteLaterSignIn() {
+        val fake = FakeTmdb()
+        fake.overrides["GET /4/account/AOID-A/movie/rated"] = { tmdbError(401, 35) }
+        val prepared = CompletableDeferred<Unit>()
+        val deliver = CompletableDeferred<Unit>()
+        val delaySync = createClientPlugin("DelaySessionSyncDelivery") {
+            onResponse { response ->
+                if (response.call.request.url.encodedPath == "/api/session") {
+                    prepared.complete(Unit)
+                    deliver.await()
+                }
+            }
+        }
+        serverTest(fake) {
+            val activeTab = browser()
+            activeTab.signIn(fake, "A")
+            assertEquals(HttpStatusCode.Unauthorized, activeTab.get("/api/account/movie/rated").status)
+            val delayedClient = createClient {
+                followRedirects = false
+                install(delaySync)
+            }
+            val oldTab = Browser(delayedClient).also { it.cookies.putAll(activeTab.cookies) }
+            coroutineScope {
+                val sync = async(Dispatchers.IO) { oldTab.get("/api/session") }
+                try {
+                    prepared.await()
+                    assertEquals("AOID-B", activeTab.signIn(fake, "B").accountObjectId)
+                } finally { deliver.complete(Unit) }
+                assertEquals(HttpStatusCode.OK, sync.await().status)
+            }
+            assertTrue(oldTab.lastSetCookies.none { it.name == SESSION_COOKIE && it.maxAge == 0 },
+                "A sync prepared before B signs in must not deliver a deletion of B's new cookie")
+            assertEquals("AOID-B", activeTab.session().accountObjectId)
+        }
+    }
+
+    /** Source-level guard: `POST /api/auth/logout` is the only route that can delete `cv_session`. */
+    @Test
+    fun onlyLogoutDeletesTheSessionCookie() {
+        val sources = File("src/main/kotlin").walk().filter { it.extension == "kt" }.toList()
+        assertTrue(sources.isNotEmpty())
+        val deletions = sources.flatMap { file ->
+            file.readLines().filter { "clearSession" in it || "maxAge = 0" in it }.map { file.name to it.trim() }
+        }
+        assertEquals(
+            listOf(
+                "Auth.kt" to "fun clearSession() = session(\"\").copy(maxAge = 0, expires = GMTDate.START)",
+                "Auth.kt" to "fun clearAttempt() = attempt(\"\").copy(maxAge = 0, expires = GMTDate.START)",
+                "Auth.kt" to "call.setCookie(cookies.clearSession()) // the only cv_session deletion; see SessionLookup",
+            ),
+            deletions,
+        )
+        val auth = sources.single { it.name == "Auth.kt" }.readText()
+        val logout = auth.indexOf("post(\"/api/auth/logout\")")
+        val nextRoute = Regex("""\n\s*(get|post)\(""").find(auth, logout + 1)!!.range.first
+        assertTrue(auth.indexOf("cookies.clearSession()") in logout until nextRoute, "the call sits in the logout handler")
     }
 
     @Test

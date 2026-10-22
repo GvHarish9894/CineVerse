@@ -204,9 +204,8 @@ class AuthFlowTest {
             browser.signIn(fake, "A")
             clock.advanceMinutes(30L * 24 * 60)
             assertEquals(SIGNED_OUT, browser.session())
-            val cleared = browser.lastSetCookies.single { it.name == SESSION_COOKIE }
-            assertEquals(0, cleared.maxAge)
-            assertEquals("/api", cleared.path)
+            // No deletion: the browser drops the cookie itself, its Max-Age is the session TTL.
+            assertTrue(browser.lastSetCookies.none { it.name == SESSION_COOKIE })
         }
     }
 

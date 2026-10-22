@@ -159,16 +159,6 @@ class AuthStore(private val config: ServerConfig, private val nowMillis: () -> L
         return (current + listOfNotNull(sessionId)).distinct().mapNotNull(sessions::remove)
     }
 
-    /**
-     * A sync (`GET /api/session`) presenting the unknown/ended/expired [sessionId] may clear `cv_session` only if
-     * that browser holds no newer live session — otherwise the deletion could hit the newer cookie.
-     */
-    @Synchronized
-    fun mayClearStaleCookie(sessionId: String): Boolean {
-        val current = browsers[bindingOf(sessionId)]?.currentSessionId ?: return true
-        return current == sessionId || liveSession(current) == null
-    }
-
     /** Atomically takes [attempt] so concurrent callbacks never exchange one request token twice. */
     fun claim(attempt: AuthAttempt) = attempts.remove(attempt.id, attempt)
     fun restore(attempt: AuthAttempt) { attempts.putIfAbsent(attempt.id, attempt) }
@@ -240,20 +230,15 @@ fun ApplicationCall.setCookie(c: Cookie) = response.headers.append(
 )
 
 /**
- * Session state of a request. Only logout and the [sync] path ever clear `cv_session`: any other response (e.g. a
- * 401 `session_expired`) may be delivered after the browser already stored a newer cookie, which a deletion header
- * would destroy.
+ * Session state of a request. Never touches `cv_session`: only `POST /api/auth/logout` deletes it. Any other
+ * response may be delivered after another tab stored a newer cookie, which a deletion header would destroy; a stale
+ * cookie is harmless (unknown to the server) and is overwritten by the next sign-in or expires.
  */
-class SessionLookup(private val store: AuthStore, private val cookies: Cookies) {
+class SessionLookup(private val store: AuthStore) {
     private fun cookieId(call: ApplicationCall) = call.request.cookies[SESSION_COOKIE]?.takeIf { it.isNotEmpty() }
 
+    /** The live session of the presented cookie; an expired record is removed. */
     fun current(call: ApplicationCall): UserSession? = cookieId(call)?.let(store::session)
-
-    /** `GET /api/session`: also clears a stale presented cookie, unless that browser holds a newer live session. */
-    fun sync(call: ApplicationCall): UserSession? {
-        val id = cookieId(call) ?: return null
-        return store.session(id) ?: null.also { if (store.mayClearStaleCookie(id)) call.setCookie(cookies.clearSession()) }
-    }
 
     fun require(call: ApplicationCall): UserSession {
         val hadCookie = !call.request.cookies[SESSION_COOKIE].isNullOrEmpty()
@@ -285,7 +270,7 @@ private class StartResponse(val approveUrl: String, val attemptId: String)
 fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies: Cookies, sessions: SessionLookup) {
     get("/api/session") {
         if (call.request.cookies[CSRF_COOKIE].isNullOrEmpty()) call.setCookie(cookies.csrf(randomId()))
-        call.respondSession(sessions.sync(call)?.toAuthSession() ?: SIGNED_OUT)
+        call.respondSession(sessions.current(call)?.toAuthSession() ?: SIGNED_OUT)
     }
 
     rateLimit(AUTH_BY_IP) {
@@ -375,7 +360,7 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
                 call.requireCsrf(config)
                 // Local sign-out first; remote revocation is best effort and never blocks it.
                 val ended = store.logout(call.request.cookies[ATTEMPT_COOKIE], call.request.cookies[SESSION_COOKIE])
-                call.setCookie(cookies.clearSession())
+                call.setCookie(cookies.clearSession()) // the only cv_session deletion; see SessionLookup
                 ended.forEach { revoke(call, tmdb, it.userAccessToken, it.sessionId) }
                 call.respondSession(SIGNED_OUT)
             }

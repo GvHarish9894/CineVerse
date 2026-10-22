@@ -164,10 +164,10 @@ class AccountTest {
                 val response = alice.send(HttpMethod.Post, "/api/account/watchlist", watchlistBody, session = a)
                 assertEquals(HttpStatusCode.Unauthorized, response.status)
                 assertTrue(response.bodyAsText().startsWith("""{"error":"session_expired""""))
-                // No deletion header on the 401 (it may land after a newer cookie); the sync clears the stale one.
+                // No deletion header on the 401 nor on the sync (either may land after a newer cookie).
                 assertTrue(alice.lastSetCookies.none { it.name == SESSION_COOKIE })
                 assertEquals(SIGNED_OUT, alice.session())
-                assertEquals(0, alice.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
+                assertTrue(alice.lastSetCookies.none { it.name == SESSION_COOKIE })
             }
         }
         val fake = FakeTmdb()
@@ -214,11 +214,11 @@ class AccountTest {
             assertEquals(HttpStatusCode.Unauthorized, guest.send(HttpMethod.Delete, "/api/account/rating/movie/1").status)
             guest.cookies[SESSION_COOKIE] = "forged"
             assertEquals("""{"error":"session_expired"}""", guest.get("/api/account/movie/watchlist").bodyAsText())
-            // Unknown cookie: possibly a late request of a replaced session, so the 401 sends no deletion cookie;
-            // only the sync path clears it (it belongs to no browser holding a newer session).
+            // Unknown cookie: possibly a late request of a replaced session, so neither the 401 nor the sync
+            // sends a deletion cookie (only logout does).
             assertTrue(guest.lastSetCookies.none { it.name == SESSION_COOKIE })
             assertEquals(SIGNED_OUT, guest.session())
-            assertEquals(0, guest.lastSetCookies.single { it.name == SESSION_COOKIE }.maxAge)
+            assertTrue(guest.lastSetCookies.none { it.name == SESSION_COOKIE })
             assertTrue(fake.requests.none { it.path.contains("account") })
         }
     }

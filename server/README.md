@@ -117,9 +117,9 @@ never relayed. TMDB codes map per spec §3.3:
    completed sign-in also supersedes the browser's other attempts.
 4. Account writes send `X-CV-Expected-Session-Generation` and `X-CV-Expected-Account` (= `accountObjectId`) from
    the `AuthSession` the screen is showing; `409 stale_session` → refetch the session and drop the action.
-   `401 session_expired` → always call `GET /api/session` (the sync path) and render what it returns:
-   `{signedIn:false}` → signed out ("Sign-in expired"); a newer session → it was a late answer for a replaced
-   session, keep going. The 401 itself never clears `cv_session`; the sync does, if the cookie is genuinely stale.
+   `401 session_expired` → always call `GET /api/session` and render what it returns: `{signedIn:false}` →
+   signed out ("Sign-in expired"); a newer session → it was a late answer for a replaced session, keep going.
+   Neither response touches `cv_session` (see "Cookie deletion").
    Writes are never retried by the server.
 5. Send `credentials: "include"` only when using `CORS_ORIGIN` in dev; same-origin needs nothing.
 6. `429` (catalog `rate_limited`, or an empty-body local limit) and `503 upstream_busy`: back off for
@@ -149,10 +149,12 @@ never relayed. TMDB codes map per spec §3.3:
   tracks each browser's current session: a sign-in commits it (ending the one it replaces) before revoking the
   old tokens, logout ends whatever the browser's current session is, and the callback publishes `cv_session` only
   if its session is still current after revocation — otherwise 409 `attempt_superseded`.
-- **Cookie deletion.** Only `POST /api/auth/logout` and the sync path `GET /api/session` send a `cv_session`
-  deletion; a 401 (TMDB `session_expired`, TTL expiry, unknown cookie) never does, because a delayed response could
-  otherwise delete a newer cookie the browser stored meanwhile. The sync clears a presented unknown/ended/expired
-  cookie unless that browser already holds a newer live session (then the newer cookie is left alone).
+- **Cookie deletion.** The server never deletes the session cookie except on `POST /api/auth/logout`. On
+  `401 session_expired` the client calls `GET /api/session` (returns `{signedIn:false}`); the stale cookie is
+  harmless (unknown to the server) and is overwritten by the next sign-in or expires. (Any other deletion header
+  could be delivered after another tab stored a newer cookie and destroy it; the server cannot know at response
+  time which cookie the browser will hold at delivery.) Multi-tab coordination (P9) is the client-side
+  BroadcastChannel contract from plan §3; no server GET can substitute for it.
 - **CSRF.** Every state-changing route requires `Origin` ∈ {`PUBLIC_ORIGIN`, `CORS_ORIGIN`}, rejects
   `Sec-Fetch-Site` other than same-origin/same-site, requires `X-CV-CSRF` == `cv_csrf` cookie (double submit;
   cookie is SameSite=Strict), and writes require `application/json`. CORS is off unless `CORS_ORIGIN` is set.

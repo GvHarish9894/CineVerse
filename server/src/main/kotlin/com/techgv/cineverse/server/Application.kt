@@ -54,7 +54,7 @@ fun Application.cineVerse(
     val missBudget = ClientBudget(config.catalogMissesPerMinute, burst = config.catalogMissesPerMinute * 2, nowMillis)
     val store = AuthStore(config, nowMillis)
     val cookies = Cookies(config)
-    val sessions = SessionLookup(store, cookies)
+    val sessions = SessionLookup(store)
 
     routing {
         get("/healthz") { call.respondText("ok") }
