@@ -1,18 +1,17 @@
 package com.techgv.cineverse.data.settings
 
-import com.techgv.cineverse.data.auth.InMemoryPreferencesStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class AccountDefaultsTest {
-    private val repo = SettingsRepository(InMemoryPreferencesStore())
+    private val repo = SettingsRepository(InMemorySettingsStore())
     private val a = AccountDefaults("a", "hi-IN", "US", includeAdult = true)
     private val b = AccountDefaults("b", "es-ES", "GB", includeAdult = false)
 
     @Test
-    fun `apply writes language, region and include_adult and ends the offer`() = runTest {
+    fun `apply writes language region and include_adult and ends the offer`() = runTest {
         repo.offerAccountDefaults(a)
         assertEquals(mapOf("a" to a), repo.pendingAccountDefaults.first())
         repo.resolveAccountDefaults("a", apply = true)
@@ -30,7 +29,7 @@ class AccountDefaultsTest {
     }
 
     @Test
-    fun `offers are kept per account until resolved, and resolving one never touches another`() = runTest {
+    fun `offers are kept per account until resolved and resolving one never touches another`() = runTest {
         repo.offerAccountDefaults(a)
         repo.offerAccountDefaults(b) // B signs in while A's offer is unresolved
         repo.offerAccountDefaults(a) // A returns: shown before, still unresolved, still offered

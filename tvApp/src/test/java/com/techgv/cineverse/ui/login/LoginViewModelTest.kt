@@ -8,6 +8,7 @@ import com.techgv.cineverse.data.auth.RequestCode
 import com.techgv.cineverse.data.auth.SignInOutcome
 import com.techgv.cineverse.data.auth.SoftwareKeys
 import com.techgv.cineverse.data.settings.AccountDefaults
+import com.techgv.cineverse.data.settings.DataStoreSettingsStore
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.AccessTokenBody
 import com.techgv.cineverse.data.tmdb.AccessTokenDto
@@ -58,7 +59,7 @@ class LoginViewModelTest {
     }
 
     private val settingsData = GatedPreferencesStore()
-    private val settings = SettingsRepository(settingsData)
+    private val settings = SettingsRepository(DataStoreSettingsStore(settingsData))
     private val credentialData = GatedPreferencesStore()
     private val auth = AuthRepository(api, DataStoreCredentialStore(credentialData, CredentialCipher(SoftwareKeys())), onAccountChanged = {})
 

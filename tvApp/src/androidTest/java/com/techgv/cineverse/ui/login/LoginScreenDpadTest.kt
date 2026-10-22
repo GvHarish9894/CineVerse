@@ -16,6 +16,7 @@ import com.techgv.cineverse.data.auth.AndroidKeystoreKeys
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
 import com.techgv.cineverse.data.auth.DataStoreCredentialStore
+import com.techgv.cineverse.data.settings.DataStoreSettingsStore
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.AccessTokenBody
 import com.techgv.cineverse.data.tmdb.AccessTokenDto
@@ -61,7 +62,7 @@ class LoginScreenDpadTest {
     @Test
     fun okStartsWaiting_rightThenOkContinuesAsGuest() {
         val auth = AuthRepository(api, DataStoreCredentialStore(store("login-test-credentials"), CredentialCipher(AndroidKeystoreKeys("login_test"))), onAccountChanged = {})
-        val vm = LoginViewModel(auth, SettingsRepository(store("login-test-settings")), CoroutineScope(Dispatchers.Default))
+        val vm = LoginViewModel(auth, SettingsRepository(DataStoreSettingsStore(store("login-test-settings"))), CoroutineScope(Dispatchers.Default))
         var guest = 0
         compose.setContent { LoginScreen(message = null, onContinueAsGuest = { guest++ }, onSignedIn = {}, vm = vm) }
         compose.waitUntil(5_000) { compose.onAllNodes(isFocused() and hasText("I've approved it")).fetchSemanticsNodes().isNotEmpty() }

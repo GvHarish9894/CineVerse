@@ -13,6 +13,7 @@ import com.techgv.cineverse.data.library.GuestLibrarySource
 import com.techgv.cineverse.data.library.LibraryDatabase
 import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
+import com.techgv.cineverse.data.settings.DataStoreSettingsStore
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.ReadToken
 import com.techgv.cineverse.data.tmdb.TmdbApi
@@ -40,7 +41,7 @@ class AppContainer(
     /** App-wide generation (§1.1): bumped on auth and content-settings changes. */
     val appGeneration = GenerationCounter()
 
-    val settingsRepository = SettingsRepository(context.settingsDataStore)
+    val settingsRepository = SettingsRepository(DataStoreSettingsStore(context.settingsDataStore))
 
     val tmdbRepository: TmdbRepository = TmdbRepository(
         tmdbApi, appGeneration, settings = settingsRepository::current,

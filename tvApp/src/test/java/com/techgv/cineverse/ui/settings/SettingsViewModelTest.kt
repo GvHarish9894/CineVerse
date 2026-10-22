@@ -10,6 +10,7 @@ import com.techgv.cineverse.data.auth.InMemoryPreferencesStore
 import com.techgv.cineverse.data.auth.SoftwareKeys
 import com.techgv.cineverse.data.settings.AccountDefaults
 import com.techgv.cineverse.data.settings.Settings
+import com.techgv.cineverse.data.settings.DataStoreSettingsStore
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.AccountId
 import com.techgv.cineverse.data.tmdb.AccountObjectId
@@ -53,7 +54,7 @@ class SettingsViewModelTest {
 
     private val credentialData = GatedPreferencesStore()
     private val credentialStore = DataStoreCredentialStore(credentialData, CredentialCipher(SoftwareKeys()))
-    private val settings = SettingsRepository(InMemoryPreferencesStore())
+    private val settings = SettingsRepository(DataStoreSettingsStore(InMemoryPreferencesStore()))
     private val vm by lazy { SettingsViewModel(SavedStateHandle(), settings, AuthRepository(api, credentialStore, onAccountChanged = {})) }
 
     private fun account(id: String, name: String) =
