@@ -2,9 +2,11 @@ package com.techgv.cineverse.ui.haptics
 
 import android.content.Context
 import android.os.Build
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.compose.runtime.Composable
@@ -33,7 +35,7 @@ actual fun rememberPlatformHaptics(enabled: Boolean, strength: HapticStrength): 
     val view = LocalView.current
     val context = LocalContext.current
     return remember(view, context, enabled, strength) {
-        if (enabled) AndroidHaptics(view, context.defaultVibrator(), strength) else Haptics.None
+        if (enabled) AndroidHaptics(view, strength, context.defaultVibrator()?.takeIf { it.hasVibrator() }?.let { it::vibrateAsTouch }) else Haptics.None
     }
 }
 
@@ -41,7 +43,17 @@ private fun Context.defaultVibrator(): Vibrator? =
     if (Build.VERSION.SDK_INT >= 31) getSystemService(VibratorManager::class.java)?.defaultVibrator
     else getSystemService(Vibrator::class.java)
 
-private class AndroidHaptics(private val view: View, private val vibrator: Vibrator?, private val strength: HapticStrength) : Haptics {
+/** Touch usage (API 33+): the system also silences it when Touch feedback is off. */
+private fun Vibrator.vibrateAsTouch(effect: VibrationEffect) {
+    if (Build.VERSION.SDK_INT >= 33) vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH)) else vibrate(effect)
+}
+
+/** The policy `performHapticFeedback` applies: the view's flag and the system Touch feedback setting. */
+internal fun View.touchFeedbackEnabled(): Boolean =
+    isHapticFeedbackEnabled && Settings.System.getInt(context.contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
+
+/** [vibrate] = the device vibrator (null when there is none); a parameter so tests can record instead. */
+internal class AndroidHaptics(private val view: View, private val strength: HapticStrength, private val vibrate: ((VibrationEffect) -> Unit)?) : Haptics {
     override fun perform(kind: HapticKind) {
         val constant = androidFeedbackConstant(kind, Build.VERSION.SDK_INT)
         // Constants respect the system touch-feedback setting; VibrationEffect only for the strength variants (kit).
@@ -49,7 +61,8 @@ private class AndroidHaptics(private val view: View, private val vibrator: Vibra
             view.performHapticFeedback(constant)
             return
         }
-        val v = vibrator?.takeIf { it.hasVibrator() } ?: return
-        runCatching { v.vibrate(VibrationEffect.createWaveform(androidWaveformTimings(kind, strength), -1)) }
+        // Direct vibration skips the view's policy, so apply the same policy here.
+        if (vibrate == null || !view.touchFeedbackEnabled()) return
+        runCatching { vibrate(VibrationEffect.createWaveform(androidWaveformTimings(kind, strength), -1)) }
     }
 }
