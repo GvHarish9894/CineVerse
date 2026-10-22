@@ -257,9 +257,14 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
                 }
                 if (!store.claim(attempt)) throw ApiError(HttpStatusCode.Gone, "attempt_expired")
 
-                val exchange = tmdb.call(
-                    HttpMethod.Post, "4/auth/access_token", body = buildJsonObject { put("request_token", attempt.requestToken) },
-                )
+                val exchange = try {
+                    tmdb.call(
+                        HttpMethod.Post, "4/auth/access_token", body = buildJsonObject { put("request_token", attempt.requestToken) },
+                    )
+                } catch (e: ApiError) {
+                    store.restore(attempt) // upstream_busy: nothing was sent, the attempt may be retried
+                    throw e
+                }
                 if (!exchange.ok) {
                     val error = classify(TmdbOperation.AccessTokenExchange, exchange)
                     // Pending / throttled / upstream trouble: the same attempt may be retried.

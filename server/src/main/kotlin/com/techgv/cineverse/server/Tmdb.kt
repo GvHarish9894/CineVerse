@@ -15,6 +15,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.appendPathSegments
 import io.ktor.http.content.TextContent
 import io.ktor.http.takeFrom
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -52,8 +53,11 @@ class Upstream(val status: Int, val body: String, val retryAfter: String?) {
 /**
  * TMDB client. Every call is made exactly once (no retries: writes and auth steps are not idempotent).
  * Bearer is the read token unless [call]'s `bearer` (a user access token) is given (spec §3.1).
+ * At most [maxConcurrent] calls run at once; past that a call fails fast with `503 upstream_busy`, before sending.
  */
-class Tmdb(private val http: HttpClient, private val readToken: String) {
+class Tmdb(private val http: HttpClient, private val readToken: String, maxConcurrent: Int) {
+    private val permits = Semaphore(maxConcurrent)
+
     suspend fun call(
         method: HttpMethod,
         path: String,
@@ -61,18 +65,23 @@ class Tmdb(private val http: HttpClient, private val readToken: String) {
         body: JsonObject? = null,
         bearer: String = readToken,
     ): Upstream {
-        val response = http.request {
-            this.method = method
-            url {
-                takeFrom(TMDB_ORIGIN)
-                appendPathSegments(path.split('/'))
-                query.forEach { (name, value) -> parameters.append(name, value) }
+        if (!permits.tryAcquire()) throw UPSTREAM_BUSY
+        try {
+            val response = http.request {
+                this.method = method
+                url {
+                    takeFrom(TMDB_ORIGIN)
+                    appendPathSegments(path.split('/'))
+                    query.forEach { (name, value) -> parameters.append(name, value) }
+                }
+                bearerAuth(bearer)
+                header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+                if (body != null) setBody(TextContent(body.toString(), ContentType.Application.Json))
             }
-            bearerAuth(bearer)
-            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
-            if (body != null) setBody(TextContent(body.toString(), ContentType.Application.Json))
+            return Upstream(response.status.value, response.bodyAsText(), response.headers[HttpHeaders.RetryAfter])
+        } finally {
+            permits.release()
         }
-        return Upstream(response.status.value, response.bodyAsText(), response.headers[HttpHeaders.RetryAfter])
     }
 
     fun close() = http.close()
@@ -131,6 +140,8 @@ fun classify(operation: TmdbOperation, upstream: Upstream): ApiError {
 }
 
 const val SESSION_EXPIRED = "session_expired"
+
+val UPSTREAM_BUSY = ApiError(HttpStatusCode.ServiceUnavailable, "upstream_busy", retryAfter = "1")
 
 // --- minimal TMDB DTOs (the server keeps its own; plan §1) ---
 

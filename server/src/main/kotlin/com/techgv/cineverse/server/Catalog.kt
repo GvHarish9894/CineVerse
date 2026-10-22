@@ -10,7 +10,11 @@ import io.ktor.server.response.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
@@ -127,28 +131,49 @@ class CatalogCache(private val maxEntries: Int, private val nowMillis: () -> Lon
         val expiresAt = if (ttl.isInfinite()) Long.MAX_VALUE else nowMillis() + ttl.inWholeMilliseconds
         entries[key] = Entry(body, expiresAt)
     }
+
+    private val loading = ConcurrentHashMap<String, CompletableDeferred<String>>()
+
+    /** Single flight: concurrent misses of one [key] share one [fetch]; its body is cached for [ttl]. */
+    suspend fun load(key: String, ttl: Duration, fetch: suspend () -> String): String {
+        val mine = CompletableDeferred<String>()
+        loading.putIfAbsent(key, mine)?.let { return it.await() }
+        try {
+            // Not cancelled with the leading request: the others wait for this result.
+            val body = get(key) ?: withContext(NonCancellable) { fetch() }.also { put(key, it, ttl) }
+            mine.complete(body)
+            return body
+        } catch (e: Throwable) {
+            mine.completeExceptionally(e)
+            throw e
+        } finally {
+            loading.remove(key, mine)
+        }
+    }
 }
 
 /**
  * `GET /api/tmdb/{v3 path}`: allow-listed public catalog reads with the server's read token. The client's own
  * headers (incl. `Authorization`, cookies) are never forwarded; only canonical allow-listed params are.
  */
-fun Route.catalogRoutes(tmdb: Tmdb, cache: CatalogCache) {
+fun Route.catalogRoutes(tmdb: Tmdb, cache: CatalogCache, missBudget: ClientBudget) {
     get("/api/tmdb/{path...}") {
         val path = call.parameters.getAll("path").orEmpty().joinToString("/")
         val rule = catalogRules.firstOrNull { it.path.matches(path) } ?: throw NOT_ALLOWED
         val query = canonicalQuery(call.request.queryParameters, rule.params)
         val key = path + "?" + query.joinToString("&") { (k, v) -> "$k=${v.encodeURLParameter()}" }
         val body = cache.get(key) ?: run {
-            // Public, idempotent GET: one retry on a transport failure (writes and auth calls are never retried).
-            val upstream = try {
-                tmdb.call(HttpMethod.Get, "3/$path", query)
-            } catch (_: IOException) {
-                tmdb.call(HttpMethod.Get, "3/$path", query)
+            missBudget.consume(call.clientIp())
+            cache.load(key, rule.ttl.ttl) {
+                // Public, idempotent GET: one retry on a transport failure (writes and auth calls are never retried).
+                val upstream = try {
+                    tmdb.call(HttpMethod.Get, "3/$path", query)
+                } catch (_: IOException) {
+                    tmdb.call(HttpMethod.Get, "3/$path", query)
+                }
+                if (upstream.status != 200) throw classify(TmdbOperation.Catalog, upstream)
+                upstream.body
             }
-            if (upstream.status != 200) throw classify(TmdbOperation.Catalog, upstream)
-            cache.put(key, upstream.body, rule.ttl.ttl)
-            upstream.body
         }
         call.response.header(HttpHeaders.CacheControl, "public, max-age=${rule.ttl.maxAge.inWholeSeconds}")
         call.respondText(body, ContentType.Application.Json)

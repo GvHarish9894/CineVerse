@@ -74,19 +74,21 @@ fun Route.accountRoutes(config: ServerConfig, tmdb: Tmdb, sessions: SessionLooku
         relay(TmdbOperation.Session, session, tmdb.call(method, path, listOf("session_id" to session.sessionId), body))
     }
 
-    get("/api/account/{media}/{list}") {
-        val session = sessions.require(call)
-        val list = call.parameters["list"]?.takeIf { it in accountLists } ?: throw NOT_ALLOWED
-        val path = "4/account/${session.accountObjectId}/${call.media()}/$list"
-        val upstream = tmdb.call(HttpMethod.Get, path, accountListQuery(call.request.queryParameters), bearer = session.userAccessToken)
-        relay(TmdbOperation.UserToken, session, upstream)
-    }
+    rateLimit(ACCOUNT_READ_BY_IP) {
+        get("/api/account/{media}/{list}") {
+            val session = sessions.require(call)
+            val list = call.parameters["list"]?.takeIf { it in accountLists } ?: throw NOT_ALLOWED
+            val path = "4/account/${session.accountObjectId}/${call.media()}/$list"
+            val upstream = tmdb.call(HttpMethod.Get, path, accountListQuery(call.request.queryParameters), bearer = session.userAccessToken)
+            relay(TmdbOperation.UserToken, session, upstream)
+        }
 
-    get("/api/account/states/{media}/{id}") {
-        val session = sessions.require(call)
-        if (!call.request.queryParameters.isEmpty()) throw NOT_ALLOWED
-        val path = "3/${call.media()}/${call.titleId()}/account_states"
-        relay(TmdbOperation.Session, session, tmdb.call(HttpMethod.Get, path, listOf("session_id" to session.sessionId)))
+        get("/api/account/states/{media}/{id}") {
+            val session = sessions.require(call)
+            if (!call.request.queryParameters.isEmpty()) throw NOT_ALLOWED
+            val path = "3/${call.media()}/${call.titleId()}/account_states"
+            relay(TmdbOperation.Session, session, tmdb.call(HttpMethod.Get, path, listOf("session_id" to session.sessionId)))
+        }
     }
 
     rateLimit(MUTATION_BY_IP) {

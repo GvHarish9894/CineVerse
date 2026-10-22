@@ -42,10 +42,13 @@ fun testConfig(
     staticDir: String? = null,
     corsOrigin: String? = null,
     trustProxy: Boolean = false,
+    accountReadsPerMinute: Int = 60,
+    upstreamConcurrency: Int = 32,
 ) = ServerConfig(
     readToken = READ_TOKEN, publicOrigin = ORIGIN, cookieSecure = cookieSecure, staticDir = staticDir,
     corsOrigin = corsOrigin, trustProxy = trustProxy,
     authRequestsPerMinute = authPerMinute, mutationRequestsPerMinute = mutationPerMinute,
+    accountReadsPerMinute = accountReadsPerMinute, upstreamConcurrency = upstreamConcurrency,
 )
 
 class TestClock(start: Long = 1_000_000L) {

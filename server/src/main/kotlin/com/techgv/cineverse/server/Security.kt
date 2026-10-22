@@ -26,6 +26,7 @@ import kotlinx.io.readByteArray
 import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.security.MessageDigest
+import kotlin.math.ceil
 import kotlin.time.Duration.Companion.minutes
 
 const val CSRF_COOKIE = "cv_csrf"
@@ -38,6 +39,7 @@ val AUTH_BY_IP = RateLimitName("auth-ip")
 val AUTH_BY_SESSION = RateLimitName("auth-session")
 val MUTATION_BY_IP = RateLimitName("mutation-ip")
 val MUTATION_BY_SESSION = RateLimitName("mutation-session")
+val ACCOUNT_READ_BY_IP = RateLimitName("account-read-ip")
 
 /** API JSON; strict when decoding client bodies (unknown keys are rejected). */
 val apiJson = Json
@@ -56,6 +58,7 @@ fun Application.installSecurity(config: ServerConfig) {
         register(AUTH_BY_SESSION, config.authRequestsPerMinute, sessionKey)
         register(MUTATION_BY_IP, config.mutationRequestsPerMinute * 2) { it.clientIp() }
         register(MUTATION_BY_SESSION, config.mutationRequestsPerMinute, sessionKey)
+        register(ACCOUNT_READ_BY_IP, config.accountReadsPerMinute) { it.clientIp() }
     }
     install(SecurityHeaders) { hsts = config.publicOrigin.startsWith("https://") }
 
@@ -136,6 +139,40 @@ fun ApplicationCall.requireCsrf(config: ServerConfig) {
 }
 
 fun constantTimeEquals(a: String, b: String) = MessageDigest.isEqual(a.toByteArray(), b.toByteArray())
+
+/**
+ * Per-client token bucket ([perMinute] refill, [burst] capacity) for work only known mid-request (catalog cache
+ * misses), which the RateLimit plugin can't key on.
+ * shortcut: in-memory, at most [maxClients] clients (least recently seen evicted, regaining a full bucket);
+ * share it before scaling out.
+ */
+class ClientBudget(
+    private val perMinute: Int,
+    private val burst: Int,
+    private val nowMillis: () -> Long,
+    private val maxClients: Int = 10_000,
+) {
+    private class Bucket(var tokens: Double, var at: Long)
+
+    private val buckets = object : LinkedHashMap<String, Bucket>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bucket>) = size > maxClients
+    }
+
+    /** Takes one token for [client], else throws `429 rate_limited` with `Retry-After`. */
+    @Synchronized
+    fun consume(client: String) {
+        val now = nowMillis()
+        val bucket = buckets.getOrPut(client) { Bucket(burst.toDouble(), now) }
+        bucket.tokens = minOf(burst.toDouble(), bucket.tokens + (now - bucket.at) * perMinute / 60_000.0)
+        bucket.at = now
+        if (bucket.tokens >= 1) {
+            bucket.tokens -= 1
+            return
+        }
+        val retryAfter = ceil((1 - bucket.tokens) * 60 / perMinute).toLong().coerceAtLeast(1)
+        throw ApiError(HttpStatusCode.TooManyRequests, "rate_limited", retryAfter = retryAfter.toString())
+    }
+}
 
 /** Reads a small JSON body (≤ [MAX_BODY_BYTES]) strictly; anything else is rejected before TMDB is called. */
 suspend inline fun <reified T> ApplicationCall.receiveSmallJson(): T {

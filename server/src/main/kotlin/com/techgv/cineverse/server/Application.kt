@@ -48,16 +48,17 @@ fun Application.cineVerse(
     }
     installSecurity(config)
 
-    val tmdb = Tmdb(tmdbHttpClient(upstreamEngine), config.readToken)
+    val tmdb = Tmdb(tmdbHttpClient(upstreamEngine), config.readToken, config.upstreamConcurrency)
     monitor.subscribe(ApplicationStopped) { tmdb.close() }
     val cache = CatalogCache(maxEntries = 1_000, nowMillis)
+    val missBudget = ClientBudget(config.catalogMissesPerMinute, burst = config.catalogMissesPerMinute * 2, nowMillis)
     val store = AuthStore(config, nowMillis)
     val cookies = Cookies(config)
     val sessions = SessionLookup(store, cookies)
 
     routing {
         get("/healthz") { call.respondText("ok") }
-        catalogRoutes(tmdb, cache)
+        catalogRoutes(tmdb, cache, missBudget)
         authRoutes(config, tmdb, store, cookies, sessions)
         accountRoutes(config, tmdb, sessions)
         // Any other /api request (path, method) is rejected, never served the web bundle.

@@ -23,7 +23,9 @@ docker run -p 8080:8080 -e TMDB_READ_ACCESS_TOKEN -e PUBLIC_ORIGIN=https://cinev
   -e STATIC_DIR=/app/static -v "$PWD/composeApp/build/dist/wasmJs/productionExecutable:/app/static:ro" cineverse-server
 ```
 
-The image runs as a non-root user on a JRE 21; TLS is terminated in front of it (set `TRUST_PROXY=true` there).
+The image runs as a non-root user on a JRE 21; TLS is terminated in front of it (set `TRUST_PROXY=true` there,
+but only if that proxy overwrites or strips client-supplied `X-Forwarded-*`/`Forwarded` headers — otherwise
+clients pick their own IP and escape every per-IP limit).
 
 ## Configuration (environment)
 
@@ -36,7 +38,7 @@ The image runs as a non-root user on a JRE 21; TLS is terminated in front of it 
 | `SESSION_TTL` | `30d` | Absolute session lifetime (`12h`, `30d`, ISO-8601 `PT12H`) — cookie `Max-Age` and server-side expiry |
 | `STATIC_DIR` | unset (API only) | Directory with the wasm bundle; unknown non-`/api` paths fall back to `index.html` |
 | `CORS_ORIGIN` | unset (no CORS) | One extra browser origin (local web dev server) allowed with credentials |
-| `TRUST_PROXY` | `false` | Use the last `X-Forwarded-For` hop as client IP (rate limits) behind a reverse proxy |
+| `TRUST_PROXY` | `false` | Use the last `X-Forwarded-For` hop as client IP (rate limits). Enable **only** behind a reverse proxy that strips/overwrites client-supplied forwarded headers |
 
 ## Routes
 
@@ -96,7 +98,9 @@ never relayed. TMDB codes map per spec §3.3:
 | missing binding headers | 400 | `missing_session_binding` |
 | binding mismatch | 409 | `stale_session` |
 | bad body / too large / not JSON | 400 / 413 / 415 | `invalid_body` / `body_too_large` / `json_required` |
-| local rate limit | 429 + `Retry-After` | (empty body) |
+| local rate limit (auth, writes, account reads) | 429 + `Retry-After` | (empty body) |
+| catalog cache-miss budget of this client IP spent | 429 + `Retry-After` | `rate_limited` |
+| global upstream concurrency cap reached | 503 + `Retry-After: 1` | `upstream_busy` (nothing reached TMDB; safe to retry, writes too) |
 
 ## For the web app (P9)
 
@@ -117,6 +121,9 @@ never relayed. TMDB codes map per spec §3.3:
    the `AuthSession` currently shown, it is a late answer for a replaced session: refetch `/api/session` instead
    of signing out. Writes are never retried by the server.
 5. Send `credentials: "include"` only when using `CORS_ORIGIN` in dev; same-origin needs nothing.
+6. `429` (catalog `rate_limited`, or an empty-body local limit) and `503 upstream_busy`: back off for
+   `Retry-After` seconds, keep showing cached content; neither means signed out. `upstream_busy` guarantees nothing
+   was sent to TMDB.
 
 ## Security model
 
@@ -145,8 +152,13 @@ never relayed. TMDB codes map per spec §3.3:
   after another tab switched the cookie to B gets `409 stale_session`. The session is checked again after the
   body has arrived, immediately before the TMDB call: a logout, expiry or re-sign-in meanwhile is also
   `409 stale_session` and nothing is sent (never retargeted to the new session).
+- **Upstream budget.** The public catalog is the exposure boundary: anyone can make the server spend its TMDB
+  read token, so cache misses are budgeted per client IP (token bucket, 30/min, burst 60; hits are free),
+  concurrent identical misses share one upstream call (single flight), and at most 32 TMDB calls run at once
+  across all routes — beyond that `503 upstream_busy` immediately instead of queueing. Per-IP limits only mean
+  something if the client IP is real (see `TRUST_PROXY`).
 - **Rate limits** (per minute): auth routes 20 per client IP and 20 per session; writes 120 per IP and 60 per
-  session. Catalog reads are protected by the cache, not throttled.
+  session; account reads 60 per IP.
 - **Headers.** `nosniff`, `X-Frame-Options: DENY`, CSP `frame-ancestors 'none'` (API: `default-src 'none'`),
   `Referrer-Policy` (`no-referrer` on the API, `strict-origin-when-cross-origin` for the app so YouTube embeds work),
   HSTS when `PUBLIC_ORIGIN` is https.

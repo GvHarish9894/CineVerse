@@ -22,6 +22,11 @@ class ServerConfig(
     val attemptTtl: Duration = 15.minutes,
     val authRequestsPerMinute: Int = 20,
     val mutationRequestsPerMinute: Int = 60,
+    /** Per client IP; bursts up to twice this. Cache hits are free. */
+    val catalogMissesPerMinute: Int = 30,
+    val accountReadsPerMinute: Int = 60,
+    /** Concurrent TMDB calls across all clients; beyond it requests fail fast with `503 upstream_busy`. */
+    val upstreamConcurrency: Int = 32,
 ) {
     init {
         require(readToken.isNotBlank()) { "TMDB_READ_ACCESS_TOKEN is required" }
