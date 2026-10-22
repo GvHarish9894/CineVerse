@@ -29,7 +29,7 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       # No secrets.properties: the native read token builds as "" in androidApp and iosApp.
-      - run: ./gradlew :shared:iosSimulatorArm64Test :composeApp:linkDebugFrameworkIosSimulatorArm64 :androidApp:assembleDebug
+      - run: ./gradlew :shared:iosSimulatorArm64Test :composeApp:iosSimulatorArm64Test :composeApp:linkDebugFrameworkIosSimulatorArm64 :androidApp:assembleDebug
       - run: >
           xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build

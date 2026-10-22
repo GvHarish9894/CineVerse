@@ -29,6 +29,11 @@ ktor = "3.6.0"
 atomicfu = "0.33.0"
 kotlinxDatetime = "0.8.0-0.6.x-compat"
 koin = "4.2.2"
+# composeApp design system (P7): material3 1.9.0 is what the CMP 1.11.1 plugin's compose.material3 alias resolves to
+composeMaterial3 = "1.9.0"
+kotlinxSerializationKmp = "1.11.0"
+# composeApp device tests on API 36 (espresso < 3.7 calls the removed InputManager.getInstance)
+androidxTestEspresso = "3.7.0"
 kotlinxBrowser = "0.5.0"
 slf4j = "2.0.19"
 
@@ -91,6 +96,11 @@ androidx-datastore-preferences-core = { group = "androidx.datastore", name = "da
 kotlinx-browser = { group = "org.jetbrains.kotlinx", name = "kotlinx-browser", version.ref = "kotlinxBrowser" }
 slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref = "slf4j" }
 koin-core = { group = "io.insert-koin", name = "koin-core", version.ref = "koin" }
+compose-mp-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMaterial3" }
+compose-mp-components-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "composeMultiplatform" }
+compose-mp-ui-test = { group = "org.jetbrains.compose.ui", name = "ui-test", version.ref = "composeMultiplatform" }
+androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "androidxTestEspresso" }
+kotlinx-serialization-json-kmp = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationKmp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

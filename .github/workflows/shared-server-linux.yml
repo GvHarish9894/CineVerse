@@ -49,4 +49,4 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # The sentinel goes where the native read token lives; it must not appear in any wasm/js/map output.
       - run: echo "TMDB_READ_ACCESS_TOKEN=SENTINEL_TMDB_TOKEN_DO_NOT_SHIP" > secrets.properties
-      - run: ./gradlew :composeApp:checkWasmHasNoSecrets
+      - run: ./gradlew :composeApp:testDebugUnitTest :composeApp:wasmJsBrowserTest :composeApp:checkWasmHasNoSecrets
