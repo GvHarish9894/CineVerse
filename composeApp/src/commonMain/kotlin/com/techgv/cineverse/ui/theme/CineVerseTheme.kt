@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -46,9 +47,12 @@ val LocalReduceMotion = staticCompositionLocalOf { false }
 /** The app's Ambient glow setting (Profile / Settings). */
 val LocalAmbientGlowEnabled = staticCompositionLocalOf { true }
 
-/** OS-level reduce motion (Android animator scale 0, iOS Reduce Motion, `prefers-reduced-motion`). */
+/**
+ * OS-level reduce motion (Android animator scale 0, iOS Reduce Motion, `prefers-reduced-motion`), observed: the
+ * state follows the OS setting while the app runs.
+ */
 @Composable
-expect fun systemReduceMotion(): Boolean
+expect fun rememberSystemReduceMotion(): State<Boolean>
 
 /**
  * The app's appearance settings. Defaults until L1's settings store lands; P8/P9 pass the persisted values.
@@ -146,11 +150,13 @@ fun CineVerseTheme(shell: ShellStyle, settings: AppearanceSettings = AppearanceS
         ),
     )
     val typography = cineVerseTypography(shell, fonts)
+    val systemReduceMotion = rememberSystemReduceMotion()
     MaterialTheme(colorScheme = CineVerseColors, typography = typography, shapes = CineVerseShapes) {
         CompositionLocalProvider(
             LocalShellStyle provides shell,
             LocalCvFonts provides fonts,
-            LocalReduceMotion provides (systemReduceMotion() || settings.reduceMotion),
+            // Computed at each reader, so an OS change recomposes only the primitives that read it.
+            LocalReduceMotion providesComputed { systemReduceMotion.value || settings.reduceMotion },
             LocalAmbientGlowEnabled provides settings.ambientGlow,
             LocalHaptics provides rememberPlatformHaptics(settings.haptics, settings.hapticStrength),
             LocalContentColor provides Tokens.Colors.TextPrimary,
