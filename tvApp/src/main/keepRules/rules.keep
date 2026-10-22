@@ -10,3 +10,9 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+# R8 (AGP 9.4.1) moved kotlin.text.StringsKt__StringBuilderKt to the root package while its package-private
+# superclass (another part of the stdlib's inheriting multifile facade chain) stayed in kotlin.text: the release
+# build crashed at start-up with IllegalAccessError once :shared's dependencies used that part. Keep the names
+# (and so the package) of the stdlib's multifile-facade parts; shrinking and optimization stay allowed.
+-keep,allowshrinking,allowoptimization class kotlin.**Kt__*
