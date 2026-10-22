@@ -7,3 +7,4 @@
 
 Hosted CI: after the P0 merge GitHub Actions has not indexed the new workflow files (no runs for dd2c8ab/f47b445; `gh workflow run tv-linux.yml` → 404). Files verified present/valid; token has `workflow` scope; Actions enabled. Re-check at each merge; escalate to owner if it persists.
 | P6 server (L2) | l2-server @ aa4184c (5 review rounds) | merged after c08a5d0 | COMPLETE; wire: sessionGeneration is a decimal STRING, opaque, equality-only | single-instance in-memory sessions; live TMDB approval + account writes; P9 multi-tab/auth integration |
+| P5 Koin (L5) | l5-koin @ 72c7d10 | merged after P6 | COMPLETE, no findings; modules are functions (Koin 4.2.2 shared-singleton pitfall) | P8/P9 must wire the app-lifetime content-settings→cache-invalidation collector (today only in TV AppContainer); iOS Keychain app-host; browser durable/multi-tab |
