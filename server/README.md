@@ -100,7 +100,7 @@ never relayed. TMDB codes map per spec §3.3:
 | bad body / too large / not JSON | 400 / 413 / 415 | `invalid_body` / `body_too_large` / `json_required` |
 | local rate limit (auth, writes, account reads) | 429 + `Retry-After` | (empty body) |
 | catalog cache-miss budget of this client IP spent | 429 + `Retry-After` | `rate_limited` |
-| global upstream concurrency cap reached | 503 + `Retry-After: 1` | `upstream_busy` (nothing reached TMDB; safe to retry, writes too) |
+| global upstream concurrency cap reached | 503 + `Retry-After: 1` | `upstream_busy` (the refused call was not sent: catalog reads and writes are safe to retry; a callback refused after the exchange keeps nothing, like `sign_in_failed`) |
 
 ## For the web app (P9)
 
@@ -122,8 +122,8 @@ never relayed. TMDB codes map per spec §3.3:
    of signing out. Writes are never retried by the server.
 5. Send `credentials: "include"` only when using `CORS_ORIGIN` in dev; same-origin needs nothing.
 6. `429` (catalog `rate_limited`, or an empty-body local limit) and `503 upstream_busy`: back off for
-   `Retry-After` seconds, keep showing cached content; neither means signed out. `upstream_busy` guarantees nothing
-   was sent to TMDB.
+   `Retry-After` seconds, keep showing cached content; neither means signed out. A write refused with
+   `upstream_busy` was not sent to TMDB.
 
 ## Security model
 
