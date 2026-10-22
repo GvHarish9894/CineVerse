@@ -17,7 +17,7 @@ Pinned by the P0 smoke build (plan §6/§7), not assumed. Every version below is
 | Compose Multiplatform | 1.11.1 (Gradle plugin `org.jetbrains.compose`) | `composeMultiplatform` |
 | Android SDK | compileSdk / targetSdk 37; minSdk: `tvApp` 36 (unchanged, D8 pending), `androidApp`/`composeApp`/`shared` 26 | module build files |
 | Java bytecode | `tvApp`/`androidApp` Java 11; `server` toolchain 21 | module build files |
-| Xcode | 27.1 (27A9275), iOS SDK 27.1 | `mobile-macos.yml` (`DEVELOPER_DIR`) |
+| Xcode | CI: **26.6** (17F113, default of the `macos-26` Apple-silicon runner image; hosted runners do not ship 27.x — checked against actions/runner-images `macos-26-arm64-Readme.md`). Local: 27.1 (27A9275). Both target iOS 16.0 | `mobile-macos.yml` (`XCODE_VERSION`, `DEVELOPER_DIR`) |
 | iOS deployment target | 16.0, Apple-silicon simulator only (no `iosX64`; `x86_64` excluded for simulator builds) | `iosApp.xcodeproj` |
 | iOS simulator used locally | iPhone 17 Pro, iOS 26.4.1 | — |
 | Node.js / Yarn / Binaryen (Kotlin/Wasm) | 25.0.0 / 1.22.17 / version_125 (KGP 2.3.21 defaults, resolved from the settings repositories) | `settings.gradle.kts`, `kotlin-js-store/wasm/yarn.lock` |
