@@ -55,4 +55,4 @@ dependencyResolutionManagement {
 
 // No spaces: Kotlin/Wasm derives npm package names from it.
 rootProject.name = "CineVerse"
-include(":shared", ":tvApp", ":composeApp", ":androidApp")
+include(":shared", ":tvApp", ":composeApp", ":androidApp", ":server")
