@@ -3,7 +3,7 @@ package com.techgv.cineverse.ui.settings
 import androidx.lifecycle.SavedStateHandle
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
-import com.techgv.cineverse.data.auth.CredentialStore
+import com.techgv.cineverse.data.auth.DataStoreCredentialStore
 import com.techgv.cineverse.data.auth.Credentials
 import com.techgv.cineverse.data.auth.GatedPreferencesStore
 import com.techgv.cineverse.data.auth.InMemoryPreferencesStore
@@ -52,7 +52,7 @@ class SettingsViewModelTest {
     }
 
     private val credentialData = GatedPreferencesStore()
-    private val credentialStore = CredentialStore(credentialData, CredentialCipher(SoftwareKeys()))
+    private val credentialStore = DataStoreCredentialStore(credentialData, CredentialCipher(SoftwareKeys()))
     private val settings = SettingsRepository(InMemoryPreferencesStore())
     private val vm by lazy { SettingsViewModel(SavedStateHandle(), settings, AuthRepository(api, credentialStore, onAccountChanged = {})) }
 

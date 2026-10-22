@@ -26,7 +26,7 @@ class CredentialStoreTest {
     private val keys = SoftwareKeys()
     private val file by lazy { folder.newFolder().resolve("credentials.preferences_pb") }
     private val store by lazy {
-        CredentialStore(PreferenceDataStoreFactory.create(scope = scope) { file }, CredentialCipher(keys))
+        DataStoreCredentialStore(PreferenceDataStoreFactory.create(scope = scope) { file }, CredentialCipher(keys))
     }
 
     private val credentials = Credentials(

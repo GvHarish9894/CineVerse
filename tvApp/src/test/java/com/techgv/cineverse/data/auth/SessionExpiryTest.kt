@@ -51,7 +51,7 @@ class SessionExpiryTest {
         override suspend fun account(sessionId: String) = AccountDto(id = 1, username = "user")
     }
     private var accountChanges = 0
-    private val store = CredentialStore(InMemoryPreferencesStore(), CredentialCipher(SoftwareKeys()))
+    private val store = DataStoreCredentialStore(InMemoryPreferencesStore(), CredentialCipher(SoftwareKeys()))
     private val auth = AuthRepository(api, store, onAccountChanged = { accountChanges++ })
     private val tmdb = TmdbRepository(
         api, GenerationCounter(), settings = { Settings() }, onSessionExpired = { auth.expireSession(it) },

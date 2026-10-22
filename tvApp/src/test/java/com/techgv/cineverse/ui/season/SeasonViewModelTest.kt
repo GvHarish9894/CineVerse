@@ -141,7 +141,7 @@ class SeasonViewModelTest {
 
     @Test
     fun `episode meta - unaired shows Airs date and no rating`() {
-        val today = java.time.LocalDate.of(2026, 10, 21)
+        val today = kotlinx.datetime.LocalDate(2026, 10, 21)
         val aired = EpisodeDto(1, episodeNumber = 1, airDate = "2026-10-01", runtime = 48, voteAverage = 8.25, voteCount = 3)
         val unaired = aired.copy(airDate = "2026-11-02")
         fun meta(e: EpisodeDto) = episodeMeta(SeasonDto(1, 1, episodes = listOf(e)).toSeason(7).episodes.single(), today)

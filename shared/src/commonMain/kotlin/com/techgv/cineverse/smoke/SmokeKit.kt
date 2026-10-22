@@ -9,7 +9,6 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -28,13 +27,6 @@ class SmokeViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel
     companion object {
         const val VISITS_KEY = "visits"
     }
-}
-
-/** Key/value settings contract: DataStore on nonWeb, browser storage on wasm. */
-interface SettingsStore {
-    fun string(key: String): Flow<String?>
-    suspend fun setString(key: String, value: String)
-    suspend fun remove(key: String)
 }
 
 const val TMDB_CONFIGURATION_URL = "https://api.themoviedb.org/3/configuration"

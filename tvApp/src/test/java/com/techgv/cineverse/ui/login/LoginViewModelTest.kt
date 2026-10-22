@@ -2,7 +2,7 @@ package com.techgv.cineverse.ui.login
 
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
-import com.techgv.cineverse.data.auth.CredentialStore
+import com.techgv.cineverse.data.auth.DataStoreCredentialStore
 import com.techgv.cineverse.data.auth.GatedPreferencesStore
 import com.techgv.cineverse.data.auth.RequestCode
 import com.techgv.cineverse.data.auth.SignInOutcome
@@ -64,7 +64,7 @@ class LoginViewModelTest {
     private val settingsData = GatedPreferencesStore()
     private val settings = SettingsRepository(settingsData)
     private val credentialData = GatedPreferencesStore()
-    private val auth = AuthRepository(api, CredentialStore(credentialData, CredentialCipher(SoftwareKeys())), onAccountChanged = {})
+    private val auth = AuthRepository(api, DataStoreCredentialStore(credentialData, CredentialCipher(SoftwareKeys())), onAccountChanged = {})
 
     /** TMDB "not approved yet": HTTP 422, status_code 41. */
     private fun pending(): HttpException {

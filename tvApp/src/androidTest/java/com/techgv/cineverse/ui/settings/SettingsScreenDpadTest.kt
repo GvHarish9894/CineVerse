@@ -19,7 +19,7 @@ import com.techgv.cineverse.appContainer
 import com.techgv.cineverse.data.auth.AndroidKeystoreKeys
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.CredentialCipher
-import com.techgv.cineverse.data.auth.CredentialStore
+import com.techgv.cineverse.data.auth.DataStoreCredentialStore
 import com.techgv.cineverse.data.auth.Credentials
 import com.techgv.cineverse.data.settings.AccountDefaults
 import com.techgv.cineverse.data.settings.Settings
@@ -79,7 +79,7 @@ class SettingsScreenDpadTest {
         val api = Proxy.newProxyInstance(TmdbApi::class.java.classLoader, arrayOf(TmdbApi::class.java)) { _, m, _ ->
             throw UnsupportedOperationException(m.name)
         } as TmdbApi
-        val credentialStore = CredentialStore(store("settings-test-credentials"), CredentialCipher(AndroidKeystoreKeys("settings_test")))
+        val credentialStore = DataStoreCredentialStore(store("settings-test-credentials"), CredentialCipher(AndroidKeystoreKeys("settings_test")))
         val localSettings = SettingsRepository(store("settings-test-settings"))
         runBlocking {
             credentialStore.save(Credentials(UserAccessToken("t"), AccountObjectId("aoid"), SessionId("s"), AccountId(1), "harish", "Harish Gv"))

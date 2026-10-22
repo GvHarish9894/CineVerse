@@ -13,7 +13,7 @@ Pinned by the P0 smoke build (plan §6/§7), not assumed. Every version below is
 | Launcher / CI JDK | Temurin 21 | `.github/workflows/*.yml` |
 | Android Gradle Plugin | 9.4.1 (`com.android.application`, `com.android.kotlin.multiplatform.library`) | `agp` |
 | Kotlin | 2.3.21 (multiplatform, jvm, compose compiler, serialization) | `kotlin` |
-| KSP | 2.3.12 (KSP2; Room compiler in `tvApp`) | `ksp` |
+| KSP | 2.3.12 (KSP2; Room compiler in `shared`: `kspAndroid`/`kspJvm`/`kspIosArm64`/`kspIosSimulatorArm64`, since P1) | `ksp` |
 | Compose Multiplatform | 1.11.1 (Gradle plugin `org.jetbrains.compose`) | `composeMultiplatform` |
 | Android SDK | compileSdk / targetSdk 37; minSdk: `tvApp` 36 (unchanged, D8 pending), `androidApp`/`composeApp`/`shared` 26 | module build files |
 | Java bytecode | `tvApp`/`androidApp` Java 11; `server` toolchain 21 | module build files |
@@ -35,6 +35,7 @@ Pinned by the P0 smoke build (plan §6/§7), not assumed. Every version below is
 | Ktor server | `io.ktor:ktor-server-{core,cio,test-host}:3.6.0`, `org.slf4j:slf4j-simple:2.0.19` | 3.6.0 / slf4j 2.0.19 |
 | Coil | `io.coil-kt.coil3:coil-compose`, `coil-network-ktor3:3.4.0` (same `coil` pin as `tvApp`) | 3.4.0 |
 | Room (nonWeb only) | `androidx.room:room-runtime:2.8.5` (same pin as `tvApp`) | 2.8.5 |
+| SQLite bundled driver (P1; `shared` jvm/iOS **tests** only) | `androidx.sqlite:sqlite-bundled:2.6.2` — the `androidx.sqlite` version Room 2.8.5 already resolves | 2.6.2 |
 | DataStore (nonWeb only) | `androidx.datastore:datastore-preferences-core:1.2.1` (same `datastore` pin as `tvApp`) | 1.2.1 |
 | atomicfu | `org.jetbrains.kotlinx:atomicfu:0.33.0` (library only, no Gradle plugin) | 0.33.0 |
 | kotlinx-datetime | `org.jetbrains.kotlinx:kotlinx-datetime:0.8.0-0.6.x-compat` | 0.8.0-0.6.x-compat (Ktor 3.6.0's `ktor-openapi-schema` requires the compat flavour; plain 0.8.0 is upgraded to it) |
@@ -46,6 +47,11 @@ Pinned by the P0 smoke build (plan §6/§7), not assumed. Every version below is
 `tvApp` dependencies are unchanged except `kotlinx-coroutines-test` 1.10.2 → 1.11.0 (test classpath only, shared
 catalog key). Nothing in `tvApp` was downgraded; `tvApp` does not depend on `shared` yet (P1). When it does,
 Gradle resolves the higher Android versions `tvApp` already uses (lifecycle 2.11.0, navigation 2.10.2).
+
+**P1:** `tvApp` depends on `shared`. Through it, `tvApp`'s release runtime classpath now resolves the tuple's
+`kotlinx-coroutines` 1.11.0 (was 1.10.2), `kotlinx-serialization` 1.11.0 (was 1.9.0), `okio` 3.18.2 (was 3.18.1) and
+adds Ktor 3.6.0 / kotlinx-datetime / atomicfu / Koin (declared, unused until P5; R8 strips it). No catalog version
+changed and nothing was downgraded.
 
 ## Decisions and fallbacks (recorded)
 
@@ -97,6 +103,9 @@ Gradle resolves the higher Android versions `tvApp` already uses (lifecycle 2.11
 - `shared/commonMain` `SmokeKit.kt`: `SmokeViewModel` (lifecycle `ViewModel` + `SavedStateHandle`), the
   `SettingsStore` contract, `fetchImageBaseUrl` (Ktor GET `/3/configuration`, MockEngine in tests).
   `nonWebMain`: `DataStoreSettingsStore`; `wasmJsMain`: `BrowserSettingsStore`.
+- P1 replaced the smoke `SettingsStore` by the typed `data/settings/SettingsStore` contract (string / boolean /
+  string-set keys, atomic multi-key `edit`); `DataStoreSettingsStore` and `BrowserSettingsStore` moved to
+  `data/settings` with it.
 - Tests: `SmokeKitTest` (common) and `SettingsStoreContractTest` (write → read → remove) run on jvm, android host,
   iOS simulator (DataStore actual, plus a reopen-the-file persistence test) and wasm in headless Chrome
   (browser actual).

@@ -79,7 +79,7 @@ class AuthRepositoryTest {
         }
     }
 
-    private val store = CredentialStore(InMemoryPreferencesStore(), CredentialCipher(SoftwareKeys()))
+    private val store = DataStoreCredentialStore(InMemoryPreferencesStore(), CredentialCipher(SoftwareKeys()))
     private val repo = AuthRepository(api, store, onAccountChanged = { accountChanges++ })
     private val code = RequestCode("request-token")
     private val approved = { AccessTokenDto(accessToken = "user-access-token", accountId = "aoid") }

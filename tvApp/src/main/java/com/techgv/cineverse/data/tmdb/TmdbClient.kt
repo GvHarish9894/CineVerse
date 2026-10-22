@@ -1,8 +1,5 @@
 package com.techgv.cineverse.data.tmdb
 
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNamingStrategy
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -13,14 +10,6 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 /** Retrofit `@Tag` marking a call that must use the user access token instead of the read token (§3.1). */
 class UserBearer(val token: UserAccessToken)
-
-@OptIn(ExperimentalSerializationApi::class)
-val TmdbJson = Json {
-    ignoreUnknownKeys = true
-    explicitNulls = false
-    coerceInputValues = true
-    namingStrategy = JsonNamingStrategy.SnakeCase
-}
 
 const val TMDB_HOST = "api.themoviedb.org"
 

@@ -5,7 +5,7 @@ import android.content.Context
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.techgv.cineverse.data.auth.AuthRepository
-import com.techgv.cineverse.data.auth.CredentialStore
+import com.techgv.cineverse.data.auth.DataStoreCredentialStore
 import com.techgv.cineverse.data.auth.AndroidKeystoreKeys
 import com.techgv.cineverse.data.auth.CredentialCipher
 import com.techgv.cineverse.data.library.AccountLibrarySource
@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
-private val Context.credentialDataStore by preferencesDataStore(name = CredentialStore.FILE_NAME)
+private val Context.credentialDataStore by preferencesDataStore(name = DataStoreCredentialStore.FILE_NAME)
 
 /** Manual DI (§1). Coil uses its own default OkHttpClient, which never carries the TMDB bearer (§1.5). */
 class AppContainer(
@@ -49,7 +49,7 @@ class AppContainer(
 
     val authRepository: AuthRepository = AuthRepository(
         api = tmdbApi,
-        store = CredentialStore(context.credentialDataStore, CredentialCipher(AndroidKeystoreKeys())),
+        store = DataStoreCredentialStore(context.credentialDataStore, CredentialCipher(AndroidKeystoreKeys())),
         onAccountChanged = tmdbRepository::onAccountChanged,
     )
 
