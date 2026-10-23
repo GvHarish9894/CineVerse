@@ -26,12 +26,13 @@ class IosWebAuthenticationSessionOpener : NativeApprovalOpener {
     private var provider: AnchorProvider? = null
     private var generation = 0L
 
+    // ObjC weak loads can produce another Kotlin wrapper for the same native window: use NSObject equality.
     fun attach(window: UIWindow) {
-        if (this.window?.get() !== window) cancel()
+        if (this.window?.get() != window) cancel()
         this.window = WeakReference(window)
     }
     fun detach(window: UIWindow): Boolean {
-        if (this.window?.get() !== window) return false
+        if (this.window?.get() != window) return false
         cancel()
         this.window = null
         return true
