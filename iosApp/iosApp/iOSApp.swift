@@ -11,6 +11,7 @@ struct iOSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView().ignoresSafeArea()
+                .onOpenURL { NativeApprovalHostKt.handleNativeApprovalUrl(uri: $0.absoluteString) }
         }
     }
 }

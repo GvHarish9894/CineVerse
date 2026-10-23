@@ -97,8 +97,16 @@ class NativeAuthRepository(
     override val sessionExpired: Flow<Unit> = expiryEvents.receiveAsFlow().filter { it == attemptEpoch.value }.map { }
 
     /** §4.1 step 1. Throws [TmdbException]. */
-    override suspend fun createRequestCode(): RequestCode = tmdbCall(TmdbOperation.Catalog) {
-        api.createRequestToken(RequestTokenBody(redirectTo = "https://www.themoviedb.org/"))
+    override suspend fun createRequestCode(): RequestCode = requestCode("https://www.themoviedb.org/")
+
+    /** Mobile only: the id exists before TMDB creates the token, so its redirect is bound to this attempt. */
+    suspend fun createRequestCode(attemptId: String): RequestCode {
+        require(Regex("[A-Za-z0-9_-]+").matches(attemptId)) { "Invalid approval attempt id" }
+        return requestCode("$APPROVAL_CALLBACK_URI?attempt=$attemptId")
+    }
+
+    private suspend fun requestCode(redirect: String): RequestCode = tmdbCall(TmdbOperation.Catalog) {
+        api.createRequestToken(RequestTokenBody(redirectTo = redirect))
     }.let { RequestCode(it.requestToken) }
 
     /**

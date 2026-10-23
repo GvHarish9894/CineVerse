@@ -13,10 +13,20 @@ kotlin {
         namespace = "com.techgv.cineverse.composeapp"
         compileSdk = 37
         minSdk = 26
+        withHostTest { isReturnDefaultValues = true }
     }
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
             baseName = "ComposeApp"
+            isStatic = true
+        }
+    }
+    // Verification-only Swift XCTest bridge; never part of production framework/archive builds.
+    if (providers.gradleProperty("nativeAuthFixture").orNull == "true") {
+        val simulator = targets.getByName<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>("iosSimulatorArm64")
+        simulator.binaries.framework("authFixture", listOf(org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.DEBUG)) {
+            baseName = "AuthFixture"
+            compilation = simulator.compilations.getByName("test")
             isStatic = true
         }
     }
@@ -41,8 +51,14 @@ kotlin {
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor3)
         }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+        }
         // coil-network-ktor3 needs a Ktor engine per target.
         androidMain.dependencies {
+            implementation(libs.androidx.browser)
+            implementation(libs.androidx.datastore.preferences)
             implementation(libs.ktor.client.okhttp)
         }
         iosMain.dependencies {
