@@ -144,6 +144,7 @@ fun serverTest(
 class Browser(private val client: HttpClient) {
     val cookies = linkedMapOf<String, String>()
     var lastSetCookies = emptyList<io.ktor.http.Cookie>()
+    private var identity: AuthSession? = null
 
     suspend fun send(
         method: HttpMethod,
@@ -178,9 +179,10 @@ class Browser(private val client: HttpClient) {
         return response
     }
 
-    suspend fun get(path: String, headers: Map<String, String> = emptyMap()) = send(HttpMethod.Get, path, headers = headers)
+    suspend fun get(path: String, headers: Map<String, String> = emptyMap(), session: AuthSession? = identity) =
+        send(HttpMethod.Get, path, headers = headers, session = session.takeIf { path.startsWith("/api/account/") })
 
-    suspend fun session(): AuthSession = Json.decodeFromString(get("/api/session").bodyAsText())
+    suspend fun session(): AuthSession = Json.decodeFromString<AuthSession>(get("/api/session").bodyAsText()).also { identity = it.takeIf { it.signedIn } }
 
     /** Starts an attempt; returns (attemptId, requestToken). */
     suspend fun start(): Pair<String, String> {

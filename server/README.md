@@ -119,7 +119,7 @@ never relayed. TMDB codes map per spec §3.3:
    (or simply `POST /api/auth/logout`); both invalidate every outstanding attempt of this browser, including a
    callback already talking to TMDB, which then ends in `409 attempt_superseded` without signing in. Any
    completed sign-in also supersedes the browser's other attempts.
-4. Account writes send `X-CV-Expected-Session-Generation` (the `sessionGeneration` string verbatim) and
+4. **All account GETs and writes require identity binding.** Account reads and writes send `X-CV-Expected-Session-Generation` (the `sessionGeneration` string verbatim) and
    `X-CV-Expected-Account` (= `accountObjectId`) from the `AuthSession` the screen is showing; `409 stale_session` → refetch the session and drop the action.
    `401 session_expired` → always call `GET /api/session` and render what it returns: `{signedIn:false}` →
    signed out ("Sign-in expired"); a newer session → it was a late answer for a replaced session, keep going.
@@ -162,7 +162,7 @@ never relayed. TMDB codes map per spec §3.3:
 - **CSRF.** Every state-changing route requires `Origin` ∈ {`PUBLIC_ORIGIN`, `CORS_ORIGIN`}, rejects
   `Sec-Fetch-Site` other than same-origin/same-site, requires `X-CV-CSRF` == `cv_csrf` cookie (double submit;
   cookie is SameSite=Strict), and writes require `application/json`. CORS is off unless `CORS_ORIGIN` is set.
-- **Identity binding.** Writes carry the expected session generation + account; a tab still showing account A
+- **Identity binding.** Every authenticated account GET and write requires the expected session generation + account headers (`X-CV-Expected-Session-Generation`, `X-CV-Expected-Account`); missing/invalid binding is 400 `missing_session_binding`, a mismatch is 409 `stale_session`, and neither dispatches upstream. GETs remain CSRF-free. A tab still showing account A
   after another tab switched the cookie to B gets `409 stale_session`. The session is checked again after the
   body has arrived, immediately before the TMDB call: a logout, expiry or re-sign-in meanwhile is also
   `409 stale_session` and nothing is sent (never retargeted to the new session).

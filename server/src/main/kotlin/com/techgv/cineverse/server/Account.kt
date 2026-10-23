@@ -44,8 +44,8 @@ private fun validTitle(mediaType: String, mediaId: Int) {
 
 /**
  * Account reads/writes on behalf of the `cv_session` cookie's TMDB account (spec §3.1/§3.5). Responses are
- * never cached (`private, no-store` default). Writes: CSRF-checked, bound to the expected session generation +
- * account, sent exactly once.
+ * never cached (`private, no-store` default). Reads and writes are bound to the expected session generation + account.
+ * Writes are also CSRF-checked and sent exactly once.
  */
 fun Route.accountRoutes(config: ServerConfig, tmdb: Tmdb, sessions: SessionLookup) {
     /** Relays a TMDB account response; TMDB saying the session is gone ends that session locally. */
@@ -55,9 +55,9 @@ fun Route.accountRoutes(config: ServerConfig, tmdb: Tmdb, sessions: SessionLooku
         throw if (error.code == SESSION_EXPIRED) sessions.expired(session, error.tmdbStatusCode) else error
     }
 
-    /** Mutation preconditions, in order: CSRF, signed in, request bound to this exact session. */
-    fun RoutingContext.boundSession(): UserSession {
-        call.requireCsrf(config)
+    /** Account preconditions: CSRF for mutations, signed in, request bound to this exact session. */
+    fun RoutingContext.boundSession(mutation: Boolean = true): UserSession {
+        if (mutation) call.requireCsrf(config)
         val session = sessions.require(call)
         val generation = call.request.headers[EXPECTED_GENERATION_HEADER]?.toLongOrNull()
         val account = call.request.headers[EXPECTED_ACCOUNT_HEADER]
@@ -76,7 +76,7 @@ fun Route.accountRoutes(config: ServerConfig, tmdb: Tmdb, sessions: SessionLooku
 
     rateLimit(ACCOUNT_READ_BY_IP) {
         get("/api/account/{media}/{list}") {
-            val session = sessions.require(call)
+            val session = boundSession(mutation = false)
             val list = call.parameters["list"]?.takeIf { it in accountLists } ?: throw NOT_ALLOWED
             val path = "4/account/${session.accountObjectId}/${call.media()}/$list"
             val upstream = tmdb.call(HttpMethod.Get, path, accountListQuery(call.request.queryParameters), bearer = session.userAccessToken)
@@ -84,7 +84,7 @@ fun Route.accountRoutes(config: ServerConfig, tmdb: Tmdb, sessions: SessionLooku
         }
 
         get("/api/account/states/{media}/{id}") {
-            val session = sessions.require(call)
+            val session = boundSession(mutation = false)
             if (!call.request.queryParameters.isEmpty()) throw NOT_ALLOWED
             val path = "3/${call.media()}/${call.titleId()}/account_states"
             relay(TmdbOperation.Session, session, tmdb.call(HttpMethod.Get, path, listOf("session_id" to session.sessionId)))

@@ -118,7 +118,7 @@ class SessionRaceTest {
             val a = activeTab.signIn(fake, "A")
             val oldTab = browser().also { it.cookies.putAll(activeTab.cookies) }
             coroutineScope {
-                val read = async(Dispatchers.IO) { oldTab.get("/api/account/movie/rated") }
+                val read = async(Dispatchers.IO) { oldTab.get("/api/account/movie/rated", session = a) }
                 try {
                     check(reached.await(10, TimeUnit.SECONDS))
                     assertEquals("AOID-B", activeTab.signIn(fake, "B").accountObjectId)
@@ -192,14 +192,14 @@ class SessionRaceTest {
         }
         serverTest(fake) {
             val activeTab = browser()
-            activeTab.signIn(fake, "A")
+            val a = activeTab.signIn(fake, "A")
             val delayedClient = createClient {
                 followRedirects = false
                 install(delayOldResponse)
             }
             val oldTab = Browser(delayedClient).also { it.cookies.putAll(activeTab.cookies) }
             coroutineScope {
-                val oldRead = async(Dispatchers.IO) { oldTab.get("/api/account/movie/rated") }
+                val oldRead = async(Dispatchers.IO) { oldTab.get("/api/account/movie/rated", session = a) }
                 try {
                     responsePrepared.await()
                     assertEquals("AOID-B", activeTab.signIn(fake, "B").accountObjectId)

@@ -56,6 +56,35 @@ class AccountTest {
     }
 
     @Test
+    fun accountReadsRequireTheCapturedIdentityWithoutCsrfAndNeverRetarget() {
+        val fake = FakeTmdb()
+        serverTest(fake) {
+            val tab = browser()
+            val a = tab.signIn(fake, "A")
+            val b = tab.signIn(fake, "B")
+            val before = fake.requests.size
+            for (path in listOf("/api/account/movie/watchlist", "/api/account/states/movie/550")) {
+                assertEquals(HttpStatusCode.Conflict, tab.send(HttpMethod.Get, path, session = a).status)
+                assertEquals(HttpStatusCode.BadRequest, tab.send(HttpMethod.Get, path).status)
+            }
+            assertEquals(before, fake.requests.size, "A-expected/B-cookie and missing binding never dispatch")
+            val bAgain = tab.signIn(fake, "B")
+            for (path in listOf("/api/account/movie/watchlist", "/api/account/states/movie/550")) {
+                val beforeRead = fake.requests.size
+                assertEquals(HttpStatusCode.Conflict, tab.send(HttpMethod.Get, path, session = b).status)
+                assertEquals(beforeRead, fake.requests.size, "same account, new generation is still stale")
+                val matching = tab.send(HttpMethod.Get, path, origin = null, session = bAgain)
+                assertEquals(HttpStatusCode.OK, matching.status)
+                assertEquals("private, no-store", matching.headers["Cache-Control"])
+                assertTrue(matching.bodyAsText().contains("\"owner\":\"B\""))
+                assertTrue(tab.lastSetCookies.none { it.name == SESSION_COOKIE })
+                // Next stale request must still add no upstream work, independent of this valid read.
+                assertEquals(HttpStatusCode.Conflict, tab.send(HttpMethod.Get, path, session = b).status)
+            }
+        }
+    }
+
+    @Test
     fun mutationsForwardOnlyValidatedFields() {
         val fake = FakeTmdb()
         serverTest(fake) {
