@@ -1,7 +1,12 @@
 package com.techgv.cineverse.data.auth
 
 import com.techgv.cineverse.data.tmdb.TmdbError
+import com.techgv.cineverse.data.tmdb.AccountDto
 import com.techgv.cineverse.presentation.FakeAuthRepository
+import com.techgv.cineverse.presentation.session
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -46,6 +51,44 @@ class ApprovalFlowTest {
             assertEquals(outcome, flow.awaitApproval(first))
             assertNull(store.load())
             assertEquals(SignInOutcome.Superseded, flow.awaitApproval(first), "a consumed attempt is never polled again")
+        }
+    }
+
+    /** Ported from the L4 review probe ReviewApprovalSupersessionTest. */
+    @Test fun completionOfAnOldWaitCannotConsumeTheNewPendingAttempt() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        auth.approval = { gate.await(); SignInOutcome.CodeExpired }
+        flow.start(first)
+        val old = async { flow.awaitApproval(first) }
+        runCurrent()
+        flow.start(second)
+        gate.complete(Unit)
+        assertEquals(SignInOutcome.Superseded, old.await())
+        assertEquals(second.id, store.load()?.id, "A's late terminal result cleared B's pending attempt")
+    }
+
+    @Test fun everyOutcomeOfAWaitSupersededDuringItIsSupersededAndKeepsTheNewAttempt() = runTest {
+        val outcomes = listOf(
+            SignInOutcome.SignedIn(session(), AccountDto(1)),
+            SignInOutcome.CodeExpired,
+            SignInOutcome.Rejected(TmdbError.ExchangeRejected(401, 17)),
+            SignInOutcome.Failed(TmdbError.Network),
+            SignInOutcome.TimedOut,
+        )
+        for (outcome in outcomes) {
+            val gate = CompletableDeferred<Unit>()
+            auth.approval = { gate.await(); outcome }
+            val older = ApprovalAttempt.of(RequestCode("old"))
+            val newer = ApprovalAttempt.of(RequestCode("new"))
+            flow.start(older)
+            val old = async { flow.awaitApproval(older) }
+            runCurrent()
+            flow.start(newer)
+            gate.complete(Unit)
+            assertEquals(SignInOutcome.Superseded, old.await(), "late $outcome")
+            assertEquals(newer.id, store.load()?.id, "late $outcome must keep the newer attempt pending")
+            auth.approval = { outcome }
+            assertEquals(outcome, flow.awaitApproval(newer), "the newer attempt still completes normally")
         }
     }
 

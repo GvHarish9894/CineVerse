@@ -38,7 +38,8 @@ class InMemoryPendingAttemptStore : PendingAttemptStore {
  * - [start] persists [ApprovalAttempt] as the pending one (a newer attempt replaces it) before showing the approval page.
  * - [onCallback] is a hint, never proof: it only reports whether the URI names the pending attempt
  *   ([isPendingCallback]); approval is verified by the token exchange in [awaitApproval].
- * - [awaitApproval] is bound to its attempt: a non-pending one is [SignInOutcome.Superseded]. Outcomes: deny →
+ * - [awaitApproval] is bound to its attempt: a non-pending one is [SignInOutcome.Superseded], and so is a result that
+ *   arrives after a newer [start] (it never clears the newer attempt). Outcomes: deny →
  *   [SignInOutcome.Rejected], 15-min expiry / consumed token → [SignInOutcome.CodeExpired] / [SignInOutcome.Failed]
  *   (the attempt is cleared), no answer yet → [SignInOutcome.TimedOut] (same attempt). Cancel = cancelling the
  *   awaiting coroutine (BACK, background, dispose): the attempt stays pending for the next [awaitApproval].
@@ -67,15 +68,22 @@ class PollingApprovalFlow(
     private val auth: AuthRepository,
     private val pending: PendingAttemptStore = InMemoryPendingAttemptStore(),
 ) : ApprovalFlow {
-    override suspend fun start(attempt: ApprovalAttempt) = pending.save(attempt)
+    /** Serializes pending-attempt transitions; never held across the approval wait. */
+    private val transitions = Mutex()
+
+    override suspend fun start(attempt: ApprovalAttempt) = transitions.withLock { pending.save(attempt) }
 
     override suspend fun onCallback(uri: String): Boolean = false
 
     override suspend fun awaitApproval(attempt: ApprovalAttempt): SignInOutcome {
-        if (pending.load()?.id != attempt.id) return SignInOutcome.Superseded
+        if (!transitions.withLock { pending.load()?.id == attempt.id }) return SignInOutcome.Superseded
         val outcome = auth.awaitApproval(attempt.code)
-        if (outcome.consumesAttempt) pending.clear()
-        return outcome
+        return transitions.withLock {
+            // A newer start() during the wait owns the pending slot: this late result must not touch it.
+            if (pending.load()?.id != attempt.id) return@withLock SignInOutcome.Superseded
+            if (outcome.consumesAttempt) pending.clear()
+            outcome
+        }
     }
 }
 
