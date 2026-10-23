@@ -38,7 +38,11 @@ sealed interface SignInOutcome {
     data object AlreadyPolling : SignInOutcome
     /** Approved, but convert / account kept failing: nothing persisted, restart login. */
     data class Failed(val error: TmdbError) : SignInOutcome
-    /** A sign-out or session expiry happened while this attempt ran: nothing persisted. */
+    /**
+     * This attempt is no longer the current one. From NativeAuthRepository this is a pre-commit result (nothing
+     * persisted). From ApprovalFlow it can also be a stale completion AFTER a commit: the session may already be
+     * saved. Callers must never infer signed-out from it — observe [AuthRepository.session] for the truth.
+     */
     data object Superseded : SignInOutcome
 }
 

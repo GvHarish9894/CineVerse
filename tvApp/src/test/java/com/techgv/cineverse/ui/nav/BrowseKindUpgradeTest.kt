@@ -11,7 +11,10 @@ class BrowseKindUpgradeTest {
     @OptIn(ExperimentalSerializationApi::class)
     @Test fun legacyNavigationEnumStillRestoresIntoTheRoute() {
         // Android Navigation's default EnumType stores a Serializable enum in the saved Bundle; the fixture is
-        // `BrowseKind.Movies` serialized by the pre-L4 app (class com.techgv.cineverse.ui.nav.BrowseKind).
+        // SYNTHETIC legacy fixture: standard Java enum serialization of `BrowseKind.Movies` under the pre-L4 FQN
+        // com.techgv.cineverse.ui.nav.BrowseKind (the format Android Navigation's enum NavType delegates to). It is not
+        // a Bundle captured from an old app build; the cross-build case was shown not to occur on API 36 (a package
+        // update finishes the task) but that observation is for that emulator, not every supported OS.
         val restored = runCatching {
             ObjectInputStream(javaClass.classLoader!!.getResourceAsStream("legacy-browse-kind-movies.bin")).use { it.readObject() }
         }
