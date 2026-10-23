@@ -1,11 +1,19 @@
 package com.techgv.cineverse.ui.nav
 
+import androidx.annotation.Keep
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import com.techgv.cineverse.domain.MediaType
-import com.techgv.cineverse.presentation.BrowseKind
 import kotlinx.serialization.Serializable
+
+/**
+ * Browse route argument. Navigation saves enum arguments as Serializable, so this FQN and its constants must not
+ * change (a saved back stack names it); the shared holder's enum is mapped in BrowseViewModel.
+ */
+@Keep // route argument: serializer must survive R8
+@Serializable
+enum class BrowseKind { Movies, Tv, People }
 
 /** Typed routes (§1.2). Routes carry identifiers only; screens reload their own data. */
 sealed interface Route {

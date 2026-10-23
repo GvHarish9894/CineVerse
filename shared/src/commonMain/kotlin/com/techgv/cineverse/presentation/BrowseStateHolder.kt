@@ -8,7 +8,6 @@ import com.techgv.cineverse.data.tmdb.MovieList
 import com.techgv.cineverse.data.tmdb.TvList
 import com.techgv.cineverse.data.tmdb.toHero
 import com.techgv.cineverse.data.tmdb.toPerson
-import com.techgv.cineverse.domain.AndroidKeep
 import com.techgv.cineverse.domain.Hero
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.util.GenerationCounter
@@ -23,10 +22,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.serialization.Serializable
 
-@AndroidKeep // route argument: serializer must survive R8
-@Serializable
+/** Which catalog Browse shows. Not a route argument: TV maps its route enum to this one. */
 enum class BrowseKind { Movies, Tv, People }
 
 /** One Browse tab (prototype `defs`): chip label, page subtitle, and its list. */

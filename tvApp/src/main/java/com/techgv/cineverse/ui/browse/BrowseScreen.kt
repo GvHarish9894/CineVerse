@@ -40,7 +40,7 @@ import com.techgv.cineverse.ui.components.UiColors
 import com.techgv.cineverse.ui.components.bleedStart
 import com.techgv.cineverse.ui.components.rememberSavedLazyGridState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
-import com.techgv.cineverse.presentation.BrowseKind
+import com.techgv.cineverse.ui.nav.BrowseKind
 import com.techgv.cineverse.ui.nav.Route
 import com.techgv.cineverse.presentation.browseTitle
 
@@ -93,7 +93,7 @@ fun BrowseScreen(container: AppContainer, kind: BrowseKind, onOpen: (Route) -> U
         AmbientBackdrop(focused?.let { artUrl(it) }, focused?.key ?: "browse:$kind")
         Column(Modifier.fillMaxSize().padding(top = 44.dp)) {
             Text(
-                browseTitle(kind),
+                browseTitle(kind.toHolderKind()),
                 modifier = Modifier.padding(start = CONTENT_INSET),
                 color = Color.White,
                 fontSize = 44.sp,
