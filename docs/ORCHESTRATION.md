@@ -70,7 +70,9 @@ lanes on the same device do). Never `read` screenshots into context — verify v
   TV behaviour changes.
 - **Server deployment**: plain Docker-able Ktor app, same-origin static hosting of the wasm bundle under `/`
   and the API under `/api` (cookies "just work"); no cloud-specific code.
-- **Model**: all lane workers on `cliproxyapi/claude-opus-5-5`; reviewer is session `01a15a3b`.
+- **Model**: all subagents (workers, reviewers, scouts and validators), including new or resumed work in existing
+  worktrees, use `cliproxyapi/gpt-6.1-sol`. Pass the model explicitly at every launch; no automatic Claude fallback.
+  Intercom reviewer `01a15a3b` must also confirm GPT before any further review; otherwise use a GPT reviewer subagent.
 - **Package / ids**: per plan K2.
 
 ## Reporting

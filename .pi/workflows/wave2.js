@@ -1,6 +1,6 @@
 // Wave 2: four parallel implementation lanes on top of the merged Phase 1 foundation.
 // Each child runs in its own managed git worktree (worktree: true at the call site).
-const MODEL = "cliproxyapi/claude-opus-5-5";
+const MODEL = "cliproxyapi/gpt-6.1-sol";
 
 const COMMON = `
 You are implementing one lane of the CineVerse Android TV app (Compose + androidx.tv.material3, Kotlin, TMDB).
