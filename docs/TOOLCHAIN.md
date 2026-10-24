@@ -117,7 +117,7 @@ declared in `tvApp` (Coil's image client and the Ktor engine resolve it).
 
 - Native read token: `secrets.properties` (git-ignored) only. `tvApp` (unchanged) and `androidApp` read it into
   `BuildConfig.TMDB_READ_ACCESS_TOKEN`; `iosApp`'s "Inject native read token" build phase writes it into the built
-  app's Info.plist (`TMDBReadAccessToken`). Entry points pass it to `App(nativeReadToken)`; there is no
+  app's Info.plist (`TMDBReadAccessToken`). Entry points pass it to `CineVerseApp(shell, nativeReadToken)`; there is no
   common/default generated token field.
 - Server: environment `TMDB_READ_ACCESS_TOKEN` only (warns at start-up when missing).
 - Wasm: no token. `:composeApp:checkWasmHasNoSecrets` builds the wasm distribution and scans every

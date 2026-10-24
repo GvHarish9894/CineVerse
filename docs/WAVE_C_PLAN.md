@@ -12,7 +12,7 @@ the orchestrator appoints one integration-only component owner (C4) for browser 
 orchestrator merges reviewed handoffs; product screen lanes follow this integration rather than each inventing
 their own transport/storage/auth wiring.
 
-L3/P7 (`l3-design` @ `b5e69a6`) is source/test-approved but **not accepted/merged** until the owner reports the
+L3/P7 (`l3-design` @ `b5e69a6`) is source/test-approved but **not accepted/merged into main** until the owner reports the
 actual Safari check. Its preview is served independently on port 8765; no worker may replace that build.
 Native/web foundation work below does not require that pending UI merge.
 
@@ -68,9 +68,10 @@ exact commits, changed contracts, focused tests, actual runtime evidence, and un
 - C4 browser integration `518b45f` is reviewed and merged as `8c186d6`. Full combined JVM265/Android259/iOS262/
   Wasm229, compose2+3/TVunit63/server52, builds/scan/Swift host pass; integrated TV UI38 and R8 boot pass.
 
-- P7/L3 remains unmerged into main pending the owner's actual Safari result. A separate `p7-ui-stage` may
-  integrate its source for screen development, but cannot be promoted/accepted without that result. Original
-  b5e69a6 preview/worktree stays untouched. No human/platform gate is waived.
+- P7/L3 remains unmerged into main pending the owner's actual Safari result. Isolated `p7-ui-stage` merged
+  its reviewed source as `db16271`, preserving native tests and browser runtime seams; automated staging gates
+  are recorded in MIGRATION_LOG.md. Reconciliation still needs independent review; this is not P7 acceptance
+  or promotion. Original b5e69a6 preview/worktree stays untouched. No human/platform gate is waived.
 
 ## Next slices after foundations
 
