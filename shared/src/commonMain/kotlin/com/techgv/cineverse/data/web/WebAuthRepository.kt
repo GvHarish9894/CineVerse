@@ -43,14 +43,18 @@ class WebAuthRepository(private val http: WebProxyHttp) : AuthRepository {
     private val lock = SynchronizedObject()
     private val mutations = Mutex()
     private var revision = 0L
+    private var sessionEpoch = 0L
     private var verified = false
     private val current = MutableStateFlow<AuthSession?>(null)
     override val session: StateFlow<AuthSession?> = current.asStateFlow()
-    private val expired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    override val sessionExpired: SharedFlow<Unit> = expired.asSharedFlow()
+    private val expired = MutableSharedFlow<Long>(extraBufferCapacity = 1)
+    // Filter per subscriber at delivery: a busy collector may still hold an earlier identity's notice.
+    override val sessionExpired: Flow<Unit> = expired.filter { epoch ->
+        synchronized(lock) { epoch == sessionEpoch && verified && current.value == null }
+    }.map { }
 
     /** C3/focus/visibility hook: immediately makes in-flight account results unusable; then call revalidate. */
-    fun invalidateSession() = synchronized(lock) { revision++; verified = false }
+    fun invalidateSession() = synchronized(lock) { revision++; sessionEpoch++; verified = false }
 
     /** Latest-started revalidation wins, regardless of response completion order. Revisions are local, not wire ordering. */
     suspend fun revalidate(): AuthSession? {
@@ -58,7 +62,11 @@ class WebAuthRepository(private val http: WebProxyHttp) : AuthRepository {
         val value = try { decodeWebSession(http.call("/api/session")) }
         catch (_: SerializationException) { throw WebProxyException("malformed_session", null, null, WebWriteOutcome.NotApplicable, TmdbError.Malformed) }
         return synchronized(lock) {
-            if (ticket == revision) { current.value = value; verified = true }
+            if (ticket == revision) {
+                if (current.value != value) sessionEpoch++
+                current.value = value
+                verified = true
+            }
             current.value
         }
     }
@@ -78,7 +86,11 @@ class WebAuthRepository(private val http: WebProxyHttp) : AuthRepository {
         invalidateSession()
         try {
             revalidate()
-            if (failure.code == "session_expired" && previous != null && current.value == null) expired.tryEmit(Unit)
+            synchronized(lock) {
+                if (failure.code == "session_expired" && previous != null && verified && current.value == null) {
+                    expired.tryEmit(sessionEpoch)
+                }
+            }
         } catch (e: CancellationException) { throw e
         } catch (_: TmdbException) { /* Keep unverified until an authoritative sync succeeds. */ }
     }

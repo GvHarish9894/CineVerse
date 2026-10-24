@@ -6,9 +6,11 @@ import io.ktor.client.request.HttpRequestData
 import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.flow.first
 import kotlin.test.*
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class WebAuthRepositoryTest {
     @Test fun lateSessionSnapshotCannotOverwriteNewerTruth() = runTest {
         var count = 0; val reached = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
@@ -75,6 +77,56 @@ class WebAuthRepositoryTest {
         assertNull(auth.session.value)
         auth.expireSession(a)
         assertEquals(listOf("/api/session", "/api/session"), paths)
+    }
+
+    @Test fun bufferedExpiryOfAIsDiscardedAfterBSignsIn() = runTest {
+        var wire = sessionJson("P", "1")
+        val auth = WebAuthRepository(mockHttp { respond(wire) })
+        val first = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
+        var slowReceived = 0; var fastReceived = 0
+        val slow = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            auth.sessionExpired.collect {
+                slowReceived++
+                if (slowReceived == 1) { first.complete(Unit); release.await() }
+            }
+        }
+        val fast = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            auth.sessionExpired.collect { fastReceived++ }
+        }
+        try {
+            val p = auth.revalidate()!!
+            wire = GUEST; auth.expireSession(p); first.await(); runCurrent()
+            wire = sessionJson("A", "9007199254740993"); val a = auth.revalidate()!!
+            wire = GUEST; auth.expireSession(a); runCurrent()
+            assertEquals(2, fastReceived, "each live subscriber receives genuine expiries")
+            wire = sessionJson("B", "-9007199254740993"); auth.revalidate()
+            release.complete(Unit); runCurrent()
+            assertEquals("B", auth.session.value!!.accountObjectId.value)
+            assertEquals(1, slowReceived, "A's buffered notice is filtered at delivery after B")
+        } finally { release.complete(Unit); slow.cancelAndJoin(); fast.cancelAndJoin() }
+    }
+
+    @Test fun bufferedGenuineExpirySurvivesUnchangedGuestRevalidation() = runTest {
+        var wire = sessionJson("P", "1")
+        val auth = WebAuthRepository(mockHttp { respond(wire) })
+        val first = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
+        var received = 0
+        val collector = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            auth.sessionExpired.collect {
+                received++
+                if (received == 1) { first.complete(Unit); release.await() }
+            }
+        }
+        try {
+            val p = auth.revalidate()!!
+            wire = GUEST; auth.expireSession(p); first.await()
+            wire = sessionJson("A", "2"); val a = auth.revalidate()!!
+            wire = GUEST; auth.expireSession(a)
+            auth.revalidate()
+            release.complete(Unit); runCurrent()
+            assertEquals(2, received, "a request revision alone is not an auth transition")
+            assertNull(auth.session.value)
+        } finally { release.complete(Unit); collector.cancelAndJoin() }
     }
 
     @Test fun approvalRejectsUntrustedDescriptorsWithoutLeakingResponse() = runTest {

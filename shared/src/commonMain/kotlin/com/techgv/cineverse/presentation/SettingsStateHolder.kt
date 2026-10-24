@@ -9,6 +9,7 @@ import com.techgv.cineverse.data.settings.HapticStrength
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.AccountDto
+import com.techgv.cineverse.data.tmdb.TmdbException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -126,6 +127,8 @@ class SettingsStateHolder(
                     signOutEvents.trySend(true)
                 }
             } catch (e: IOException) {
+                if (!signedOut) signOutEvents.trySend(false)
+            } catch (e: TmdbException) {
                 if (!signedOut) signOutEvents.trySend(false)
             } finally {
                 signingOut = false

@@ -1,11 +1,26 @@
 package com.techgv.cineverse.presentation
 
+import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.settings.AccountDefaults
 import com.techgv.cineverse.data.settings.HapticStrength
 import com.techgv.cineverse.data.settings.InMemorySettingsStore
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.AccountDto
+import com.techgv.cineverse.data.tmdb.TmdbError
+import com.techgv.cineverse.data.tmdb.TmdbException
+import com.techgv.cineverse.data.web.WebAuthRepository
+import com.techgv.cineverse.data.web.mockHttp
+import com.techgv.cineverse.data.web.sessionJson
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,6 +36,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** §7.9 (moved from tvApp SettingsModelTest / SettingsViewModelTest; auth faked instead of NativeAuthRepository). */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -112,6 +128,45 @@ class SettingsStateHolderTest {
         runCurrent()
         assertEquals(listOf(true), results)
         assertEquals(1, auth.signOutCalls)
+    }
+
+    @Test fun sharedSettingsHolderReportsProxyLogoutFailureWithoutUncaughtException() = runTest(dispatcher) {
+        val webAuth = WebAuthRepository(mockHttp { request ->
+            if (request.method == HttpMethod.Get) respond(sessionJson("B", "-9007199254740993"))
+            else respond("""{"error":"csrf_token"}""", HttpStatusCode.Forbidden)
+        })
+        val b = webAuth.revalidate()!!
+        val uncaught = mutableListOf<Throwable>()
+        val owner = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob() + CoroutineExceptionHandler { _, error -> uncaught += error })
+        try {
+            val webHolder = SettingsStateHolder(settings, webAuth, owner)
+            webHolder.signOut(); runCurrent()
+            assertTrue(uncaught.isEmpty())
+            assertEquals(false, webHolder.signOutResults.first())
+            assertEquals(b, webAuth.session.value, "failed logout must not silently clear authoritative B")
+            webHolder.signOut(); runCurrent()
+            assertEquals(false, webHolder.signOutResults.first(), "failure releases the duplicate-press guard")
+            assertEquals(b, webAuth.session.value)
+        } finally { owner.cancel() }
+    }
+
+    @Test fun signOutHandlesNativeTmdbFailuresButPropagatesCancellationAndProgrammerErrors() = runTest(dispatcher) {
+        for (failure in listOf(TmdbException(TmdbError.Network), CancellationException("cancel"), IllegalArgumentException("programmer error"))) {
+            auth.sessions.value = ann
+            val failedAuth = object : AuthRepository by auth {
+                override suspend fun signOut(onSignedOutLocally: () -> Unit) { throw failure }
+            }
+            val results = mutableListOf<Boolean>(); val uncaught = mutableListOf<Throwable>()
+            val owner = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob() + CoroutineExceptionHandler { _, error -> uncaught += error })
+            try {
+                val failedHolder = SettingsStateHolder(settings, failedAuth, owner)
+                backgroundScope.launch { failedHolder.signOutResults.collect { results += it } }
+                failedHolder.signOut(); runCurrent()
+                assertEquals(ann, auth.sessions.value)
+                assertEquals(if (failure is TmdbException) listOf(false) else emptyList(), results)
+                assertEquals(if (failure is IllegalArgumentException) listOf(failure) else emptyList(), uncaught)
+            } finally { owner.cancel() }
+        }
     }
 
     @Test fun aFailedLocalClearReportsFailureAndAllowsAnotherTry() = runTest(dispatcher) {
