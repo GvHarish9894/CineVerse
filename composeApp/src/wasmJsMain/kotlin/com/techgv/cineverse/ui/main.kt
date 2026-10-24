@@ -1,18 +1,19 @@
 @file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
 
-package com.techgv.cineverse.smoke
+package com.techgv.cineverse.ui
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
 import com.techgv.cineverse.di.BrowserApplication
+import com.techgv.cineverse.ui.adaptive.ShellStyle
 import kotlinx.browser.document
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     val application = BrowserApplication()
     onPageExit(application::stop)
-    // The separate Coil image client remains credential-free; no product UI is introduced here.
-    ComposeViewport(document.body!!) { App(nativeReadToken = null) }
+    // The browser never receives a TMDB token; the proxy (server) holds it.
+    ComposeViewport(document.body!!) { CineVerseApp(ShellStyle.Web, nativeReadToken = null) }
 }
 
 // A bfcache page retains its live graph and catches up via C3 visibility/focus signals when restored.

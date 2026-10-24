@@ -43,6 +43,10 @@ Pinned by the P0 smoke build (plan §6/§7), not assumed. Every version below is
 | kotlinx-serialization | transitive via Ktor | 1.11.0 (`tvApp` keeps its own 1.9.0 declaration) |
 | kotlinx-browser | `org.jetbrains.kotlinx:kotlinx-browser:0.5.0` (wasmJs) | 0.5.0 |
 | Koin | `io.insert-koin:koin-core:4.2.2` (`api` of `shared`; P5 wires the composition roots, `shared/.../di/`) | 4.2.2 |
+| Material 3 (P7, `composeApp`) | `org.jetbrains.compose.material3:material3:1.9.0` — what the CMP 1.11.1 plugin's own `compose.material3` alias resolves to (latest stable) | 1.9.0; on Android → `androidx.compose.material3:material3` 1.4.0 |
+| Compose resources (P7) | `org.jetbrains.compose.components:components-resources:1.11.1` | 1.11.1 |
+| kotlinx-serialization-json (P7, `composeApp`) | `org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0` (catalog `kotlinx-serialization-json-kmp`; same version Ktor already resolves) | 1.11.0 |
+| Compose UI tests (P7) | `org.jetbrains.compose.ui:ui-test:1.11.1` (`composeUiTest` source set → android device, iOS simulator, wasm browser); Android device tests add `ui-test-junit4`/`ui-test-manifest` (BOM) and `androidx.test.espresso:espresso-core:3.7.0` | 1.11.1; espresso 3.5.0 → 3.7.0 (older espresso calls `InputManager.getInstance`, removed in API 36) |
 
 `tvApp` dependencies are unchanged except `kotlinx-coroutines-test` 1.10.2 → 1.11.0 (test classpath only, shared
 catalog key). Nothing in `tvApp` was downgraded; `tvApp` does not depend on `shared` yet (P1). When it does,
@@ -89,6 +93,26 @@ declared in `tvApp` (Coil's image client and the Ktor engine resolve it).
   'iOS-simulator' version (18.5) than being linked (16.0)` — ICU data shipped inside the Compose/Skiko klibs. Not a
   P0 blocker; must be checked on an iOS 16 simulator/device before release (P10).
 
+- **`composeApp` (P7).** `androidResources { enable = true }` on the AGP-9 KMP library: Compose resources (fonts,
+  `files/sample-tmdb.json`) ship as Android assets only with it, and without it the device-test resource copy task has
+  no output directory. `commonMain` Compose resources are `src/commonMain/composeResources` plus
+  `design/sample-tmdb.json`, merged by `:composeApp:syncCommonComposeResources` (one source of truth for the sample).
+  Design tokens are generated at build time by `:composeApp:generateDesignTokens` into
+  `build/generated/designTokens` (not checked in); see `docs/kits/TOKEN_CONFLICTS.md`.
+- **Fonts (P7).** Static TTFs from the Google Fonts CSS API (Bricolage Grotesque v9: 500/700/800; Inter v20:
+  400/500/600/700), SIL OFL 1.1 (`composeApp/licenses/`), in `composeApp/src/commonMain/composeResources/font/`
+  (1.53 MB, fetched lazily by the wasm app):
+
+  | File | Source URL (fonts.gstatic.com) | SHA-256 |
+  |---|---|---|
+  | `bricolage_grotesque_medium.ttf` | `/s/bricolagegrotesque/v9/3y9U6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiaaD30YfKfjZZoLvSniyM0.ttf` | `e1b454f5469f3d0d98c117651a4d15a8345ad77b50f09540b5cf61e82511b563` |
+  | `bricolage_grotesque_bold.ttf` | `/s/bricolagegrotesque/v9/3y9U6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiaaD30YfKfjZZoLvfzlyM0.ttf` | `913ee3631949ee1b4fb2601269412fca5775eb994d4f87be2c366c94ac123dc5` |
+  | `bricolage_grotesque_extrabold.ttf` | `/s/bricolagegrotesque/v9/3y9U6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiaaD30YfKfjZZoLvZvlyM0.ttf` | `50fe1039eb3ff208d027a4867d3f53bd288bba76273a718578f7b3ec0feec388` |
+  | `inter_regular.ttf` | `/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf` | `1b08e7fc267a5c7e1d614100f604b83e7e8a0be241f0f288faa2b3ac93a683ba` |
+  | `inter_medium.ttf` | `/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fMZg.ttf` | `8c883f63b2c4157d997319f2c8bc6995ed4357ef371940d31ca159004a4aae63` |
+  | `inter_semibold.ttf` | `/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYMZg.ttf` | `e7a1aaf7eda9f2fad4131725fa556265ec75ca7b2d756260173a040363e8d4f7` |
+  | `inter_bold.ttf` | `/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf` | `b37284b5701b6b168dfc770aa1a4ac492106422fd3ba76bc7641e37434e8019c` |
+
 ## Secrets
 
 - Native read token: `secrets.properties` (git-ignored) only. `tvApp` (unchanged) and `androidApp` read it into
@@ -115,7 +139,9 @@ declared in `tvApp` (Coil's image client and the Ktor engine resolve it).
   (browser actual).
 - `composeApp`: one Navigation Compose route, `viewModel { SmokeViewModel(createSavedStateHandle()) }`, a Coil
   `AsyncImage` from `image.tmdb.org` (credential-free); logs `CineVerseSmoke image=success|error`. Wasm `main()`
-  lives in `composeApp/wasmJsMain`; iOS static framework `ComposeApp`.
+  lives in `composeApp/wasmJsMain`; iOS static framework `ComposeApp`. **Replaced in P7** by the design-system
+  gallery (`com.techgv.cineverse.ui.CineVerseApp` → `GalleryScreen`, one Navigation Compose route, a Coil network
+  poster from `image.tmdb.org`); it logs `CineVerseGallery samples=loaded|error`. `SmokeViewModel` stays in `shared`.
 
 ## Gate commands
 
@@ -125,6 +151,8 @@ export ANDROID_HOME=~/Library/Android/sdk DEVELOPER_DIR=/Applications/Xcode.app/
 ./gradlew -q :shared:dependencies --configuration wasmJsRuntimeClasspath | grep -c room   # must print 0
 ./gradlew :composeApp:wasmJsBrowserDistribution :composeApp:linkDebugFrameworkIosSimulatorArm64 :composeApp:checkWasmHasNoSecrets
 ./gradlew :androidApp:assembleDebug :server:test
+./gradlew :composeApp:testDebugUnitTest :composeApp:iosSimulatorArm64Test :composeApp:wasmJsBrowserTest
+ANDROID_SERIAL=emulator-5556 ./gradlew :composeApp:connectedAndroidDeviceTest   # phone emulator only
 xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphonesimulator \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.4.1' build
 PORT=8080 ./gradlew :server:run & curl http://127.0.0.1:8080/healthz          # "ok"
