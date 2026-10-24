@@ -67,7 +67,8 @@ class Cdp {
 
 function bootstrapFailures(events) {
     return events.filter(event => event.method === 'Runtime.exceptionThrown' ||
-        event.method === 'Network.loadingFailed' ||
+        // Reload cancels the preceding document's catalog/font Fetch requests; missing assets still fail.
+        (event.method === 'Network.loadingFailed' && !(event.params.canceled && event.params.type === 'Fetch')) ||
         (event.method === 'Network.responseReceived' && event.params.response.status >= 400));
 }
 
