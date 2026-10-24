@@ -33,6 +33,12 @@ Product work is **multi-seam**: native entry/navigation/Home, browser URL/sessio
 - W1 may show Upcoming movies with click-time 'Find a trailer', not a claimed Latest trailers feed. Preserve Unavailable/error and inactive-event cancellation. Player destinations remain explicitly unfinished. Navigation-only hero CTA says 'Open library', not 'Add to watchlist'; no false write/success or assumed membership. Real trailer feed/player/watchlist actions remain later requirements.
 - Both shells must avoid automatic retry loops when pagination fails; retain content and require explicit retry.
 
+### D0 — discovered catalog-storage recovery seam
+
+W1 found that catalog preference reads can throw typed StorageException outside existing TMDB-only catches in PagedSection/Home. A shell CoroutineExceptionHandler/recreation workaround is rejected. Reuse the finished UI-staging worktree `../CineVerse-c1-native-auth` as `d0-catalog-storage-errors`, based on M1's dedicated paging handoff `676c068` (forwarder plus test only); p7-ui-stage711d339 remains preserved. D0 exclusively owns PagedSection/Home storage handling, compatible defaulted diagnostics/retry/resubscription and focused shared tests. M1 has finished/transferred shared Home ownership after676c068; M1/W1 do not edit it further. No new worktree; total remains six. D0 has no browser/native lease until explicitly granted.
+
+Required: catch only known storage failures, preserve current-context real content and page/scalar state, surface initial errors honestly, recover dead settings/genre collectors through explicit retry, reset trailer loading without automatic trailer replay. Ignore stale/disposed/canceled outcomes; programmer/cancellation errors propagate. Keep native defaults/TV rows/keys/query-switch behavior and API compatibility. Independent review and committed handoff precede shell integration.
+
 ## Required contracts
 
 - Native lifecycle/weak hosts/background cancellation and encrypted approval recovery stay unchanged. Native-only source may use a native UI source group if necessary; no native contracts in Wasm/common portable code.
@@ -49,6 +55,13 @@ Product work is **multi-seam**: native entry/navigation/Home, browser URL/sessio
 - No real sign-in/account mutation/import without owner participation; use fake transports/stores for behavioral tests. Normal public catalog read rendering is allowed. No credential dumps/secrets.properties output/overwrites or permission changes.
 - Do not rerun unaffected historical TV UI/retention for these first shells. Build/unit safety as needed; final integrated TV/platform gates remain parent-owned. CI result is separate from local tests.
 - Checkpoint implementation before long gates; keep logs/XML/screenshots (public guest content only) under isolated temp/managed artifacts, reports file-only. Report exact head, owned diff/callers, counts/commands, slot release, known limits. On provider/runtime failure preserve state and stop; retry saved work only on user instruction.
+
+## Current follow-up decisions
+
+- S1 dbfb69e: independent source review complete; parent browser240/240 passed. Parent integration/combined gates remain.
+- D0 e35d221: independent source review complete, OK with P2 note. Fix accepted: ordinary loadMore must consume the old storageFailedPage marker after no-op guards, with regression for loadMore→retryStorage and later TMDB failure. Same D0 owner, no UI changes.
+- M1 4a6d373: complete recovery report preserved, phone57 and targeted iOS1 pass; original full iOS run remains interrupted/failed. Independent mobile review stopped at provider usage limit and is resumed only on explicit user request.
+- W1 e88867d: complete handoff preserved, UI57/shared230/scanner18 passed. Reproduced nested document refresh fails before Kotlin because index.html uses a relative script URL. W1 is authorized to fix its document/resource bootstrap (including index.html and only necessary resource-public-path configuration), with actual full-document root/nested-route refresh regression. This is a focused repair to the existing navigation diff, not new screens. Preserve root-origin /api and original owner8765. W1 must separately consume reviewed D0 and bind typed Home callbacks/retry before acceptance; no handler/recreation workaround. Keep these repairs in separate commits; do not wait idle for a dependency or merge unreviewed code.
 
 ## Acceptance boundary
 
