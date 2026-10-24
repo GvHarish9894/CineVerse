@@ -8,8 +8,9 @@ The six-worktree cap includes the main checkout. Leave unrelated IDE/untracked f
 
 This work is **multi-seam**: native approval, proxy transport/auth, and browser durability are independently
 implementable/testable contracts. They have isolated component writers. After committed handoffs and review,
-the orchestrator is the integration-only owner for browser DI/lifetime observers; product screen lanes follow
-that integration rather than each inventing their own transport/storage/auth wiring.
+the orchestrator appoints one integration-only component owner (C4) for browser DI/lifetime observers. The
+orchestrator merges reviewed handoffs; product screen lanes follow this integration rather than each inventing
+their own transport/storage/auth wiring.
 
 L3/P7 (`l3-design` @ `b5e69a6`) is source/test-approved but **not accepted/merged** until the owner reports the
 actual Safari check. Its preview is served independently on port 8765; no worker may replace that build.
@@ -22,7 +23,9 @@ Native/web foundation work below does not require that pending UI merge.
 | C1 native approval | `../CineVerse-c1-native-auth` / `c1-native-auth` | Native redirect-aware token creation; encrypted persistent pending attempts; real Android Custom Tabs/iOS ASWebAuthenticationSession flows; callback host wiring and phone backup exclusions. Own native auth/host files; no browser/shared public auth-contract changes without coordination. | Implement/test/commit only; no merge/push/account writes. | Native/common tests, host links/builds, TV regression; committed API + manual approval instructions. | Uses existing direct transport/secure storage, not browser HTTP/storage. |
 | C2 browser HTTP | `../CineVerse-c2-web-http` / `c2-web-http` | New proxy catalog/account/session/approval adapters and safe error/identity mapping; browser HTTP/cookie adapter. Own new `data/web` code/tests and new transport-specific bindings only. | Implement/test/commit; ask before server/public contract changes; no merge/push. | MockEngine/real-browser transport tests, signed-Long string extremes, no-secret scan; committed API handoff. | Accepts existing storage/account interfaces; does not implement browser persistence or final DI. |
 | C3 browser durability | `../CineVerse-c3-browser-storage` / `c3-browser-storage` | Browser settings/guest/ledger/offers over durable transactions; migration/error behavior; non-secret revision notifications and lifecycle revalidation signals. Own browser storage code/tests, including existing BrowserSettingsStore. | Implement/test/commit only; no merge/push; no HTTP/auth policy edits. | Browser durability/reload/quota/blocked/concurrent-tab fixtures; committed constructors/event API handoff. | No network/session protocols, catalog methods or UI ownership. |
-| Integration (after reviews) | main checkout | Compose C2+C3 into wasm DI (remove explicit stub), one catalog/cache/generation root, session/settings/library invalidation and lifecycle observers; consume C1 host handoff. | Integrate reviewed commits; merged gates; push as GvHarish9894. | Shared/TV/server/mobile/web combined gates + fresh integration review. | No simultaneous root writer; does not reimplement component outcomes. |
+| C4 browser integration | Reuse `../CineVerse-c2-web-http` / branch `c4-web-integration` after C2 review/merge | Compose reviewed C2+C3 into wasm DI/lifetime wiring; guarded import entry, no echo-loop notifications, startup/teardown and visible failures. Own browser DI/runtime/main/tests; no catalog/native/UI behavior. | Implement/test/commit; no merge/push. | Real graph/isolation/lifecycle/invalidation/import-lock integration tests + independent review. | C2/C3 writers finished; this owner wires their contracts, not their implementations. |
+| C5 catalog extensions | `../CineVerse-c5-catalog` / `c5-catalog` | Discover genre/sort and keywords across common API/repository, direct+proxy adapters and affected fakes/tests. | Implement/test/commit; no merge/push. | Exact endpoint/query/cache/normalization tests on all targets + TV compatibility/review. | One tightly coupled API surface across the same files; splitting discover/keywords would overlap those owners. No browser DI/native auth edits. |
+| Final integration | main checkout | Merge reviewed C4/C5/C1 handoffs, resolve only contract/build seams; product screen lanes follow. | Merged gates; push as GvHarish9894. | Shared/TV/server/mobile/web combined gates + required independent reviews. | No simultaneous root writer; no component reimplementation. |
 
 All component writers leave `shared/.../di/WebModules.kt` and the common `SharedModules.kt` to integration.
 Any necessary shared contract/build-file overlap is a supervisor decision before editing. Each report names
@@ -54,7 +57,11 @@ exact commits, changed contracts, focused tests, actual runtime evidence, and un
 
 - C3 browser-storage component merged as `76d1e02` after round-2 REVIEW COMPLETE; merged JVM206/Android200/Wasm160
   and production secret scan pass. Its worktree is retained; browser DI/product acceptance is still pending.
-- C2 HTTP candidate `2556dff` fixes the two reproduced expiry/Settings-consumer findings; re-review precedes merge.
+- C2 HTTP `2556dff` merged as `ed3982e` after round-2 REVIEW COMPLETE. Combined JVM231/Android225/iOS228/Wasm186,
+  server52/TVunit63 and build/scan gates pass. Its finished worktree is reused by C4; old C2 branch/history remain.
+- C4/C5 start from this reviewed combined foundation (plus the lane-board documentation). Six total worktrees
+  maximum; no temporary branch/history is deleted to make room. Native C1 recovery remains on its own branch.
+
 - C1 native candidate `5bd81ca` has one required iOS scene-background cancellation fix unfinished after a GPT proxy
   stream failure. Its partial patch is retained at `/tmp/cineverse-review-diffs/c1-r2-interrupted-5bd81ca.patch`;
   no alternate model/execution mode was selected.
