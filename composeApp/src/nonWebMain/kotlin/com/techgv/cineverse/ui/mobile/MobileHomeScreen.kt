@@ -39,13 +39,15 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 @Composable
 internal fun MobileHomeScreen(
     graph: MobileApplication,
-    home: HomeStateHolder,
+    model: MobileHomeViewModel,
     scrollToTop: Int,
     navigator: MobileNavigator,
     onSearch: () -> Unit,
     onProfile: () -> Unit,
 ) {
+    val home = model.home
     val state by home.uiState.collectAsState()
+    val homeStorageFailed by model.storageFailed.collectAsState()
     val settingsFailed by graph.settingsFailed.collectAsState()
     val identityFailed by graph.identityFailed.collectAsState()
     val storageFailed by graph.storageFailed.collectAsState()
@@ -80,8 +82,14 @@ internal fun MobileHomeScreen(
                         Text("Movies, TV and the people who make them.")
                     }
                 }
-                if (settingsFailed) item("settings-error") {
-                    ErrorState("Saved preferences unavailable; keeping the last loaded values.", graph::retrySettings, Modifier.padding(horizontal = 20.dp))
+                if (settingsFailed || state.settingsError != null) item("settings-error") {
+                    ErrorState("Saved preferences unavailable; keeping the last loaded values.", model::retryStorage, Modifier.padding(horizontal = 20.dp).testTag("home-settings-recovery"))
+                }
+                if (state.genresError != null) item("genres-error") {
+                    ErrorState("Genre names unavailable; keeping loaded content.", model::retryStorage, Modifier.padding(horizontal = 20.dp).testTag("home-genres-recovery"))
+                }
+                if (homeStorageFailed && !settingsFailed && state.settingsError == null && state.genresError == null) item("home-storage-error") {
+                    ErrorState("Home storage unavailable. Retry reads; previous trailer actions are not replayed.", model::retryStorage, Modifier.padding(horizontal = 20.dp).testTag("home-storage-recovery"))
                 }
                 if (identityFailed) item("identity-error") {
                     ErrorState("Account state unavailable. Watchlist is disabled.", graph::retryIdentity, Modifier.padding(horizontal = 20.dp))

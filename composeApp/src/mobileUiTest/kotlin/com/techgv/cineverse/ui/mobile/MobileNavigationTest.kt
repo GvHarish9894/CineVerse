@@ -14,7 +14,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.techgv.cineverse.domain.Hero
 import com.techgv.cineverse.presentation.HomeStateHolder
-import com.techgv.cineverse.presentation.SavedStateHandleStateSaver
 import com.techgv.cineverse.ui.adaptive.ProvideWindowClass
 import com.techgv.cineverse.ui.adaptive.ShellStyle
 import com.techgv.cineverse.ui.haptics.Haptics
@@ -22,7 +21,6 @@ import com.techgv.cineverse.ui.haptics.LocalHaptics
 import com.techgv.cineverse.ui.shell.MobileShell
 import com.techgv.cineverse.ui.theme.AppearanceSettings
 import com.techgv.cineverse.ui.theme.CineVerseTheme
-import kotlinx.coroutines.flow.filterNotNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -33,7 +31,7 @@ class MobileNavigationTest {
     @Test fun tabStacksKeepPushedRoutesAndBackReturnsToHome() = runComposeUiTest {
         lateinit var home: HomeStateHolder
         lateinit var api: MobileCatalogApi
-        setContent { MobileTestRoot(onHomeReady = { holder, catalog -> home = holder; api = catalog }) }
+        setContent { MobileTestRoot(onReady = { model, fixture -> home = model.home; api = fixture.api }) }
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
         val retainedHome = home
         onNodeWithText("Internal placeholder · movie 101").assertIsDisplayed()
@@ -107,20 +105,20 @@ class MobileNavigationTest {
 internal fun MobileTestRoot(
     savedHome: SavedStateHandle = remember { SavedStateHandle() },
     haptics: Haptics = Haptics.None,
-    onHomeReady: (HomeStateHolder, MobileCatalogApi) -> Unit = { _, _ -> },
+    configureFixture: (MobileFixture) -> Unit = {},
+    onReady: (MobileHomeViewModel, MobileFixture) -> Unit = { _, _ -> },
 ) {
     val scope = rememberCoroutineScope()
-    val fixture = remember { MobileFixture(scope) }
+    val fixture = remember { MobileFixture(scope).also(configureFixture) }
     val owner = remember { MobileTestOwner() }
-    val home = remember { HomeStateHolder(fixture.catalog, fixture.generation, fixture.graph.settings.filterNotNull(),
-        SavedStateHandleStateSaver(savedHome), scope) }
-    SideEffect { onHomeReady(home, fixture.api) }
+    val model = remember { MobileHomeViewModel(fixture.graph, savedHome, scope) }
+    SideEffect { onReady(model, fixture) }
     LaunchedEffect(Unit) { fixture.auth.emissions.emit(null) }
     DisposableEffect(Unit) { onDispose { fixture.graph.close(); owner.viewModelStore.clear() } }
     CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalViewModelStoreOwner provides owner) {
         CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = true)) {
             CompositionLocalProvider(LocalHaptics provides haptics) {
-                ProvideWindowClass { MobileShell { MobileRoot(fixture.graph, home) } }
+                ProvideWindowClass { MobileShell { MobileRoot(fixture.graph, model) } }
             }
         }
     }

@@ -83,6 +83,9 @@ internal class MobileCatalogApi : MobileUnusedTmdbApi() {
     var failure: TmdbError? = null
     var pageFailure: Int? = null
     var trailerGate: CompletableDeferred<Unit>? = null
+    var genreGate: CompletableDeferred<Unit>? = null
+    var failGenresStorage = false
+    var genreCalls = 0
     private fun page(label: String, page: Int, type: String) : PageDto<MediaItemDto> {
         calls += "$label/$page"
         failure?.let { throw TmdbException(it) }
@@ -90,7 +93,12 @@ internal class MobileCatalogApi : MobileUnusedTmdbApi() {
         return PageDto(page, (1..12).map { MediaItemDto(id = page * 100 + it, title = "$label $it", name = "$label $it", mediaType = type) }, 2)
     }
     override suspend fun configuration() = ConfigurationDto()
-    override suspend fun genres(media: MediaType, language: String) = GenreListDto(emptyList())
+    override suspend fun genres(media: MediaType, language: String): GenreListDto {
+        genreCalls++
+        genreGate?.await()
+        if (failGenresStorage) throw StorageException("fake genre storage read")
+        return GenreListDto(listOf(GenreDto(if (media == MediaType.Movie) 28 else 18, "Fixture genre")))
+    }
     override suspend fun trending(window: TrendingWindow, language: String, page: Int) = page("$window-$language", page, "movie")
     override suspend fun movieList(list: MovieList, language: String, region: String, page: Int) = page("$list-$language-$region", page, "movie")
     override suspend fun tvList(list: TvList, language: String, timezone: String?, page: Int) = page("tv-$language", page, "tv")

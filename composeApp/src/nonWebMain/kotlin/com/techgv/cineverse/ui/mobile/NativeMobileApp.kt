@@ -21,7 +21,6 @@ import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.techgv.cineverse.data.library.LibraryWriteResult
-import com.techgv.cineverse.presentation.HomeStateHolder
 import com.techgv.cineverse.presentation.TrailerEvent
 import com.techgv.cineverse.ui.adaptive.ProvideWindowClass
 import com.techgv.cineverse.ui.adaptive.ShellStyle
@@ -50,7 +49,7 @@ fun NativeMobileApp(graph: MobileApplication) {
                     }
                 } else {
                     val model = viewModel { MobileHomeViewModel(graph, createSavedStateHandle()) }
-                    MobileRoot(graph, model.home)
+                    MobileRoot(graph, model)
                 }
             }
         }
@@ -58,7 +57,8 @@ fun NativeMobileApp(graph: MobileApplication) {
 }
 
 @Composable
-internal fun MobileRoot(graph: MobileApplication, home: HomeStateHolder) {
+internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
+    val home = model.home
     val toasts = LocalToasts.current
     var selected by rememberSaveable(stateSaver = Saver<MobileTab, Int>(
         save = { it.ordinal }, restore = { MobileTab.entries[it] },
@@ -132,7 +132,7 @@ internal fun MobileRoot(graph: MobileApplication, home: HomeStateHolder) {
         stateHolder.SaveableStateProvider(selected.name) {
             NavHost(controller, startDestination = MobileTabRoot) {
                 composable<MobileTabRoot> {
-                    if (selected == MobileTab.Home) MobileHomeScreen(graph, home, scrollHome, navigator,
+                    if (selected == MobileTab.Home) MobileHomeScreen(graph, model, scrollHome, navigator,
                         onSearch = { select(MobileTab.Search) }, onProfile = { select(MobileTab.Profile) })
                     else MobilePlaceholder(selected.name, "Internal placeholder · This tab is not implemented in M1.")
                 }
