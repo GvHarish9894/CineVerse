@@ -232,7 +232,9 @@ class HomeStateHolder(
 
     fun retry(row: HomeRow) {
         if (settingsError.value != null) retryStorage()
-        else sections.getValue(row).reload(retainContent = true)
+        else sections.getValue(row).run {
+            if (!retryStorage()) reload(retainContent = true)
+        }
     }
 
     fun loadMore(row: HomeRow) = sections.getValue(row).loadMore()

@@ -155,10 +155,10 @@ class PagedSectionStorageTest {
             val bug = IllegalStateException("fixture bug")
             section.load(PageSource({ throw bug }) { it.toHero() })
             advanceUntilIdle()
-            assertEquals(listOf(bug), errors)
+            assertEquals(listOf<Throwable>(bug), errors)
             section.load(PageSource({ throw CancellationException("fixture cancel") }) { it.toHero() })
             advanceUntilIdle()
-            assertEquals(listOf(bug), errors)
+            assertEquals(listOf<Throwable>(bug), errors)
             assertTrue(reports.isEmpty())
             assertEquals(SectionState.Loading, section.state.value)
         } finally { owner.cancel() }
