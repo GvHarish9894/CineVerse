@@ -56,7 +56,7 @@ class Cdp {
                 const params = message.params;
                 const receivedAt = Date.now();
                 if (message.method === 'Network.requestWillBeSent') {
-                    const request = {requestId: params.requestId, url: params.request.url, type: params.type, frameId: params.frameId,
+                    const request = {requestId: params.requestId, url: params.request.url, method: params.request.method, type: params.type, frameId: params.frameId,
                         loaderId: params.loaderId, timestamp: params.timestamp, wallTime: params.wallTime, initiator: params.initiator,
                         boundary: this.boundary, receivedAt, lifecycle: []};
                     this.requests.set(params.requestId, request);
@@ -91,11 +91,12 @@ class Cdp {
         const id = ++this.serial;
         return new Promise((resolve, reject) => { this.pending.set(id, {resolve, reject}); this.socket.send(JSON.stringify({id, method, params})); });
     }
-    async documentIdentity() {
+    async documentIdentity(withDom = false) {
         try {
             const frame = (await this.call('Page.getFrameTree')).frameTree.frame;
             const evaluation = await this.call('Runtime.evaluate', {expression: 'JSON.stringify({url:location.href,timeOrigin:performance.timeOrigin,readyState:document.readyState})', returnByValue: true});
-            return {receivedAt: Date.now(), frameId: frame.id, loaderId: frame.loaderId, frameUrl: frame.url, ...JSON.parse(evaluation.result.value)};
+            return {receivedAt: Date.now(), frameId: frame.id, loaderId: frame.loaderId, frameUrl: frame.url, ...JSON.parse(evaluation.result.value),
+                ...(withDom ? {backendNodeId: (await this.call('DOM.getDocument', {depth: 0})).root.backendNodeId} : {})};
         } catch (error) { return {receivedAt: Date.now(), unavailable: error.message}; }
     }
     close() { this.socket.close(); }
@@ -119,6 +120,84 @@ function checkFailureClassification() {
     console.log('PASS: preceding-only cancellation classification; active/non-canceled/non-Fetch/runtime/HTTP failures remain failures.');
 }
 
+function sameDocument(expected, actual) {
+    return ['frameId', 'loaderId', 'url', 'timeOrigin'].every(key => expected?.[key] !== undefined && expected[key] === actual?.[key]);
+}
+
+function authoritativeAxState(tree, expected, before, after) {
+    const nodes = tree.nodes.filter(node => !node.ignored);
+    const root = nodes.find(node => node.role?.value === 'RootWebArea');
+    const axUrl = root?.properties?.find(property => property.name === 'url')?.value?.value;
+    if (!sameDocument(expected, before) || !sameDocument(expected, after) || root?.frameId !== expected.frameId || axUrl !== expected.url ||
+        root.backendDOMNodeId === undefined || root.backendDOMNodeId !== before.backendNodeId || root.backendDOMNodeId !== after.backendNodeId) return 'RejectedIdentity';
+    // WebApp.kt: only Ready(null) renders this exact header button; absent/conflicting labels prove nothing.
+    const ready = nodes.some(node => node.role?.value === 'button' && node.name?.value === 'Sign in');
+    const checking = nodes.some(node => ['Verifying', 'Checking session…'].includes(node.name?.value));
+    const failed = nodes.some(node => ['Unverified', 'Session verification failed. Account actions are unavailable.'].includes(node.name?.value));
+    if ([ready, checking, failed].filter(Boolean).length !== 1) return 'UnknownOrConflicting';
+    return ready ? 'Ready' : checking ? 'Checking' : 'Failed';
+}
+
+function checkOutcomeGuards() {
+    const current = {frameId: 'frame', loaderId: 'new', url: 'http://fixture/', timeOrigin: 2, backendNodeId: 7};
+    const root = {role: {value: 'RootWebArea'}, frameId: 'frame', backendDOMNodeId: 7, properties: [{name: 'url', value: {value: current.url}}]};
+    const tree = (name, role = 'StaticText') => ({nodes: [root, {name: {value: name}, role: {value: role}}]});
+    assert.equal(authoritativeAxState(tree('Sign in', 'button'), current, current, current), 'Ready');
+    assert.equal(authoritativeAxState(tree('Verifying'), current, current, current), 'Checking');
+    assert.equal(authoritativeAxState(tree('Unverified'), current, current, current), 'Failed');
+    assert.equal(authoritativeAxState(tree('Sign in'), current, current, current), 'UnknownOrConflicting');
+    for (const old of [{...current, loaderId: 'old'}, {...current, timeOrigin: 1}, {...current, frameId: 'old'}, {...current, url: 'http://fixture/old'}]) {
+        assert.equal(authoritativeAxState(tree('Sign in', 'button'), current, old, current), 'RejectedIdentity');
+        assert.equal(authoritativeAxState(tree('Sign in', 'button'), current, current, old), 'RejectedIdentity');
+    }
+    assert.equal(authoritativeAxState(tree('Sign in', 'button'), current, {...current, backendNodeId: 8}, current), 'RejectedIdentity');
+    assert.equal(authoritativeAxState(tree('Sign in', 'button'), current, current, {...current, backendNodeId: 8}), 'RejectedIdentity');
+    assert.equal(authoritativeAxState({nodes: [{...root, frameId: 'old'}, tree('Sign in', 'button').nodes[1]]}, current, current, current), 'RejectedIdentity');
+    assert.equal(authoritativeAxState({nodes: [...tree('Sign in', 'button').nodes, tree('Verifying').nodes[1]]}, current, current, current), 'UnknownOrConflicting');
+    const event = {method: 'Network.loadingFailed', params: {requestId: 'session', canceled: true, type: 'Fetch'}};
+    const request = {method: 'GET', url: 'http://fixture/api/session', frameId: 'frame', loaderId: 'new'};
+    for (const [candidate, accepted] of [[request, true], [{...request, method: 'POST'}, false], [{...request, url: 'http://other/api/session'}, false], [{...request, loaderId: 'old'}, false]]) {
+        assert.equal(exactSessionAbort(event, {requests: new Map([['session', candidate]])}, current, 'http://fixture'), accepted);
+    }
+    console.log('PASS: same-document AX Ready/Checking/Failed and exact session request guards reject stale/ambiguous outcomes.');
+}
+
+function exactSessionAbort(event, cdp, expected, origin) {
+    const request = cdp.requests.get(event.params?.requestId);
+    return event.method === 'Network.loadingFailed' && event.params.canceled && event.params.type === 'Fetch' &&
+        request?.method === 'GET' && request.url === origin + '/api/session' &&
+        request.frameId === expected?.frameId && request.loaderId === expected?.loaderId;
+}
+
+async function observeSessionOutcome(cdp, origin, step, precedingFetches) {
+    const expected = step.observations.at(-1);
+    const navigation = cdp.events.findLast(event => event.method === 'Page.frameNavigated' && event.params.frame.id === expected?.frameId && event.params.frame.loaderId === expected?.loaderId);
+    const probe = {startedAt: Date.now(), expected, samples: [], outcome: 'NotEligible'};
+    step.sessionOutcomeProbe = probe;
+    try {
+        if (!navigation || navigation.params.frame.url !== expected.url || sameDocument(expected, step.before) ||
+            !bootstrapFailures(cdp.events, precedingFetches).every(event => exactSessionAbort(event, cdp, expected, origin))) return;
+        const deadline = Date.now() + 5000;
+        probe.outcome = 'Pending';
+        do {
+            const failures = bootstrapFailures(cdp.events, precedingFetches);
+            if (failures.some(event => !exactSessionAbort(event, cdp, expected, origin))) { probe.outcome = 'UnrelatedStrictFailure'; return; }
+            const before = await cdp.documentIdentity(true);
+            const tree = await cdp.call('Accessibility.getFullAXTree');
+            const after = await cdp.documentIdentity(true);
+            const state = authoritativeAxState(tree, expected, before, after);
+            probe.samples.push({receivedAt: Date.now(), before, after, state});
+            if (bootstrapFailures(cdp.events, precedingFetches).some(event => !exactSessionAbort(event, cdp, expected, origin))) { probe.outcome = 'UnrelatedStrictFailure'; return; }
+            if (['Ready', 'Failed', 'RejectedIdentity'].includes(state)) { probe.outcome = state; return; }
+            await sleep(100);
+        } while (Date.now() < deadline);
+        probe.timedOut = true;
+    } finally {
+        probe.finishedAt = Date.now();
+        probe.sessionRequests = [...cdp.requests.values()].filter(request => request.url === origin + '/api/session');
+    }
+}
+
 async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRequired = true) {
     const before = await cdp.documentIdentity();
     const precedingFetches = new Set(cdp.fetches);
@@ -130,6 +209,11 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
     step.navigationReturnedAt = Date.now();
     const tree = await until(async () => {
         step.observations.push(await cdp.documentIdentity());
+        const strictFailures = bootstrapFailures(cdp.events, precedingFetches);
+        if (strictFailures.length && !step.sessionOutcomeProbe) {
+            step.originalStrictFailures = strictFailures;
+            await observeSessionOutcome(cdp, origin, step, precedingFetches);
+        }
         assert.deepEqual(bootstrapFailures(cdp.events, precedingFetches), [], label + ': resource/runtime failure');
         const tree = await cdp.call('Accessibility.getFullAXTree');
         const names = tree.nodes.filter(node => !node.ignored).map(node => node.name?.value);
@@ -150,6 +234,11 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
     if (bootstrapRequired) assert.equal(wasm.length, 2, label + ': Kotlin and Skiko Wasm');
     assert.ok(wasm.every(response => response.status === 200 && response.mime === 'application/wasm'));
     assert.ok(step.responses.filter(response => response.url.includes('/composeResources/')).every(response => response.url.startsWith(origin + '/composeResources/') && response.status === 200 && response.mime !== 'text/html'));
+    const finalFailures = bootstrapFailures(cdp.events, precedingFetches);
+    if (finalFailures.length && !step.sessionOutcomeProbe) {
+        step.originalStrictFailures = finalFailures;
+        await observeSessionOutcome(cdp, origin, step, precedingFetches);
+    }
     assert.deepEqual(bootstrapFailures(cdp.events, precedingFetches), []);
     fs.writeFileSync(path.join(artifacts, label + '-ax.json'), JSON.stringify(tree, null, 2));
     fs.writeFileSync(path.join(artifacts, label + '-events.json'), JSON.stringify(cdp.events, null, 2));
@@ -160,6 +249,7 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
 
 (async () => {
     checkFailureClassification();
+    checkOutcomeGuards();
     assert.ok(fs.existsSync(path.join(dist, 'index.html')), 'Build the production distribution first');
     assert.ok(process.env.CHROME_BIN, 'Set CHROME_BIN to the leased Chrome executable');
     const server = http.createServer(serve);
