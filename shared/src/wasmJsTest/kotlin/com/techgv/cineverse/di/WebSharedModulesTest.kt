@@ -390,6 +390,135 @@ class WebSharedModulesTest {
         assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
     } }
 
+    @Test fun settingsReadFailureRetainsPriorRealValuesAndRetryResubscribes() = runTest { fixture { f ->
+        f.identity = null; f.start()
+        val observer = f.scope.launch { f.runtime.settingsHolder.state.collect() }
+        f.settings.update { it.copy(language = "ml-IN", region = "GB", includeAdult = true) }
+        until { f.runtime.settingsHolder.state.value?.settings?.language == "ml-IN" }
+        val real = f.runtime.settingsHolder.state.value
+        val fault = failTransactions(f.name, "settings")
+        try {
+            f.bus.publish(BrowserChangeTopic.Settings)
+            f.runtime.storageFailure.first { it == BrowserStorageFailure.Quota }
+            assertEquals(real, f.runtime.settingsHolder.state.value)
+        } finally { restore(fault) }
+        f.settings.update { it.copy(language = "ta-IN") }
+        tick().await()
+        assertEquals(real, f.runtime.settingsHolder.state.value) // The failed upstream really needs a new subscription.
+        f.runtime.retryStorage()
+        until { f.runtime.settingsHolder.state.value?.settings?.language == "ta-IN" }
+        observer.cancelAndJoin()
+    } }
+
+    @Test fun ledgerFailuresBeforeAndAfterPostAreVisibleAndRetryReconcilesWithoutReplay() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        val controller = f.koin.get<ImportLibraryStateHolder>()
+        controller.prompt.first { it is ImportPrompt.Ask }
+        var completed = 0
+        val observer = f.scope.launch(start = CoroutineStart.UNDISPATCHED) { f.runtime.importsCompleted.collect { completed++ } }
+        val beforePost = failCommit(f.name, "ledger", "attempting")
+        try {
+            controller.import()
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(0, f.calls.count { it.method == HttpMethod.Post })
+            assertEquals(0, completed)
+        } finally { restore(beforePost) }
+        val afterPost = failCommit(f.name, "ledger", "done")
+        try {
+            controller.retryStorage()
+            until { f.calls.count { it.method == HttpMethod.Post } == 1 }
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(ImportStepState.Attempting, f.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+            assertEquals(0, completed)
+        } finally { restore(afterPost) }
+        controller.retryStorage()
+        controller.prompt.first { it == null }
+        until { completed == 1 }
+        assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
+        assertEquals(ImportStepState.Done, f.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+        observer.cancelAndJoin()
+    } }
+
+    @Test fun finishFailureRetriesOnlyFinishAndNeverClaimsImportedOrRepostsUnknownWrites() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        val controller = f.runtime.importController
+        controller.prompt.first { it is ImportPrompt.Ask }
+        f.postStatus = HttpStatusCode.ServiceUnavailable
+        controller.import()
+        controller.prompt.first { it is ImportPrompt.Unconfirmed }
+        assertEquals(ImportOfferRecord("a", true, false), f.koin.get<ImportOfferStore>().offer("a"))
+        val fault = failCommit(f.name, "offers", "complete")
+        try {
+            controller.close()
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(BrowserStorageFailure.Quota, f.runtime.storageFailure.value)
+        } finally { restore(fault) }
+        controller.retryStorage()
+        controller.prompt.first { it == null }
+        assertEquals(ImportOfferRecord("a", true, true), f.koin.get<ImportOfferStore>().offer("a"))
+        assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
+        assertEquals(ImportStepState.Attempting, f.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+    } }
+
+    @Test fun completionBookkeepingFailureCannotReportSuccessUntilDurableFinishRetry() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        val controller = f.runtime.importController
+        controller.prompt.first { it is ImportPrompt.Ask }
+        var completed = 0
+        val observer = f.scope.launch(start = CoroutineStart.UNDISPATCHED) { f.runtime.importsCompleted.collect { completed++ } }
+        val fault = failCommit(f.name, "offers", "complete")
+        try {
+            controller.import()
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(0, completed)
+            assertEquals(ImportOfferRecord("a", true, false), f.koin.get<ImportOfferStore>().offer("a"))
+        } finally { restore(fault) }
+        controller.retryStorage()
+        controller.prompt.first { it == null }
+        until { completed == 1 }
+        assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
+        observer.cancelAndJoin()
+    } }
+
+    @Test fun unknownAttemptSurvivesReopenAndReconcilesAbsentThenLandedWithoutBlindPost() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start(); f.postStatus = HttpStatusCode.ServiceUnavailable
+        val unknown = f.importer.import(f.identity!!) as ImportResult.Done
+        assertEquals(1, unknown.unconfirmed.size)
+        f.runtime.close(); f.app.close()
+        val reopened = Fixture(f.name)
+        try {
+            reopened.start()
+            val absent = reopened.importer.import(reopened.identity!!) as ImportResult.Done
+            assertEquals(1, absent.unconfirmed.size)
+            assertEquals(0, reopened.calls.count { it.method == HttpMethod.Post })
+            reopened.landed = true // Authoritative reconciliation now confirms that the earlier unknown POST landed.
+            val reconciled = reopened.importer.import(reopened.identity!!) as ImportResult.Done
+            assertTrue(reconciled.unconfirmed.isEmpty())
+            assertEquals(0, reopened.calls.count { it.method == HttpMethod.Post })
+            assertEquals(ImportStepState.Done, reopened.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+        } finally { reopened.close(delete = false) }
+    } }
+
+    @Test fun actualSettingsConsumerSignOutPublishesOneLocalSessionHintWithoutEcho() = runTest { fixture { f ->
+        f.start()
+        val peer = BrowserChanges(f.channel)
+        try {
+            val before = peer.changes.value.session
+            f.runtime.settingsHolder.signOut()
+            peer.changes.first { it.session > before }
+            tick().await()
+            val stable = peer.changes.value.session
+            tick().await(); tick().await()
+            assertEquals(before + 1, stable)
+            assertEquals(stable, peer.changes.value.session)
+            assertEquals(1, f.count("/api/auth/logout"))
+        } finally { peer.close() }
+    } }
+
     @Test fun closingCancelsInflightHttpBeforeClosingDatabaseAndBusAndLeavesOtherGraphAlive() = runTest {
         val a = Fixture(); val b = Fixture()
         try {
@@ -468,3 +597,18 @@ private external fun failOpen(name: String): JsAny
     return {restore:() => { if (old) Object.defineProperty(navigator,'locks',old); else delete navigator.locks; }};
 }""")
 private external fun disableLocks(): JsAny
+
+@JsFun("""(name, store, phase) => {
+    const old = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function(...args) {
+        if (this.transaction.db.name === name && this.name === store) {
+            const value = JSON.parse(args[0]);
+            if ((phase === 'attempting' && value === 'Attempting') || (phase === 'done' && value === 'Done') || (phase === 'complete' && value.complete === true)) {
+                throw new DOMException('fixture', 'QuotaExceededError');
+            }
+        }
+        return old.apply(this, args);
+    };
+    return {restore:() => { IDBObjectStore.prototype.put = old; }};
+}""")
+private external fun failCommit(name: String, store: String, phase: String): JsAny

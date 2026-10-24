@@ -121,7 +121,9 @@ class SettingsStateHolder(
                 if (auth.session.first()?.accountObjectId?.value == offer.accountObjectId) {
                     settings.resolveAccountDefaults(offer.accountObjectId, apply)
                 }
-            } catch (failure: StorageException) { onStorageFailure(failure) }
+            } catch (failure: StorageException) {
+                if (auth.session.first()?.accountObjectId?.value == offer.accountObjectId) onStorageFailure(failure)
+            }
         }
     }
 

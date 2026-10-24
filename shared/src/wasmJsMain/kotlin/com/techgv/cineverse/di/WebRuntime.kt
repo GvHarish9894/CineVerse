@@ -9,7 +9,6 @@ import com.techgv.cineverse.data.tmdb.CatalogRepository
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.TmdbException
 import com.techgv.cineverse.data.web.WebApprovalAttempt
-import com.techgv.cineverse.data.web.WebAuthRepository
 import com.techgv.cineverse.presentation.*
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.*
@@ -46,7 +45,7 @@ class WebRuntime internal constructor(
     private var syncing: Job? = null
     private val completedImports = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val importsCompleted: Flow<Unit> = completedImports.asSharedFlow()
-    val settingsHolder = SettingsStateHolder(settings, auth, scope, ::reportStorageFailure)
+    val settingsHolder = SettingsStateHolder(settings, browserAuth, scope, ::reportStorageFailure)
     val importController = ImportLibraryStateHolder(importer, scope,
         onImported = { completedImports.tryEmit(Unit) }, onStorageFailure = ::reportStorageFailure)
 

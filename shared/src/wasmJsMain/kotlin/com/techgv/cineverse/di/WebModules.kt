@@ -90,7 +90,12 @@ internal class BrowserAuthRepository(
     override val session: StateFlow<AuthSession?> get() = web.session
     private val verificationRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val verification = verificationRequests.asSharedFlow()
-    fun requestVerification() { verificationRequests.tryEmit(Unit) }
+    fun requestVerification() {
+        val current = web.session.value ?: return
+        // A dropped A result is not evidence against an already verified B (or a library-only invalidation).
+        try { web.capture(current); return } catch (_: WebProxyException) { }
+        verificationRequests.tryEmit(Unit)
+    }
     override suspend fun signOut(onSignedOutLocally: () -> Unit) {
         try { web.signOut(onSignedOutLocally) }
         finally { changes.publish(BrowserChangeTopic.Session) }
