@@ -47,17 +47,17 @@ class WebHomeTest {
         var retry: HomeRow? = null
         var route: WebRoute? = null
         val history = saver()
+        history.putInt("page.index", 1)
         val initial = state().copy(rows = state().rows + (HomeRow.Trending to SectionState.Error(SectionErrorKind.Offline)))
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             WebHomeContent(initial, history, WebSessionState.Checking, { trend = it }, {}, { retry = it }, {}, { route = it })
         }
-        onNodeWithTag("web-home").performScrollToNode(hasText("Today"))
-        onNodeWithText("Today").performClick()
-        onNodeWithText("Retry").performClick()
+        onNodeWithText("Today").assertIsDisplayed().performClick()
+        onNodeWithText("Retry").assertIsDisplayed().performClick()
         assertEquals(TrendingWindow.Day, trend)
         assertEquals(HomeRow.Trending, retry)
-        onNodeWithTag("web-home").performScrollToNode(hasText("What’s popular · Movies"))
-        onAllNodesWithText("Fixture film").onLast().performClick()
+        onNodeWithTag("web-home").performScrollToIndex(2)
+        onNodeWithTag("home-popularMovies-movie:7").assertIsDisplayed().performClick()
         assertEquals(WebRoute.Detail("movie", 7), route)
     }
 

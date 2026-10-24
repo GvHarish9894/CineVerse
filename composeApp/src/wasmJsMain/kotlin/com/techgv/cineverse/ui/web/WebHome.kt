@@ -57,7 +57,12 @@ internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: Ge
         }
     }
     val state by holder.uiState.collectAsState()
-    WebHomeContent(state, entry, session, holder::selectTrend, { holder.selectHero(it) }, holder::retry, holder::playTrailer, { navigate(it, false) })
+    LaunchedEffect(state.rows[HomeRow.Trending]) {
+        val saved = entry.getString("home.hero")
+        val titles = (state.rows[HomeRow.Trending] as? SectionState.Content)?.value?.items.orEmpty()
+        (titles.firstOrNull { it.key == saved } ?: titles.firstOrNull())?.let { holder.selectHero(it) }
+    }
+    WebHomeContent(state, entry, session, { entry.putString("home.hero", null); holder.selectTrend(it) }, { holder.selectHero(it) }, holder::retry, holder::playTrailer, { navigate(it, false) })
 }
 
 @Composable
@@ -67,7 +72,7 @@ internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebS
     val scroll = savedScroll(saver, "page")
     var popularTv by remember { mutableStateOf(saver.getBoolean("home.popularTv") ?: false) }
     LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-home"), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        item("hero") { HomeHero(state, selectHero, playTrailer, navigate) }
+        item("hero") { HomeHero(state, { saver.putString("home.hero", it.key); selectHero(it) }, playTrailer, navigate) }
         item("trending") {
             Column {
                 Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -140,7 +145,7 @@ private fun HomeSection(row: HomeRow, section: SectionState<PagedItems>, saver: 
             items(section.value.items, key = { it.key }) { hero ->
                 when (hero) {
                     is Hero.OfPerson -> PersonCard(hero.person.name, hero.person.knownForDepartment, webPalette(hero.key), { navigate(hero.route()) }, imageUrl = webImage(hero.person.profilePath, "w185"))
-                    is Hero.OfTitle -> PosterCard(hero.title.title, hero.title.releaseDate, webPalette(hero.key), { navigate(hero.route()) }, imageUrl = webImage(hero.title.posterPath, "w342"), voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, badge = if (row == HomeRow.Upcoming) hero.title.releaseDate else null)
+                    is Hero.OfTitle -> PosterCard(hero.title.title, hero.title.releaseDate, webPalette(hero.key), { navigate(hero.route()) }, modifier = Modifier.testTag("home-${row.key}-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"), voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, badge = if (row == HomeRow.Upcoming) hero.title.releaseDate else null)
                 }
             }
         }

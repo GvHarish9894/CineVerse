@@ -1,6 +1,8 @@
 package com.techgv.cineverse.ui.web
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -10,6 +12,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,8 +31,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.mapNotNull
 
 @Composable
-fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: GenerationCounter) {
-    val navigation = remember { WebNavigation(BrowserHistory()) }
+fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: GenerationCounter, history: WebHistory = remember { BrowserHistory() }) {
+    val navigation = remember(history) { WebNavigation(history) }
     DisposableEffect(navigation) { onDispose { navigation.close() } }
     val entry by navigation.entry.collectAsState()
     val session by runtime.session.collectAsState()
@@ -105,8 +109,8 @@ internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: F
                 else {
                     NavigationMenu("Movies", listOf("Popular" to "popular", "Now playing" to "now_playing", "Upcoming" to "upcoming", "Top rated" to "top_rated").map { it.first to WebRoute.Browse("movie", it.second) }, navigate)
                     NavigationMenu("TV Shows", listOf("Popular" to "popular", "Airing today" to "airing_today", "On TV" to "on_the_air", "Top rated" to "top_rated").map { it.first to WebRoute.Browse("tv", it.second) }, navigate)
-                    TextButton(onClick = { navigate(WebRoute.People, false) }) { Text("People") }
-                    TextButton(onClick = { navigate(WebRoute.Library(), false) }) { Text("My Library") }
+                    NavButton("People") { navigate(WebRoute.People, false) }
+                    NavButton("My Library") { navigate(WebRoute.Library(), false) }
                 }
                 if (!narrow) Spacer(Modifier.weight(1f))
                 if (!narrow) SearchField(query, { query = it; edited = true }, searchFocus, Modifier.widthIn(max = 340.dp).weight(1f).onFocusChanged { searchFocused(it.isFocused) })
@@ -132,10 +136,21 @@ private fun SearchField(query: String, change: (String) -> Unit, focus: FocusReq
 private fun NavigationMenu(label: String, links: List<Pair<String, WebRoute>>, navigate: (WebRoute, Boolean) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { expanded = !expanded }) { Text("$label ▾", maxLines = 1) }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-            links.forEach { (text, route) -> DropdownMenuItem(text = { Text(text) }, onClick = { expanded = false; navigate(route, false) }) }
+        NavButton("$label ▾") { expanded = !expanded }
+        DropdownMenu(expanded, onDismissRequest = { expanded = false }, modifier = Modifier.onPointerEvent(PointerEventType.Exit) { expanded = false }) {
+            links.forEach { (text, route) ->
+                val source = remember { MutableInteractionSource() }
+                DropdownMenuItem(text = { Text(text) }, onClick = { expanded = false; navigate(route, false) },
+                    interactionSource = source, modifier = Modifier.focusRing(source, RoundedCornerShape(6.dp)))
+            }
         }
+    }
+}
+
+@Composable
+private fun NavButton(label: String, onClick: () -> Unit) {
+    Box(Modifier.heightIn(min = 48.dp).cvClickable(onClick, focusShape = RoundedCornerShape(8.dp)).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+        Text(label, maxLines = 1, style = MaterialTheme.typography.labelLarge)
     }
 }
 
