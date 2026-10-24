@@ -41,7 +41,7 @@ sealed interface TmdbError {
     data class Http(val httpCode: Int, val statusCode: Int?) : TmdbError
 }
 
-class TmdbException(val error: TmdbError, cause: Throwable? = null) : Exception(error.toString(), cause)
+open class TmdbException(val error: TmdbError, cause: Throwable? = null) : Exception(error.toString(), cause)
 
 private val sessionInvalidCodes = setOf(3, 14, 17, 37)
 private val userTokenInvalidCodes = setOf(35, 36)
@@ -96,6 +96,7 @@ suspend fun <T> tmdbCall(operation: TmdbOperation, block: suspend () -> T): T {
         block()
     } catch (e: Exception) {
         if (e is CancellationException) throw e
+        if (e is TmdbException) throw e
         throw TmdbException(e.toTmdbError(operation), e)
     }
     return try {
