@@ -3,6 +3,10 @@ package com.techgv.cineverse.presentation
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.*
 import com.techgv.cineverse.data.storage.StorageException
+import com.techgv.cineverse.data.tmdb.TmdbError
+import com.techgv.cineverse.data.tmdb.TmdbException
+import com.techgv.cineverse.domain.MediaType
+import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.LibraryKind
 import com.techgv.cineverse.domain.LibraryState
 import kotlinx.coroutines.*
@@ -48,6 +52,59 @@ class StorageConsumerRecoveryTest {
         holder.retryStorage(); runCurrent()
         assertNull(stores.offer("b"))
         assertTrue(account.writes.isEmpty())
+    }
+
+    @Test fun forcedRetryPermissionIsConsumedByPreflightAndNeverRestoredByStorageRecovery() = runTest {
+        val a = session()
+        val stores = InMemoryImportStores()
+        val guest = GuestLibrarySource(InMemoryGuestLibraryStore())
+        guest.write(title(1), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        val remote = FakeAccountLibrary()
+        var failPreflight = false; var failPost = true; var failDone = false; var posts = 0
+        val account = object : AccountLibrarySource by remote {
+            override suspend fun page(session: AuthSession, kind: LibraryKind, media: MediaType, page: Int): LibraryPage {
+                if (failPreflight) throw TmdbException(TmdbError.Network)
+                return remote.page(session, kind, media, page)
+            }
+            override suspend fun write(session: AuthSession, ref: MediaRef, kind: LibraryKind, target: LibraryState) {
+                posts++
+                if (failPost) throw TmdbException(TmdbError.Network)
+                remote.write(session, ref, kind, target)
+            }
+        }
+        val ledger = object : ImportLedgerStore by stores {
+            override suspend fun put(accountObjectId: String, ref: MediaRef, kind: LibraryKind, state: ImportStepState) {
+                if (state == ImportStepState.Done && failDone) throw StorageException("fixture")
+                stores.put(accountObjectId, ref, kind, state)
+            }
+        }
+        val importer = LibraryImporter(ledger, stores, guest, account, LibraryRepository(MutableStateFlow(a), guest, account))
+        var imported = 0
+        val holder = ImportLibraryStateHolder(importer, backgroundScope, { imported++ }, {})
+        holder.onAccount(a); holder.import(); runCurrent()
+        assertIs<ImportPrompt.Unconfirmed>(holder.prompt.first())
+        assertEquals(1, posts)
+        failPreflight = true
+        holder.retry(); runCurrent() // The warned authorization is consumed even before its failed preflight.
+        assertEquals(ImportPrompt.Failed, holder.prompt.first())
+        failPreflight = false
+        holder.retry(); runCurrent() // Ordinary failure recovery is not a fresh warned authorization.
+        assertEquals(1, posts)
+        assertIs<ImportPrompt.Unconfirmed>(holder.prompt.first())
+        failPost = false; failDone = true
+        holder.retry(); runCurrent() // Renewed explicit confirmation allows exactly this operation.
+        assertEquals(2, posts)
+        assertEquals(ImportPrompt.Failed, holder.prompt.first())
+        assertEquals(0, imported)
+        remote.watchlist.clear(); remote.invalidateLists(); failDone = false
+        holder.retryStorage(); runCurrent()
+        assertEquals(2, posts)
+        assertIs<ImportPrompt.Unconfirmed>(holder.prompt.first())
+        assertEquals(ImportStepState.Attempting, stores.state("aoid", title(1).ref, LibraryKind.WATCHLIST))
+        assertEquals(ImportOfferRecord("aoid", true, false), stores.offer("aoid"))
+        holder.retry(); runCurrent()
+        assertEquals(3, posts); assertEquals(1, imported)
+        assertNull(holder.prompt.first())
     }
 
     @Test fun resumeOfferReadFailureDoesNotConsumeOncePerLaunchAndRetryDoesNotPost() = runTest {

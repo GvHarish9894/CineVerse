@@ -44,7 +44,7 @@ class ImportLibraryStateHolder(
     private var job: Job? = null
     private var revision = 0L
     private enum class Action { Offer, KeepSeparate, Finish, Import }
-    private var failed: Pair<Action, Set<ImportStep>>? = null
+    private var failed: Action? = null
 
     /** The dialog to display: null while the Player is up. */
     val prompt: Flow<ImportPrompt?> = combine(dialog, playerActive) { d, player -> d.takeUnless { player } }
@@ -70,7 +70,8 @@ class ImportLibraryStateHolder(
 
     fun retry() {
         val failure = failed
-        if (failure != null) launch(failure.first, failure.second) else launch(Action.Import, unconfirmed)
+        val force = if (failure == null && dialog.value is ImportPrompt.Unconfirmed) unconfirmed else emptySet()
+        launch(failure ?: Action.Import, force)
     }
 
     /** Retries exactly the failed local operation; a failed offer/finish never starts account POSTs. */
@@ -91,6 +92,8 @@ class ImportLibraryStateHolder(
     private fun launch(action: Action, retry: Set<ImportStep> = emptySet()) {
         val c = account ?: return
         job?.cancel()
+        // Warned force permission belongs to this operation only, even if preflight or bookkeeping fails.
+        if (action == Action.Import) unconfirmed = emptySet()
         val ticket = ++revision
         job = scope.launch { perform(c, ticket, action, retry) }
     }
@@ -133,7 +136,7 @@ class ImportLibraryStateHolder(
             }
         } catch (failure: StorageException) {
             if (current()) {
-                failed = action to retry
+                failed = action
                 dialog.value = ImportPrompt.Failed
                 onStorageFailure(failure)
             }

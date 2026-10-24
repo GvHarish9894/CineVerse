@@ -91,8 +91,7 @@ class LibraryStateHolder(
                     }.catch { failure ->
                         if (failure !is StorageException) throw failure
                         onStorageFailure(failure)
-                        val error = LibraryGroup(SectionState.Error(SectionErrorKind.Generic))
-                        _state.update { it.copy(movies = error, tv = error) }
+                        MediaType.entries.forEach { media -> setGroup(media) { it.refreshFailed(SectionErrorKind.Generic) } }
                     } }.collect { (m, tv) -> _state.update { it.copy(movies = m, tv = tv) } }
                 } else {
                     MediaType.entries.forEach(::reload)
@@ -147,7 +146,7 @@ class LibraryStateHolder(
             } catch (failure: StorageException) {
                 if (generations.getValue(media).isCurrent(generation)) {
                     onStorageFailure(failure)
-                    setGroup(media) { it.copy(section = SectionState.Error(SectionErrorKind.Generic), loadingMore = false) }
+                    setGroup(media) { it.copy(loadingMore = false, moreError = SectionErrorKind.Generic) }
                 }
             } catch (e: TmdbException) {
                 if (generations.getValue(media).isCurrent(generation)) {
@@ -176,15 +175,12 @@ class LibraryStateHolder(
             } catch (failure: StorageException) {
                 if (generations.getValue(media).isCurrent(generation)) {
                     onStorageFailure(failure)
-                    setGroup(media) { it.copy(section = SectionState.Error(SectionErrorKind.Generic), loadingMore = false) }
+                    setGroup(media) { it.refreshFailed(SectionErrorKind.Generic) }
                 }
             } catch (e: TmdbException) {
                 if (!generations.getValue(media).isCurrent(generation)) return@launch
                 // A failed revalidation keeps the items already shown, marked stale with the error and a retry.
-                setGroup(media) {
-                    if (it.section is SectionState.Content) it.copy(loadingMore = false, refreshError = e.toSectionErrorKind())
-                    else LibraryGroup(SectionState.Error(e.toSectionErrorKind()))
-                }
+                setGroup(media) { it.refreshFailed(e.toSectionErrorKind()) }
             }
         }
     }
@@ -192,6 +188,10 @@ class LibraryStateHolder(
     private fun setGroup(media: MediaType, change: (LibraryGroup) -> LibraryGroup) = _state.update {
         if (media == MediaType.Movie) it.copy(movies = change(it.movies)) else it.copy(tv = change(it.tv))
     }
+
+    private fun LibraryGroup.refreshFailed(error: SectionErrorKind): LibraryGroup =
+        if (section is SectionState.Content) copy(loadingMore = false, refreshError = error)
+        else LibraryGroup(SectionState.Error(error))
 
     private fun List<LibraryEntry>.toSection(): SectionState<List<LibraryEntry>> =
         if (isEmpty()) SectionState.Empty else SectionState.Content(this)

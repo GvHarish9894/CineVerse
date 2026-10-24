@@ -51,11 +51,11 @@ class WebRuntime internal constructor(
         onImported = { completedImports.tryEmit(Unit) }, onStorageFailure = ::reportStorageFailure)
 
     /** Future shells supply their existing route saver and scoped holder lifetime, not another DI scope. */
-    fun libraryHolder(saver: StateSaver) =
-        LibraryStateHolder(library, saver, scope, ::reportStorageFailure)
+    fun libraryHolder(saver: StateSaver, ownerScope: CoroutineScope) =
+        LibraryStateHolder(library, saver, ownerScope, ::reportStorageFailure)
 
-    fun libraryActions(onOutcome: (LibraryWriteOutcome) -> Unit) =
-        LibraryActionsStateHolder(library, scope, scope, onOutcome, ::reportStorageFailure)
+    fun libraryActions(uiScope: CoroutineScope, onOutcome: (LibraryWriteOutcome) -> Unit) =
+        LibraryActionsStateHolder(library, scope, uiScope, onOutcome, ::reportStorageFailure)
 
     fun reportStorageFailure(failure: StorageException) {
         storageIssue.value = (failure as? BrowserStorageException)?.failure ?: BrowserStorageFailure.Unavailable

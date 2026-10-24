@@ -28,7 +28,10 @@ import kotlin.test.*
 
 /** Real graph/stores/bus/locks with only the remote server replaced. All persisted names are test-local. */
 class WebSharedModulesTest {
-    private class Fixture(val name: String = "cineverse.c4.test." + uniqueId()) {
+    private class Fixture(
+        val name: String = "cineverse.c4.test." + uniqueId(),
+        guestStore: (GuestLibraryStore) -> GuestLibraryStore = { it },
+    ) {
         val prefix = "$name.legacy."
         val channel = "$name.bus"
         val database = BrowserDatabase(name)
@@ -75,6 +78,7 @@ class WebSharedModulesTest {
             single { bus }
             single<HttpClient> { client }
             single<SettingsStore> { BrowserSettingsStore(prefix, database, bus) }
+            single<GuestLibraryStore> { guestStore(BrowserGuestLibraryStore(database, bus)) }
         }) }
         val koin get() = app.koin
         val runtime = koin.get<WebRuntime>()
@@ -83,9 +87,11 @@ class WebSharedModulesTest {
         val importer = koin.get<LibraryImporter>()
         val library = koin.get<LibraryRepository>()
         val scope = koin.get<CoroutineScope>(AppScope)
+        val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         fun count(path: String) = calls.count { it.url.encodedPath == path }
         suspend fun start() { runtime.start(); runtime.session.first { it is WebSessionState.Ready } }
         suspend fun close(delete: Boolean = true) {
+            uiScope.coroutineContext.job.cancelAndJoin()
             runtime.close(); app.close()
             if (delete) deleteDatabase(name).await()
             document.cookie = "cv_csrf=; Max-Age=0; Path=/"
@@ -222,7 +228,7 @@ class WebSharedModulesTest {
 
     @Test fun externalLibraryHintsReloadBoundLibraryWithoutRebroadcastAndUnknownLocalWritesNotifyPeers() = runTest { fixture { f ->
         f.start()
-        val holder = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()))
+        val holder = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), f.uiScope)
         holder.state.first { it.movies.section is SectionState.Empty }
         val path = "/api/account/movie/watchlist"
         val initial = f.count(path)
@@ -335,9 +341,9 @@ class WebSharedModulesTest {
         f.identity = null; f.start()
         f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
         val quota = failTransactions(f.name, "guest")
-        val holder = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()))
+        val holder = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), f.uiScope)
         val outcomes = mutableListOf<LibraryWriteOutcome>()
-        val actions = f.runtime.libraryActions(outcomes::add)
+        val actions = f.runtime.libraryActions(f.uiScope, outcomes::add)
         try {
             holder.state.first { it.movies.section is SectionState.Error }
             assertEquals(SectionState.Error(SectionErrorKind.Generic), holder.state.value.movies.section)
@@ -519,6 +525,143 @@ class WebSharedModulesTest {
             assertEquals(stable, peer.changes.value.session)
             assertEquals(1, f.count("/api/auth/logout"))
         } finally { peer.close() }
+    } }
+
+    @Test fun storageRetryDoesNotReuseForceAfterPostAndLedgerFailure() = runTest { fixture { f ->
+        val ref = MediaRef(MediaType.Movie, 7)
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        val controller = f.runtime.importController
+        controller.prompt.first { it is ImportPrompt.Ask }
+        f.postStatus = HttpStatusCode.ServiceUnavailable
+        controller.import()
+        controller.prompt.first { it is ImportPrompt.Unconfirmed }
+        assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
+        f.postStatus = HttpStatusCode.OK
+        val fault = failCommit(f.name, "ledger", "done")
+        try {
+            controller.retry() // New warned user authorization, not a storage recovery action.
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(2, f.calls.count { it.method == HttpMethod.Post })
+            assertEquals(ImportStepState.Attempting, f.koin.get<ImportLedgerStore>().state("a", ref, LibraryKind.WATCHLIST))
+        } finally { restore(fault) }
+        f.landed = false // A landed value may have been removed remotely.
+        controller.retryStorage()
+        val recovered = controller.prompt.first { it == null || it is ImportPrompt.Unconfirmed }
+        assertEquals(2, f.calls.count { it.method == HttpMethod.Post })
+        assertIs<ImportPrompt.Unconfirmed>(recovered)
+        assertEquals(ImportStepState.Attempting, f.koin.get<ImportLedgerStore>().state("a", ref, LibraryKind.WATCHLIST))
+        assertEquals(ImportOfferRecord("a", true, false), f.koin.get<ImportOfferStore>().offer("a"))
+        assertEquals(1, f.koin.get<GuestLibraryStore>().all().size)
+        controller.retry() // A subsequent NEW warned confirmation can authorize one later write.
+        controller.prompt.first { it == null }
+        assertEquals(3, f.calls.count { it.method == HttpMethod.Post })
+    } }
+
+    @Test fun guestLibraryStorageRefreshAndRepeatedRetryPreserveRealContentUntilRecoveryOrSelectionChange() = runTest { fixture { f ->
+        f.identity = null; f.start()
+        val target = LibraryState(true, true, false, null, emptySet())
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, target)
+        val holder = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), f.uiScope)
+        holder.state.first { it.movies.section is SectionState.Content }
+        val original = holder.state.value.movies.section
+        val fault = failTransactions(f.name, "guest")
+        try {
+            f.bus.publish(BrowserChangeTopic.Library)
+            holder.state.first { it.movies.refreshError != null || it.movies.section is SectionState.Error }
+            assertEquals(original, holder.state.value.movies.section)
+            assertEquals(SectionErrorKind.Generic, holder.state.value.movies.refreshError)
+            assertEquals(BrowserStorageFailure.Quota, f.runtime.storageFailure.value)
+            holder.retry(MediaType.Movie)
+            tick().await(); tick().await()
+            assertEquals(original, holder.state.value.movies.section)
+            assertEquals(SectionErrorKind.Generic, holder.state.value.movies.refreshError)
+            holder.selectTab(LibraryTab.Favourites)
+            holder.state.first { it.movies.section is SectionState.Error }
+            assertFalse(holder.state.value.movies.section is SectionState.Content)
+        } finally { restore(fault) }
+        holder.retry(MediaType.Movie)
+        holder.state.first { it.movies.section == SectionState.Empty }
+        holder.selectTab(LibraryTab.Watchlist)
+        holder.state.first { it.movies.section is SectionState.Content }
+        f.koin.get<GuestLibrarySource>().write(title(8), LibraryKind.WATCHLIST, target)
+        holder.state.first { (it.movies.section as? SectionState.Content)?.value?.size == 2 }
+        assertEquals(listOf(8, 7), (holder.state.value.movies.section as SectionState.Content).value.map { it.title.ref.id })
+        assertNull(holder.state.value.movies.refreshError)
+    } }
+
+    @Test fun ownerDisposalStopsAbandonedLibraryLoadsWhileTheGraphRemainsUsable() = runTest { fixture { f ->
+        f.start()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val replacementOwner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val path = "/api/account/movie/watchlist"
+        f.gatePath = path; f.gate = CompletableDeferred()
+        var canceled = false
+        f.onCancel = { canceled = true }
+        try {
+            f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), owner)
+            until { f.count(path) == 1 }
+            owner.cancel(); tick().await(); tick().await()
+            assertTrue(canceled, "screen-owned load must stop, not survive on appScope")
+            assertTrue(f.scope.isActive)
+            f.gate!!.complete(Unit)
+            f.bus.publish(BrowserChangeTopic.Library)
+            tick().await(); tick().await()
+            assertEquals(1, f.count(path), "abandoned holder must not reload")
+            val replacement = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), replacementOwner)
+            replacement.state.first { it.movies.section == SectionState.Empty }
+            assertEquals(2, f.count(path))
+        } finally { owner.cancel(); replacementOwner.cancel(); f.gate?.complete(Unit) }
+    } }
+
+    @Test fun ownerDisposalCancelsDialogReadButNotGraphOwnedGuestWrite() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var entered = 0; var canceledReads = 0
+        val f = Fixture(guestStore = { store -> object : GuestLibraryStore by store {
+            override fun observeTitle(ref: MediaRef): Flow<List<GuestLibraryRow>> = flow {
+                entered++
+                try { gate.await(); emitAll(store.observeTitle(ref)) }
+                finally { canceledReads++ }
+            }
+        } })
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            f.identity = null; f.start()
+            val outcomes = mutableListOf<LibraryWriteOutcome>()
+            val actions = f.runtime.libraryActions(owner, outcomes::add)
+            actions.openRate(title(7))
+            until { entered == 1 }
+            actions.toggleFavourite(title(7))
+            until { entered == 2 }
+            owner.cancel(); tick().await(); tick().await()
+            assertEquals(1, canceledReads, "only the UI dialog read is canceled; the app write waits")
+            assertTrue(outcomes.isEmpty())
+            gate.complete(Unit)
+            until { outcomes.size == 1 }
+            assertTrue(outcomes.single().result is LibraryWriteResult.Done)
+            assertNull(actions.ratePrompt.first())
+            assertEquals(LibraryKind.FAVOURITE, f.koin.get<GuestLibraryStore>().all().single().kind)
+            assertTrue(f.scope.isActive)
+        } finally { owner.cancel(); gate.complete(Unit); f.close() }
+    }
+
+    @Test fun graphCloseCancelsItsOutlivingWriteWithoutCancelingUnrelatedOwnerWork() = runTest { fixture { f ->
+        f.start()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val unrelated = owner.launch { awaitCancellation() }
+        val path = "/api/account/favorite"
+        f.gatePath = path; f.gate = CompletableDeferred()
+        var canceled = false
+        f.onCancel = { canceled = true }
+        try {
+            val actions = f.runtime.libraryActions(owner) { }
+            actions.onIdentity(f.identity)
+            actions.toggleFavourite(title(7))
+            until { f.count(path) == 1 }
+            f.runtime.close()
+            assertTrue(canceled)
+            assertTrue(owner.isActive); assertTrue(unrelated.isActive)
+        } finally { owner.cancel(); f.gate?.complete(Unit) }
     } }
 
     @Test fun concurrentApprovalVerificationCannotTurnSupersededBootstrapIntoVerifiedGuest() = runTest { fixture { f ->
