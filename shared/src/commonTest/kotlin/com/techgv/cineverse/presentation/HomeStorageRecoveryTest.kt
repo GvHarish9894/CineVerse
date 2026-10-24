@@ -31,16 +31,20 @@ class HomeStorageRecoveryTest {
         var failGenres = false
         var subscriptions = 0
         var readHook: (suspend () -> Unit)? = null
+        var observeHook: (suspend () -> Unit)? = null
+        var genreHook: (suspend () -> Unit)? = null
         val ticks = MutableStateFlow(0)
         val settings = flow {
             subscriptions++
             ticks.collect {
+                observeHook?.invoke()
                 if (failObserve) throw failure
                 emit(preferences)
             }
         }
         val transport = object : TmdbApi by api {
             override suspend fun genres(media: MediaType, language: String): GenreListDto {
+                genreHook?.invoke()
                 if (failGenres) throw failure
                 return api.genres(media, language)
             }
@@ -65,7 +69,7 @@ class HomeStorageRecoveryTest {
         assertEquals(SectionErrorKind.Generic, f.holder.uiState.value.genresError)
         assertTrue(f.holder.uiState.value.genres.isEmpty())
         assertNull(f.holder.uiState.value.hero)
-        assertTrue(f.reports.all { it === f.failure })
+        assertTrue(f.reports.all { it.message == f.failure.message })
         f.holder.retryStorage()
         advanceUntilIdle()
         assertEquals(2, f.subscriptions)
@@ -179,12 +183,98 @@ class HomeStorageRecoveryTest {
         advanceUntilIdle()
         assertTrue(f.holder.uiState.value.rows.values.all { it is SectionState.Content })
         assertEquals(SectionErrorKind.Generic, f.holder.uiState.value.genresError)
-        assertEquals(listOf(f.failure), f.reports)
+        assertEquals(listOf(f.failure.message), f.reports.map { it.message })
         f.failGenres = false
         f.holder.retryStorage()
         advanceUntilIdle()
         assertNull(f.holder.uiState.value.genresError)
         assertEquals(2, f.holder.uiState.value.genres.size)
+    }
+
+    @Test fun rowRetryRetriesTheFailedNextPageInsteadOfReplacingLoadedPages() = runTest {
+        val f = Fixture()
+        advanceUntilIdle()
+        f.failRead = true
+        f.holder.loadMore(HomeRow.Trending)
+        advanceUntilIdle()
+        f.holder.retry(HomeRow.Trending)
+        advanceUntilIdle()
+        assertEquals(1, f.page().page)
+        assertEquals(SectionErrorKind.Generic, f.page().moreError)
+        f.failRead = false
+        f.holder.retry(HomeRow.Trending)
+        advanceUntilIdle()
+        assertEquals(2, f.page().page)
+        assertEquals(6, f.page().items.size)
+        assertNull(f.page().moreError)
+    }
+
+    @Test fun staleAppSettingsFailureIsIgnoredAndExplicitRetryReestablishesObservation() = runTest {
+        val f = Fixture()
+        advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        f.observeHook = { gate.await(); throw f.failure }
+        f.signal()
+        runCurrent()
+        f.app.bump()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(f.reports.isEmpty())
+        assertNull(f.holder.uiState.value.settingsError)
+        f.observeHook = null
+        f.preferences = Settings(language = "hi-IN")
+        f.holder.retryStorage()
+        advanceUntilIdle()
+        assertEquals(2, f.subscriptions)
+        assertEquals("trending@hi-IN-1-0", (f.holder.uiState.value.hero as Hero.OfTitle).title.title)
+    }
+
+    @Test fun canceledObservationCannotReportIntoTheReplacementSubscription() = runTest {
+        val f = Fixture()
+        advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        f.observeHook = { withContext(NonCancellable) { gate.await(); throw f.failure } }
+        f.signal()
+        runCurrent()
+        f.holder.retryStorage()
+        runCurrent()
+        f.observeHook = null
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(2, f.subscriptions)
+        assertTrue(f.reports.isEmpty())
+        assertNull(f.holder.uiState.value.settingsError)
+        assertTrue(f.holder.uiState.value.rows.values.all { it is SectionState.Content })
+    }
+
+    @Test fun obsoleteGenresFailureCannotClobberNewLanguageOrReportIt() = runTest {
+        val f = Fixture()
+        val gate = CompletableDeferred<Unit>()
+        f.genreHook = { withContext(NonCancellable) { gate.await(); throw f.failure } }
+        runCurrent()
+        f.genreHook = null
+        f.preferences = Settings(language = "hi-IN")
+        f.signal()
+        runCurrent()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(mapOf(28 to "movie@hi-IN", 18 to "tv@hi-IN"), f.holder.uiState.value.genres)
+        assertNull(f.holder.uiState.value.genresError)
+        assertTrue(f.reports.isEmpty())
+    }
+
+    @Test fun staleAppGenresFailureReloadsWithoutReportingTheOldFailure() = runTest {
+        val f = Fixture()
+        val gate = CompletableDeferred<Unit>()
+        f.genreHook = { gate.await(); throw f.failure }
+        runCurrent()
+        f.genreHook = null
+        f.app.bump()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(2, f.holder.uiState.value.genres.size)
+        assertNull(f.holder.uiState.value.genresError)
+        assertTrue(f.reports.isEmpty())
     }
 
     @Test fun trailerStorageFailureClearsLoadingAndGenericRetryNeverReplaysIt() = runTest {
@@ -196,7 +286,7 @@ class HomeStorageRecoveryTest {
         advanceUntilIdle()
         assertEquals(listOf<TrailerEvent>(TrailerEvent.Failed), f.events)
         assertNull(f.holder.uiState.value.trailerLoading)
-        assertEquals(listOf(f.failure), f.reports)
+        assertEquals(listOf(f.failure.message), f.reports.map { it.message })
         f.failRead = false
         f.holder.retryStorage()
         advanceUntilIdle()
@@ -212,7 +302,7 @@ class HomeStorageRecoveryTest {
         f.holder.playTrailer(title(7))
         advanceUntilIdle()
         assertEquals(listOf<TrailerEvent>(TrailerEvent.Failed), f.events)
-        assertEquals(listOf(f.failure), f.reports)
+        assertEquals(listOf(f.failure.message), f.reports.map { it.message })
         assertNull(f.holder.uiState.value.trailerLoading)
         f.failObserve = false
         f.holder.retryStorage()
@@ -272,7 +362,7 @@ class HomeStorageRecoveryTest {
         val holder = HomeStateHolder(catalog, app, flow { throw bug }, SavedStateHandleStateSaver(SavedStateHandle()), owner, reports::add)
         advanceUntilIdle()
         assertEquals(9, errors.size) // seven rows, genres, observation
-        assertTrue(errors.all { it === bug })
+        assertTrue(errors.all { it is IllegalStateException && it.message == bug.message })
         holder.setActive(true)
         holder.playTrailer(title(7))
         advanceUntilIdle()
