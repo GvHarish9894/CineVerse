@@ -52,6 +52,19 @@ interface TmdbApi {
         page: Int,
     ): PageDto<MediaItemDto>
 
+    /** AND genre filter, typed ordering and pages 1..500. TV ignores region; no adult/vote threshold params. */
+    suspend fun discover(
+        media: MediaType,
+        genreIds: List<Int>,
+        sort: DiscoverSort,
+        language: String,
+        region: String?,
+        page: Int,
+    ): PageDto<MediaItemDto>
+
+    /** Language-independent keywords: movie keywords[] / TV results[], normalized without inventing data. */
+    suspend fun keywords(media: MediaType, id: Int): KeywordsDto
+
     suspend fun popularPeople(language: String, page: Int): PageDto<MediaItemDto>
 
     suspend fun movieDetail(

@@ -24,6 +24,21 @@ class ProxyTmdbApi(private val http: WebProxyHttp) : TmdbApi {
     override suspend fun tvList(list: TvList, language: String, timezone: String?, page: Int): PageDto<MediaItemDto> =
         call("tv/$list", "language" to language, "timezone" to timezone.takeIf { list.usesTimezone }, "page" to page)
 
+    override suspend fun discover(
+        media: MediaType,
+        genreIds: List<Int>,
+        sort: DiscoverSort,
+        language: String,
+        region: String?,
+        page: Int,
+    ): PageDto<MediaItemDto> =
+        call("discover/$media", *discoverQuery(media, genreIds, sort, language, region, page).toTypedArray())
+
+    override suspend fun keywords(media: MediaType, id: Int): KeywordsDto {
+        requireCatalogId(id)
+        return decodeKeywords(media, http.call("/api/tmdb/$media/$id/keywords"))
+    }
+
     override suspend fun popularPeople(language: String, page: Int): PageDto<MediaItemDto> =
         call("person/popular", "language" to language, "page" to page)
 
