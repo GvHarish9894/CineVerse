@@ -45,12 +45,17 @@ async function until(condition, description, milliseconds = 15000) {
 class Cdp {
     constructor(socket) {
         this.socket = socket; this.serial = 0; this.pending = new Map(); this.events = [];
+        this.fetches = new Set(); this.precedingFetches = new Set();
         socket.addEventListener('message', event => {
             const message = JSON.parse(event.data);
             if (message.id) {
                 const pending = this.pending.get(message.id); this.pending.delete(message.id);
                 if (message.error) pending.reject(Error(JSON.stringify(message.error))); else pending.resolve(message.result);
-            } else this.events.push(message);
+            } else {
+                if (message.method === 'Network.requestWillBeSent' && message.params.type === 'Fetch') this.fetches.add(message.params.requestId);
+                if (message.method === 'Network.loadingFinished' || message.method === 'Network.loadingFailed') this.fetches.delete(message.params.requestId);
+                this.events.push(message);
+            }
         });
     }
     static async connect(url) {
@@ -65,19 +70,32 @@ class Cdp {
     close() { this.socket.close(); }
 }
 
-function bootstrapFailures(events) {
+function bootstrapFailures(events, precedingFetches) {
     return events.filter(event => event.method === 'Runtime.exceptionThrown' ||
-        // Reload cancels the preceding document's catalog/font Fetch requests; missing assets still fail.
-        (event.method === 'Network.loadingFailed' && !(event.params.canceled && event.params.type === 'Fetch')) ||
+        // Ignore only Fetches already outstanding before navigation, never the new document's failures.
+        (event.method === 'Network.loadingFailed' && !(event.params.canceled && event.params.type === 'Fetch' && precedingFetches.has(event.params.requestId))) ||
         (event.method === 'Network.responseReceived' && event.params.response.status >= 400));
 }
 
+function checkFailureClassification() {
+    const preceding = new Set(['old']);
+    const failure = (requestId, canceled, type) => ({method: 'Network.loadingFailed', params: {requestId, canceled, type}});
+    assert.deepEqual(bootstrapFailures([failure('old', true, 'Fetch')], preceding), []);
+    for (const event of [failure('active', true, 'Fetch'), failure('old', false, 'Fetch'), failure('old', true, 'Script'),
+        {method: 'Runtime.exceptionThrown', params: {}}, {method: 'Network.responseReceived', params: {response: {status: 404}}}]) {
+        assert.deepEqual(bootstrapFailures([event], preceding), [event]);
+    }
+    console.log('PASS: preceding-only cancellation classification; active/non-canceled/non-Fetch/runtime/HTTP failures remain failures.');
+}
+
 async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRequired = true) {
-    const step = {label, expected, responses: []}; report.steps.push(step);
+    const precedingFetches = new Set(cdp.fetches);
+    cdp.precedingFetches = precedingFetches;
+    const step = {label, expected, responses: [], precedingFetches: [...precedingFetches]}; report.steps.push(step);
     cdp.events = [];
     await navigate();
     const tree = await until(async () => {
-        assert.deepEqual(bootstrapFailures(cdp.events), [], label + ': resource/runtime failure');
+        assert.deepEqual(bootstrapFailures(cdp.events, precedingFetches), [], label + ': resource/runtime failure');
         const tree = await cdp.call('Accessibility.getFullAXTree');
         const names = tree.nodes.filter(node => !node.ignored).map(node => node.name?.value);
         if (!names.includes(expected) || !names.includes('Sign in')) return false;
@@ -96,7 +114,7 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
     if (bootstrapRequired) assert.equal(wasm.length, 2, label + ': Kotlin and Skiko Wasm');
     assert.ok(wasm.every(response => response.status === 200 && response.mime === 'application/wasm'));
     assert.ok(step.responses.filter(response => response.url.includes('/composeResources/')).every(response => response.url.startsWith(origin + '/composeResources/') && response.status === 200 && response.mime !== 'text/html'));
-    assert.deepEqual(bootstrapFailures(cdp.events), []);
+    assert.deepEqual(bootstrapFailures(cdp.events, precedingFetches), []);
     fs.writeFileSync(path.join(artifacts, label + '-ax.json'), JSON.stringify(tree, null, 2));
     fs.writeFileSync(path.join(artifacts, label + '-events.json'), JSON.stringify(cdp.events, null, 2));
     const screenshot = await cdp.call('Page.captureScreenshot', {format: 'png'});
@@ -105,6 +123,7 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
 }
 
 (async () => {
+    checkFailureClassification();
     assert.ok(fs.existsSync(path.join(dist, 'index.html')), 'Build the production distribution first');
     assert.ok(process.env.CHROME_BIN, 'Set CHROME_BIN to the leased Chrome executable');
     const server = http.createServer(serve);
@@ -150,7 +169,7 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
         if (chrome && chrome.exitCode === null) { chrome.kill('SIGTERM'); await new Promise(resolve => chrome.once('exit', resolve)); }
         await new Promise(resolve => server.close(resolve));
         report.resourcesReleased = true;
-        report.failureEvents = pages.flatMap(cdp => bootstrapFailures(cdp.events));
+        report.failureEvents = pages.flatMap(cdp => bootstrapFailures(cdp.events, cdp.precedingFetches));
         fs.writeFileSync(path.join(artifacts, 'report.json'), JSON.stringify(report, null, 2));
         console.log('FIXTURE evidence: ' + artifacts);
     }
