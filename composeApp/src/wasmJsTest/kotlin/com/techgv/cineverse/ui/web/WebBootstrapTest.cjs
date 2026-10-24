@@ -220,13 +220,17 @@ function consumedApiAbort(event, cdp, expected, origin) {
     if (event.method !== 'Network.loadingFailed' || !event.params.canceled || event.params.type !== 'Fetch' ||
         request?.method !== 'GET' || request.frameId !== expected?.frameId || request.loaderId !== expected?.loaderId) return null;
     const url = new URL(request.url);
-    if (url.origin !== origin || !(url.pathname === '/api/session' || url.pathname.startsWith('/api/tmdb/'))) return null;
+    if (url.origin !== origin || url.pathname !== '/api/session') return null;
     const response = request.lifecycle.find(item => item.method === 'Network.responseReceived')?.response;
     if (!response || response.status < 200 || response.status >= 300 || response.mimeType !== 'application/json') return null;
     const starts = cdp.readTraces.filter(trace => trace.phase === 'fetch' && trace.isDefault && trace.url === request.url && trace.method === 'GET' &&
         trace.frameId === expected.frameId && trace.documentUrl === expected.url && trace.timeOrigin === expected.timeOrigin &&
         Math.abs(trace.timeOrigin + trace.at - request.wallTime * 1000) < 50);
     if (starts.length !== 1) return null;
+    const matchingRequests = [...cdp.requests.values()].filter(candidate => candidate.method === 'GET' && candidate.url === request.url &&
+        candidate.frameId === expected.frameId && candidate.loaderId === expected.loaderId &&
+        Math.abs(starts[0].timeOrigin + starts[0].at - candidate.wallTime * 1000) < 50);
+    if (matchingRequests.length !== 1 || matchingRequests[0].requestId !== request.requestId) return null;
     const traces = cdp.readTraces.filter(trace => trace.id === starts[0].id && trace.executionContextId === starts[0].executionContextId);
     const responseTrace = traces.find(trace => trace.phase === 'response');
     const end = traces.find(trace => trace.phase === 'end');
@@ -235,7 +239,7 @@ function consumedApiAbort(event, cdp, expected, origin) {
         responseTrace.sequence >= end.sequence || end.sequence >= abort.sequence || end.at > abort.at ||
         traces.some(trace => ['alreadyAborted', 'readRejected', 'fetchRejected'].includes(trace.phase))) return null;
     return {requestId: request.requestId, url: request.url, frameId: request.frameId, loaderId: request.loaderId,
-        documentUrl: expected.url, timeOrigin: expected.timeOrigin, end, abort, catalog: url.pathname.startsWith('/api/tmdb/')};
+        documentUrl: expected.url, timeOrigin: expected.timeOrigin, end, abort};
 }
 
 function checkConsumptionProof() {
@@ -245,9 +249,12 @@ function checkConsumptionProof() {
         lifecycle: [{method: 'Network.responseReceived', response: {status: 200, mimeType: 'application/json'}}]};
     const trace = {id: 1, executionContextId: 1, url: request.url, method: 'GET', isDefault: true, frameId: 'frame', documentUrl: expected.url, timeOrigin: 1000};
     const traces = [{...trace, phase: 'fetch', sequence: 1, at: 0}, {...trace, phase: 'response', status: 200, sequence: 2, at: 0.5}, {...trace, phase: 'end', sequence: 3, at: 1}, {...trace, phase: 'abort', sequence: 4, at: 2}];
-    const prove = (candidate = request, events = traces, failure = event, identity = expected) => consumedApiAbort(failure, {requests: new Map([['read', candidate]]), readTraces: events}, identity, 'http://fixture');
+    const prove = (candidate = request, events = traces, failure = event, identity = expected, others = []) =>
+        consumedApiAbort(failure, {requests: new Map([['read', candidate], ...others.map(other => [other.requestId, other])]), readTraces: events}, identity, 'http://fixture');
     assert.ok(prove());
+    assert.equal(prove(request, traces, event, expected, [{...request, requestId: 'other', wallTime: 1.01}]), null);
     for (const candidate of [{...request, method: 'POST'}, {...request, url: 'http://other/api/session'}, {...request, url: 'http://fixture/api/auth/start'},
+        {...request, url: 'http://fixture/api/tmdb/movie/popular'},
         {...request, loaderId: 'old'}, {...request, frameId: 'old'}, {...request, lifecycle: []},
         ...[199, 300, 500].map(status => ({...request, lifecycle: [{method: 'Network.responseReceived', response: {status, mimeType: 'application/json'}}]})),
         {...request, lifecycle: [{method: 'Network.responseReceived', response: {status: 200, mimeType: 'text/html'}}]}]) assert.equal(prove(candidate), null);
@@ -265,15 +272,13 @@ function checkConsumptionProof() {
     const document = {...expected, backendNodeId: 7};
     const sample = {state: 'Ready', before: document, after: document, axFrameId: 'frame', axUrl: expected.url, axBackendNodeId: 7, homeEmpty: true};
     assert.ok(validApplicationOutcome(proof, sample));
-    assert.ok(validApplicationOutcome({...proof, catalog: true}, sample));
     for (const outcome of [...['Checking', 'Failed', 'UnknownOrConflicting', 'RejectedIdentity'].map(state => ({...sample, state})),
         {...sample, before: {...document, loaderId: 'old'}}, {...sample, after: {...document, timeOrigin: 0}},
         {...sample, axFrameId: 'old'}, {...sample, axUrl: 'http://fixture/old'}, {...sample, axBackendNodeId: 8}, {...sample, axBackendNodeId: undefined},
         {...sample, after: {...document, backendNodeId: 8}}]) assert.equal(validApplicationOutcome(proof, outcome), false);
-    assert.equal(validApplicationOutcome({...proof, catalog: true}, {...sample, homeEmpty: false}), false);
     assert.equal(validApplicationOutcome(null, sample), false);
     assert.equal(validApplicationOutcome(proof, null), false);
-    console.log('PASS: completed-read policy rejects unknown/early/ambiguous/foreign/method/status/MIME/identity/state/empty-data failures.');
+    console.log('PASS: session-only completed-read policy rejects unknown/early/ambiguous/foreign/method/status/MIME/identity/state failures.');
 }
 
 function parsedHomeEmpty(tree) {
@@ -288,7 +293,7 @@ function validApplicationOutcome(proof, sample) {
     const expected = {frameId: proof.frameId, loaderId: proof.loaderId, url: proof.documentUrl, timeOrigin: proof.timeOrigin};
     return sameDocument(expected, sample.before) && sameDocument(expected, sample.after) && sample.axFrameId === expected.frameId &&
         sample.axUrl === expected.url && sample.axBackendNodeId !== undefined && sample.axBackendNodeId === sample.before.backendNodeId &&
-        sample.axBackendNodeId === sample.after.backendNodeId && (!proof.catalog || sample.homeEmpty === true);
+        sample.axBackendNodeId === sample.after.backendNodeId;
 }
 
 async function applicationSample(cdp, expected) {
