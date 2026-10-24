@@ -29,6 +29,10 @@ class WebRuntimeUiTest {
         var sessionReads = 0
         var catalogReads = 0
         var canceledReads = 0
+        var settingsSubscriptions = 0
+        var activeSettingsReaders = 0
+        var withTitles = false
+        val storageRevision = MutableStateFlow(0)
         var gate: CompletableDeferred<Unit>? = null
         private val values = object : SettingsValues {
             override fun string(key: String): String? = null
@@ -39,8 +43,14 @@ class WebRuntimeUiTest {
             single<CoroutineScope>(AppScope) { CoroutineScope(SupervisorJob() + Dispatchers.Unconfined) }
             single<SettingsStore> { object : SettingsStore {
                 override val data: Flow<SettingsValues> get() = flow {
-                    if (failSettings) throw BrowserStorageException(BrowserStorageFailure.Blocked)
-                    emit(values); awaitCancellation()
+                    settingsSubscriptions++
+                    activeSettingsReaders++
+                    try {
+                        storageRevision.collect {
+                            if (failSettings) throw BrowserStorageException(BrowserStorageFailure.Blocked)
+                            emit(values)
+                        }
+                    } finally { activeSettingsReaders-- }
                 }
                 override suspend fun edit(transform: (MutableSettingsValues) -> Unit) { error("No writes allowed in root fixture") }
             } }
@@ -57,6 +67,7 @@ class WebRuntimeUiTest {
                         session && failSession -> """{"error":"upstream_error"}"""
                         session -> """{"signedIn":false,"accountObjectId":null,"displayName":null,"sessionGeneration":"0"}"""
                         data.url.encodedPath.contains("/genre/") -> """{"genres":[]}"""
+                        withTitles && !data.url.encodedPath.contains("/person/") -> """{"page":1,"results":[{"id":7,"media_type":"movie","title":"Loaded film","name":"Loaded series","overview":"Retained public overview","vote_average":8.1,"vote_count":20}],"total_pages":1,"total_results":1}"""
                         else -> """{"page":1,"results":[],"total_pages":1,"total_results":0}"""
                     }
                     return HttpResponseData(if (session && failSession) HttpStatusCode.ServiceUnavailable else HttpStatusCode.OK,
@@ -109,4 +120,82 @@ class WebRuntimeUiTest {
             assertEquals("/people", history.url)
         } finally { f.close() }
     }
+
+    private fun ComposeUiTest.failTrendingRead(f: Fixture) {
+        onNodeWithText("Retained public overview").assertExists()
+        runOnIdle { f.failSettings = true }
+        onNodeWithTag("web-home").performScrollToIndex(1)
+        onNodeWithText("Today").assertIsDisplayed().performClick()
+        waitUntil(timeoutMillis = 10_000) { f.runtime.storageFailure.value == BrowserStorageFailure.Blocked }
+        onNodeWithTag("home-trending-recovery").assertExists()
+    }
+
+    private fun ComposeUiTest.retryWithin(tag: String) =
+        onNode(hasText("Retry") and hasAnyAncestor(hasTestTag(tag))).assertIsDisplayed().performClick()
+
+    @Test fun loadedHomeStorageRetryRecoversOwnerReadsWhenRecoveredPreferencesAreEqual() = runComposeUiTest {
+        val f = Fixture()
+        val history = FakeHistory()
+        try {
+            f.failSession = false; f.failSettings = false; f.withTitles = true
+            f.runtime.start()
+            setContent { WebApp(f.runtime, f.catalog, f.generation, history) }
+            onNodeWithText("Retained public overview").assertExists()
+            val settingsBefore = f.runtime.settingsHolder.state.value?.settings
+            failTrendingRead(f)
+            runOnIdle { f.storageRevision.value++ }
+            waitUntil(timeoutMillis = 10_000) { f.activeSettingsReaders == 0 }
+            onNodeWithTag("web-home").performScrollToIndex(3)
+            onNodeWithTag("home-popularMovies-movie:7").assertIsDisplayed()
+            val subscriptions = f.settingsSubscriptions
+            val reads = f.catalogReads
+            runOnIdle { f.failSettings = false } // No new settings emission: explicit recovery must re-subscribe.
+            onNodeWithTag("web-home").performScrollToIndex(0)
+            retryWithin("home-storage-recovery")
+            waitUntil(timeoutMillis = 10_000) { f.runtime.storageFailure.value == null && f.activeSettingsReaders >= 3 }
+            onNodeWithText("Retained public overview").assertExists()
+            assertEquals(settingsBefore, f.runtime.settingsHolder.state.value?.settings)
+            assertTrue(f.settingsSubscriptions > subscriptions)
+            assertEquals(reads + 1, f.catalogReads)
+            onNodeWithTag("home-storage-recovery").assertDoesNotExist()
+        } finally { f.close() }
+    }
+
+    @Test fun ordinaryRowRecoveryLeavesOnlyTruthfulHistoricalStorageNotice() = runComposeUiTest {
+        val f = Fixture()
+        val history = FakeHistory()
+        try {
+            f.failSession = false; f.failSettings = false; f.withTitles = true
+            f.runtime.start()
+            setContent { WebApp(f.runtime, f.catalog, f.generation, history) }
+            failTrendingRead(f)
+            runOnIdle { f.failSettings = false }
+            retryWithin("home-trending-recovery")
+            onNodeWithTag("home-trending-recovery").assertDoesNotExist()
+            onNodeWithTag("web-home").performScrollToIndex(0)
+            onNodeWithText("Retained public overview").assertExists()
+            assertEquals(BrowserStorageFailure.Blocked, f.runtime.storageFailure.value)
+            onNodeWithText("Last reported storage error: blocked access. Check browser storage access, then retry reads.").assertExists()
+        } finally { f.close() }
+    }
+
+    @Test fun retryAfterLeavingHomeCannotRestartDisposedHolderReads() = runComposeUiTest {
+        val f = Fixture()
+        val history = FakeHistory()
+        try {
+            f.failSession = false; f.failSettings = false; f.withTitles = true
+            f.runtime.start()
+            setContent { WebApp(f.runtime, f.catalog, f.generation, history) }
+            failTrendingRead(f)
+            onNodeWithText("People").performClick()
+            val reads = f.catalogReads
+            runOnIdle { f.failSettings = false }
+            onNodeWithText("Retry").assertIsDisplayed().performClick()
+            waitUntil(timeoutMillis = 10_000) { f.runtime.storageFailure.value == null }
+            assertEquals(reads, f.catalogReads)
+            assertEquals("/people", history.url)
+            onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertExists()
+        } finally { f.close() }
+    }
+
 }

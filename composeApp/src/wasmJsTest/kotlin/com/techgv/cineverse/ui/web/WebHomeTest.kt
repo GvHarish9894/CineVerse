@@ -31,7 +31,7 @@ class WebHomeTest {
         val plays = mutableListOf<Title>()
         val history = saver()
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            WebHomeContent(state(), history, WebSessionState.Ready(null), {}, {}, {}, { plays += it }, { routes += it })
+            WebHomeContent(state(), history, WebSessionState.Ready(null), {}, {}, {}, { plays += it }, { routes += it }, {}, null)
         }
         onNodeWithText("Public catalog overview").assertExists()
         onNodeWithText("Find a trailer").performClick()
@@ -50,7 +50,7 @@ class WebHomeTest {
         history.putInt("page.index", 1)
         val initial = state().copy(rows = state().rows + (HomeRow.Trending to SectionState.Error(SectionErrorKind.Offline)))
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            WebHomeContent(initial, history, WebSessionState.Checking, { trend = it }, {}, { retry = it }, {}, { route = it })
+            WebHomeContent(initial, history, WebSessionState.Checking, { trend = it }, {}, { retry = it }, {}, { route = it }, {}, null)
         }
         onNodeWithText("Today").assertIsDisplayed().performClick()
         onNodeWithText("Retry").assertIsDisplayed().performClick()
@@ -65,7 +65,7 @@ class WebHomeTest {
         val history = saver()
         val initial = state().copy(hero = null, rows = state().rows + (HomeRow.Trending to SectionState.Empty))
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            WebHomeContent(initial, history, WebSessionState.Ready(null), {}, {}, {}, {}, {})
+            WebHomeContent(initial, history, WebSessionState.Ready(null), {}, {}, {}, {}, {}, {}, null)
         }
         onNodeWithText("No trending titles available.").assertExists()
         onNodeWithTag("web-home").performScrollToNode(hasText("No titles yet"))
@@ -101,12 +101,12 @@ class WebHomeTest {
                 androidx.compose.material3.Text("Last good catalog")
             }
         }
-        onNodeWithText("Browser storage is full. Saved data is retained; writes are not replayed.").assertExists()
+        onNodeWithText("Last reported storage error: quota exhausted. Retry reads; writes are not replayed.").assertExists()
         onNodeWithText("Last good catalog").assertExists()
         onNodeWithText("Retry").performClick()
         assertEquals(1, retries)
         onNodeWithText("Last good catalog").assertExists()
-        onNodeWithText("Browser storage is full", substring = true).assertDoesNotExist()
+        onNodeWithText("Last reported storage error", substring = true).assertDoesNotExist()
     }
 
     @Test fun internalPlayerAndInvalidRoutesCannotPretendToPlayOrMutate() = runComposeUiTest {
@@ -116,4 +116,40 @@ class WebHomeTest {
         runOnIdle { route = WebRoute.NotFound }
         onNodeWithText("This URL is unknown or invalid. No account operation was performed.").assertExists()
     }
+
+    @Test fun settingsAndGenreDiagnosticsOfferExplicitRecoveryWithoutReplacingContent() = runComposeUiTest {
+        val history = saver()
+        var recoveries = 0
+        val failed = state().copy(settingsError = SectionErrorKind.Generic, genresError = SectionErrorKind.Generic)
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            WebHomeContent(failed, history, WebSessionState.Ready(null), {}, {}, {}, {}, {}, { recoveries++ }, null)
+        }
+        onNodeWithText("Saved preferences could not be observed. Last loaded values are retained.").assertExists()
+        onNodeWithText("Genre names could not be read. Loaded content is retained.").assertExists()
+        onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("home-settings-recovery"))).performClick()
+        onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("home-genres-recovery"))).performClick()
+        assertEquals(2, recoveries)
+        onNodeWithTag("web-home").performScrollToIndex(2)
+        onNodeWithText("Public catalog overview").assertExists()
+    }
+
+    @Test fun retainedRowErrorsKeepCardsAndRespectTypedRetryability() = runComposeUiTest {
+        val history = saver().apply { putInt("page.index", 1) }
+        var error by mutableStateOf(SectionErrorKind.Offline)
+        var retried: HomeRow? = null
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            val retained = state().copy(rows = state().rows + (HomeRow.Trending to SectionState.Content(
+                PagedItems(listOf(Hero.OfTitle(title)), 1, false, moreError = error))))
+            WebHomeContent(retained, history, WebSessionState.Ready(null), {}, {}, { retried = it }, {}, {}, {}, null)
+        }
+        onNodeWithTag("home-trending-movie:7").assertExists()
+        onNodeWithText("Offline. Check your connection. Loaded titles are retained.").assertExists()
+        onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("home-trending-recovery"))).assertIsDisplayed().performClick()
+        assertEquals(HomeRow.Trending, retried)
+        runOnIdle { error = SectionErrorKind.AppCredential }
+        onNodeWithTag("home-trending-movie:7").assertExists()
+        onNodeWithText("Catalog service configuration is unavailable. Loaded titles are retained.").assertExists()
+        onNodeWithTag("home-trending-recovery").assertDoesNotExist()
+    }
+
 }

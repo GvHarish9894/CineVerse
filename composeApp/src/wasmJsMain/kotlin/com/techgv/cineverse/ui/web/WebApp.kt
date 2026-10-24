@@ -54,14 +54,14 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                     } else false
                 }) {
                     WebHeader(entry.route, session, searchFocus, navigation::navigate) { searchFocused = it }
-                    WebStatus(session, storage, runtime::revalidateSession, runtime::retryStorage)
+                    WebStatus(session, storage.takeUnless { settings != null && entry.route == WebRoute.Home }, runtime::revalidateSession, runtime::retryStorage)
                     if (settings == null) {
                         Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                             Text(if (storage == null) "Reading saved settings…" else "Saved settings are unavailable. Retry storage to continue.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                         }
                     } else key(entry) {
                         if (entry.route == WebRoute.Home) {
-                            WebHome(entry, catalog, generation, settingsFlow, session, navigation::navigate)
+                            WebHome(entry, catalog, generation, settingsFlow, session, runtime, navigation::navigate)
                         } else WebPlaceholder(entry.route, navigation::navigate)
                     }
                 }
@@ -74,17 +74,22 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
 internal fun WebStatus(session: WebSessionState, storage: BrowserStorageFailure?, retrySession: () -> Unit, retryStorage: () -> Unit) {
     if (session == WebSessionState.Checking) Text("Checking session…", Modifier.padding(horizontal = 16.dp, vertical = 4.dp).semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall)
     if (session is WebSessionState.Failed) ErrorState("Session verification failed. Account actions are unavailable.", retrySession, Modifier.padding(8.dp))
-    if (storage != null) ErrorState(storageMessage(storage), retryStorage, Modifier.padding(8.dp))
+    if (storage != null) WebStorageNotice(storage, retryStorage)
 }
 
-internal fun storageMessage(failure: BrowserStorageFailure): String = when (failure) {
-    BrowserStorageFailure.Unsupported -> "Persistent browser storage is unsupported. No temporary library will be used."
-    BrowserStorageFailure.Blocked -> "Browser storage is blocked. Allow storage, then retry the read."
-    BrowserStorageFailure.Quota -> "Browser storage is full. Saved data is retained; writes are not replayed."
-    BrowserStorageFailure.Corrupt -> "Saved browser data could not be read. Nothing has been reset."
-    BrowserStorageFailure.Closed -> "Browser storage closed. Retry the read."
-    BrowserStorageFailure.Aborted -> "The storage operation was interrupted. Writes are not replayed."
-    BrowserStorageFailure.Unavailable -> "Browser storage is unavailable. Saved data has not been reset."
+internal fun storageMessage(failure: BrowserStorageFailure): String = "Last reported storage error: " + when (failure) {
+    BrowserStorageFailure.Unsupported -> "persistent storage unsupported. No temporary library is used."
+    BrowserStorageFailure.Blocked -> "blocked access. Check browser storage access, then retry reads."
+    BrowserStorageFailure.Quota -> "quota exhausted. Retry reads; writes are not replayed."
+    BrowserStorageFailure.Corrupt -> "unreadable saved data. Nothing has been reset."
+    BrowserStorageFailure.Closed -> "storage closed. Retry reads."
+    BrowserStorageFailure.Aborted -> "operation interrupted. Writes are not replayed."
+    BrowserStorageFailure.Unavailable -> "storage unavailable. Saved data has not been reset."
+}
+
+@Composable
+internal fun WebStorageNotice(failure: BrowserStorageFailure, retry: () -> Unit, modifier: Modifier = Modifier) {
+    ErrorState(storageMessage(failure), retry, modifier.padding(8.dp))
 }
 
 @Composable

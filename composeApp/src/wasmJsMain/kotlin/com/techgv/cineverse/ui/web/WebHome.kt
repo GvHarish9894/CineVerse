@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.tmdb.*
 import com.techgv.cineverse.di.WebSessionState
+import com.techgv.cineverse.di.WebRuntime
+import com.techgv.cineverse.data.storage.BrowserStorageFailure
 import com.techgv.cineverse.domain.*
 import com.techgv.cineverse.presentation.*
 import com.techgv.cineverse.ui.adaptive.*
@@ -40,9 +42,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
-internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: GenerationCounter, settings: Flow<Settings>, session: WebSessionState, navigate: (WebRoute, Boolean) -> Unit) {
+internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: GenerationCounter, settings: Flow<Settings>, session: WebSessionState, runtime: WebRuntime, navigate: (WebRoute, Boolean) -> Unit) {
     val scope = rememberCoroutineScope()
-    val holder = remember(entry) { HomeStateHolder(catalog, generation, settings, entry, scope) }
+    val holder = remember(entry) { HomeStateHolder(catalog, generation, settings, entry, scope, runtime::reportStorageFailure) }
+    val storage by runtime.storageFailure.collectAsState()
+    val retryStorage = {
+        runtime.retryStorage()
+        // Same-valued recovered preferences need not emit; retry this live owner's failed reads explicitly.
+        holder.retryStorage()
+    }
     val visible = rememberPageVisible()
     DisposableEffect(holder, visible) { holder.setActive(visible); onDispose { holder.setActive(false) } }
     val toasts = LocalToasts.current
@@ -62,16 +70,24 @@ internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: Ge
         val titles = (state.rows[HomeRow.Trending] as? SectionState.Content)?.value?.items.orEmpty()
         (titles.firstOrNull { it.key == saved } ?: titles.firstOrNull())?.let { holder.selectHero(it) }
     }
-    WebHomeContent(state, entry, session, { entry.putString("home.hero", null); holder.selectTrend(it) }, { holder.selectHero(it) }, holder::retry, holder::playTrailer, { navigate(it, false) })
+    WebHomeContent(state, entry, session, { entry.putString("home.hero", null); holder.selectTrend(it) }, { holder.selectHero(it) }, holder::retry, holder::playTrailer, { navigate(it, false) }, retryStorage, storage)
 }
 
 @Composable
 internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebSessionState,
                             selectTrend: (TrendingWindow) -> Unit, selectHero: (Hero) -> Unit,
-                            retry: (HomeRow) -> Unit, playTrailer: (Title) -> Unit, navigate: (WebRoute) -> Unit) {
+                            retry: (HomeRow) -> Unit, playTrailer: (Title) -> Unit, navigate: (WebRoute) -> Unit,
+                            retryStorage: () -> Unit, storage: BrowserStorageFailure?) {
     val scroll = savedScroll(saver, "page")
     var popularTv by remember { mutableStateOf(saver.getBoolean("home.popularTv") ?: false) }
     LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-home"), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        if (storage != null) item("storage-error") { WebStorageNotice(storage, retryStorage, Modifier.testTag("home-storage-recovery")) }
+        if (state.settingsError != null) item("settings-error") {
+            ErrorState("Saved preferences could not be observed. Last loaded values are retained.", retryStorage, Modifier.padding(16.dp).testTag("home-settings-recovery"))
+        }
+        if (state.genresError != null) item("genres-error") {
+            ErrorState("Genre names could not be read. Loaded content is retained.", retryStorage, Modifier.padding(16.dp).testTag("home-genres-recovery"))
+        }
         item("hero") { HomeHero(state, { saver.putString("home.hero", it.key); selectHero(it) }, playTrailer, navigate) }
         item("trending") {
             Column {
@@ -132,24 +148,32 @@ private fun HomeSection(row: HomeRow, section: SectionState<PagedItems>, saver: 
         SectionState.Empty -> Column(Modifier.padding(16.dp)) { SectionTitle(row.title); EmptyState("No titles yet", "There are no results for this section.") { PillButton("Refresh ${row.title}", { retry(row) }) } }
         is SectionState.Error -> Column(Modifier.padding(16.dp)) {
             SectionTitle(row.title)
-            val message = when (section.kind) {
-                SectionErrorKind.Offline -> "Offline. Check your connection."
-                SectionErrorKind.NotAvailable -> "This section is not available."
-                SectionErrorKind.AppCredential -> "Catalog service configuration is unavailable."
-                SectionErrorKind.SessionExpired -> "Session expired. Verification is required."
-                SectionErrorKind.Generic -> "Could not load this section."
-            }
-            if (section.kind.retryable) ErrorState(message, { retry(row) }) else Text(message)
+            val message = homeSectionError(section.kind)
+            if (section.kind.retryable) ErrorState(message, { retry(row) }, Modifier.testTag("home-${row.key}-recovery")) else Text(message)
         }
-        is SectionState.Content -> ScrollRow(row.title, state = savedScroll(saver, row.key)) {
-            items(section.value.items, key = { it.key }) { hero ->
-                when (hero) {
-                    is Hero.OfPerson -> PersonCard(hero.person.name, hero.person.knownForDepartment, webPalette(hero.key), { navigate(hero.route()) }, imageUrl = webImage(hero.person.profilePath, "w185"))
-                    is Hero.OfTitle -> PosterCard(hero.title.title, hero.title.releaseDate, webPalette(hero.key), { navigate(hero.route()) }, modifier = Modifier.testTag("home-${row.key}-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"), voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, badge = if (row == HomeRow.Upcoming) hero.title.releaseDate else null)
+        is SectionState.Content -> Column {
+            ScrollRow(row.title, state = savedScroll(saver, row.key)) {
+                items(section.value.items, key = { it.key }) { hero ->
+                    when (hero) {
+                        is Hero.OfPerson -> PersonCard(hero.person.name, hero.person.knownForDepartment, webPalette(hero.key), { navigate(hero.route()) }, imageUrl = webImage(hero.person.profilePath, "w185"))
+                        is Hero.OfTitle -> PosterCard(hero.title.title, hero.title.releaseDate, webPalette(hero.key), { navigate(hero.route()) }, modifier = Modifier.testTag("home-${row.key}-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"), voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, badge = if (row == HomeRow.Upcoming) hero.title.releaseDate else null)
+                    }
                 }
+            }
+            section.value.moreError?.let { error ->
+                val message = "${homeSectionError(error)} Loaded titles are retained."
+                if (error.retryable) ErrorState(message, { retry(row) }, Modifier.padding(16.dp).testTag("home-${row.key}-recovery")) else Text(message, Modifier.padding(16.dp))
             }
         }
     }
+}
+
+private fun homeSectionError(kind: SectionErrorKind): String = when (kind) {
+    SectionErrorKind.Offline -> "Offline. Check your connection."
+    SectionErrorKind.NotAvailable -> "This section is not available."
+    SectionErrorKind.AppCredential -> "Catalog service configuration is unavailable."
+    SectionErrorKind.SessionExpired -> "Session expired. Verification is required."
+    SectionErrorKind.Generic -> "Could not load this section."
 }
 
 @Composable
