@@ -6,8 +6,8 @@ import com.techgv.cineverse.auth.NativeApprovalHost
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.techgv.cineverse.ui.CineVerseApp
-import com.techgv.cineverse.ui.adaptive.ShellStyle
+import com.techgv.cineverse.di.nativeMobileApplication
+import com.techgv.cineverse.ui.mobile.NativeMobileApp
 
 class MainActivity : ComponentActivity() {
     private val approval by lazy { NativeApprovalHost() }
@@ -17,7 +17,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         approval.attach(this)
         intent?.dataString?.let(approval::onCallback)
-        setContent { CineVerseApp(ShellStyle.Mobile, nativeReadToken = BuildConfig.TMDB_READ_ACCESS_TOKEN.ifBlank { null }) }
+        val graph = nativeMobileApplication()
+        setContent { NativeMobileApp(graph) }
     }
 
     override fun onStart() {

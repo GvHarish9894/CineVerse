@@ -62,6 +62,22 @@ kotlin {
         commonMain {
             kotlin.srcDir(generateDesignTokens.flatMap { it.mainOutput })
         }
+        val nonWebMain by creating {
+            dependsOn(commonMain.get())
+        }
+        androidMain.get().dependsOn(nonWebMain)
+        iosMain.get().dependsOn(nonWebMain)
+        val nonWebTest by creating {
+            dependsOn(commonTest.get())
+        }
+        getByName("androidHostTest").dependsOn(nonWebTest)
+        iosTest.get().dependsOn(nonWebTest)
+        val mobileUiTest by creating {
+            dependsOn(nonWebTest)
+            dependencies { implementation(libs.compose.mp.ui.test) }
+        }
+        getByName("androidDeviceTest").dependsOn(mobileUiTest)
+        iosTest.get().dependsOn(mobileUiTest)
         getByName("androidHostTest").kotlin.srcDir(generateDesignTokens.flatMap { it.testOutput })
         // C1's boundary fixture uses native-only auth contracts; never compile it into wasm tests.
         val nativeApprovalTest by creating {
@@ -76,6 +92,7 @@ kotlin {
                 implementation(libs.compose.mp.ui.test)
             }
         }
+        mobileUiTest.dependsOn(composeUiTest)
         getByName("androidDeviceTest").dependsOn(composeUiTest)
         iosTest.get().dependsOn(composeUiTest)
         wasmJsTest.get().dependsOn(composeUiTest)
