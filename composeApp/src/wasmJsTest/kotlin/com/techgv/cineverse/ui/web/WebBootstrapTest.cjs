@@ -253,8 +253,11 @@ function checkConsumptionProof() {
         consumedApiAbort(failure, {requests: new Map([['read', candidate], ...others.map(other => [other.requestId, other])]), readTraces: events}, identity, 'http://fixture');
     assert.ok(prove());
     assert.equal(prove(request, traces, event, expected, [{...request, requestId: 'other', wallTime: 1.01}]), null);
+    for (const pathname of ['/api/tmdb/movie/popular', '/api/tmdb/genre/movie']) {
+        const url = 'http://fixture' + pathname;
+        assert.equal(prove({...request, url}, traces.map(item => ({...item, url}))), null);
+    }
     for (const candidate of [{...request, method: 'POST'}, {...request, url: 'http://other/api/session'}, {...request, url: 'http://fixture/api/auth/start'},
-        {...request, url: 'http://fixture/api/tmdb/movie/popular'},
         {...request, loaderId: 'old'}, {...request, frameId: 'old'}, {...request, lifecycle: []},
         ...[199, 300, 500].map(status => ({...request, lifecycle: [{method: 'Network.responseReceived', response: {status, mimeType: 'application/json'}}]})),
         {...request, lifecycle: [{method: 'Network.responseReceived', response: {status: 200, mimeType: 'text/html'}}]}]) assert.equal(prove(candidate), null);
