@@ -12,6 +12,26 @@ import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WebAuthRepositoryTest {
+    @Test fun verificationQueryDistinguishesInitialNullInvalidatedIdentityAndVerifiedTruth() = runTest {
+        var wire = GUEST
+        val auth = WebAuthRepository(mockHttp { respond(wire) })
+        assertFalse(auth.isVerifiedSession(null))
+        auth.revalidate()
+        assertTrue(auth.isVerifiedSession(null))
+        wire = sessionJson()
+        val a = auth.revalidate()!!
+        assertTrue(auth.isVerifiedSession(a)); assertFalse(auth.isVerifiedSession(null))
+        auth.invalidateSession()
+        assertEquals(a, auth.session.value)
+        assertFalse(auth.isVerifiedSession(a))
+        wire = sessionJson("B", "-9007199254740993")
+        val b = auth.revalidate()!!
+        assertTrue(auth.isVerifiedSession(b)); assertFalse(auth.isVerifiedSession(a))
+        wire = GUEST
+        auth.revalidate()
+        assertTrue(auth.isVerifiedSession(null)); assertFalse(auth.isVerifiedSession(b))
+    }
+
     @Test fun lateSessionSnapshotCannotOverwriteNewerTruth() = runTest {
         var count = 0; val reached = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
         val auth = WebAuthRepository(mockHttp {

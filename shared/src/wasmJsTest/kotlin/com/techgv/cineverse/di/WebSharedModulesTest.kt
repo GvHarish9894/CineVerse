@@ -42,6 +42,7 @@ class WebSharedModulesTest {
         var postStatus = HttpStatusCode.OK
         var landed = false
         var onCancel: () -> Unit = {}
+        var beforeSession: suspend (Int) -> Unit = {}
         val client = HttpClient(MockEngine { request ->
             calls += request
             val path = request.url.encodedPath
@@ -49,6 +50,7 @@ class WebSharedModulesTest {
             catch (canceled: CancellationException) { onCancel(); throw canceled }
             val response = when {
                 path == "/api/session" -> {
+                    beforeSession(calls.count { it.url.encodedPath == "/api/session" })
                     document.cookie = "cv_csrf=c4fixture; Path=/; SameSite=Strict"
                     if (sessionStatus == HttpStatusCode.OK) identity.json() else """{"error":"upstream_error"}"""
                 }
@@ -517,6 +519,48 @@ class WebSharedModulesTest {
             assertEquals(stable, peer.changes.value.session)
             assertEquals(1, f.count("/api/auth/logout"))
         } finally { peer.close() }
+    } }
+
+    @Test fun concurrentApprovalVerificationCannotTurnSupersededBootstrapIntoVerifiedGuest() = runTest { fixture { f ->
+        val bootstrap = CompletableDeferred<Unit>(); val approval = CompletableDeferred<Unit>()
+        f.beforeSession = { n -> if (n == 1) bootstrap.await() else if (n == 2) approval.await() }
+        f.runtime.start(); until { f.count("/api/session") == 1 }
+        val explicit = async { assertFailsWith<WebProxyException> { f.auth.onApprovalReturned() } }
+        until { f.count("/api/session") == 2 }
+        bootstrap.complete(Unit)
+        f.runtime.session.first { it is WebSessionState.Failed }
+        assertNull(f.auth.session.value)
+        assertFalse(f.auth.isVerifiedSession(null))
+        f.sessionStatus = HttpStatusCode.ServiceUnavailable
+        approval.complete(Unit); explicit.await()
+        tick().await()
+        assertTrue(f.runtime.session.value is WebSessionState.Failed)
+        f.sessionStatus = HttpStatusCode.OK; f.identity = session("b", generation = Long.MIN_VALUE)
+        f.runtime.revalidateSession()
+        assertEquals(WebSessionState.Ready(f.identity), f.runtime.session.first { it is WebSessionState.Ready })
+    } }
+
+    @Test fun concurrentAccountRecoveryCannotPublishUnverifiedOldIdentityOrRetargetItsWrite() = runTest { fixture { f ->
+        f.start(); val a = f.identity!!
+        val root = CompletableDeferred<Unit>(); val recovery = CompletableDeferred<Unit>()
+        f.beforeSession = { n -> if (n == 2) root.await() else if (n == 3) recovery.await() }
+        f.runtime.revalidateSession(); until { f.count("/api/session") == 2 }
+        val expiry = async { f.koin.get<AuthRepository>().expireSession(a) }
+        until { f.count("/api/session") == 3 }
+        root.complete(Unit)
+        f.runtime.session.first { it is WebSessionState.Failed }
+        assertFalse(f.auth.isVerifiedSession(a))
+        f.sessionStatus = HttpStatusCode.ServiceUnavailable
+        recovery.complete(Unit); expiry.await(); tick().await()
+        assertTrue(f.runtime.session.value is WebSessionState.Failed)
+        f.sessionStatus = HttpStatusCode.OK; f.identity = session("b", generation = Long.MIN_VALUE)
+        f.runtime.revalidateSession()
+        f.runtime.session.first { it == WebSessionState.Ready(f.identity) }
+        assertFailsWith<WebProxyException> { f.koin.get<AccountLibrarySource>().write(a, MediaRef(MediaType.Movie, 7),
+            LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet())) }
+        assertEquals(0, f.calls.count { it.method != HttpMethod.Get })
+        assertEquals(f.identity, f.auth.session.value)
+        assertTrue(f.auth.isVerifiedSession(f.identity))
     } }
 
     @Test fun closingCancelsInflightHttpBeforeClosingDatabaseAndBusAndLeavesOtherGraphAlive() = runTest {

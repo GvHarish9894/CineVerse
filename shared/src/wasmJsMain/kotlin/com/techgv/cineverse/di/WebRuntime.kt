@@ -43,6 +43,7 @@ class WebRuntime internal constructor(
     private var started = false
     private var closed = false
     private var syncing: Job? = null
+    private var syncRevision = 0L
     private val completedImports = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val importsCompleted: Flow<Unit> = completedImports.asSharedFlow()
     val settingsHolder = SettingsStateHolder(settings, browserAuth, scope, ::reportStorageFailure)
@@ -86,9 +87,11 @@ class WebRuntime internal constructor(
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             auth.session.drop(1).collect { identity ->
-                catalog.onAccountChanged()
-                invalidateLibrary()
-                sessionState.value = WebSessionState.Ready(identity)
+                if (sessionState.value != WebSessionState.Checking && auth.isVerifiedSession(identity)) {
+                    catalog.onAccountChanged()
+                    invalidateLibrary()
+                    sessionState.value = WebSessionState.Ready(identity)
+                }
             }
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -124,13 +127,16 @@ class WebRuntime internal constructor(
         importController.later()
         sessionState.value = WebSessionState.Checking
         syncing?.cancel()
+        val ticket = ++syncRevision
         syncing = scope.launch {
             try {
                 val identity = auth.revalidate() // Also bootstraps the readable CSRF cookie.
-                sessionState.value = WebSessionState.Ready(identity)
-                invalidateLibrary()
+                if (closed || ticket != syncRevision) return@launch
+                sessionState.value = if (auth.isVerifiedSession(identity)) WebSessionState.Ready(identity)
+                    else WebSessionState.Failed(TmdbError.Http(409, null))
+                if (sessionState.value is WebSessionState.Ready) invalidateLibrary()
             } catch (failure: TmdbException) {
-                sessionState.value = WebSessionState.Failed(failure.error)
+                if (!closed && ticket == syncRevision) sessionState.value = WebSessionState.Failed(failure.error)
             }
         }
     }
@@ -165,6 +171,7 @@ class WebRuntime internal constructor(
     fun stop() {
         if (closed) return
         closed = true
+        syncRevision++
         val job = scope.coroutineContext.job
         job.invokeOnCompletion {
             changes.close()
