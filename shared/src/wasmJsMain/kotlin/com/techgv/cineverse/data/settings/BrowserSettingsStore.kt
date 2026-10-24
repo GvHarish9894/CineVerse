@@ -1,11 +1,18 @@
+@file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+
 package com.techgv.cineverse.data.settings
 
-import kotlinx.browser.localStorage
+import com.techgv.cineverse.data.storage.BrowserChangeTopic
+import com.techgv.cineverse.data.storage.BrowserChanges
+import com.techgv.cineverse.data.storage.BrowserDatabase
+import com.techgv.cineverse.data.storage.BrowserStorageException
+import com.techgv.cineverse.data.storage.BrowserStorageFailure
+import com.techgv.cineverse.data.storage.decodeStorage
+import com.techgv.cineverse.data.storage.storageFailure
+import kotlinx.serialization.Serializable
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -13,31 +20,58 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 
-// DataStore 1.3.0's wasm storage is sessionStorage-only (b/441511612), so web settings use localStorage directly:
-// one item per key, the value as JSON (string / boolean / string array) so types round-trip.
-// shortcut: same-tab change notification only, no cross-tab `storage` events; upgrade with the web shell (P9).
-class BrowserSettingsStore(private val keyPrefix: String = "cineverse.") : SettingsStore {
-    private val writes = MutableStateFlow(0)
+/** Atomic settings blob; the legacy per-key localStorage snapshot is copied on first access and never deleted. */
+class BrowserSettingsStore(
+    private val keyPrefix: String = "cineverse.",
+    database: BrowserDatabase? = null,
+    changes: BrowserChanges? = null,
+) : SettingsStore {
+    private val ownsDatabase = database == null
+    private val ownsChanges = changes == null
+    private val database = database ?: BrowserDatabase()
+    private val changes = changes ?: BrowserChanges()
 
-    override val data: Flow<SettingsValues> = writes.map { JsonValues(read()) }.distinctUntilChanged()
+    /** Closes only default-owned resources; injected database/bus belong to the composition root. */
+    fun close() {
+        if (ownsDatabase) database.close()
+        if (ownsChanges) changes.close()
+    }
+    override val data: Flow<SettingsValues> = this.changes.changes
+        .map { it.settings to it.revalidate }.distinctUntilChanged()
+        .map { JsonValues(snapshot()) }.distinctUntilChanged()
 
-    // Single-threaded: nothing runs between the read and the writes, so the edit is atomic within this tab.
     override suspend fun edit(transform: (MutableSettingsValues) -> Unit) {
-        val before = read()
-        val values = MutableJsonValues(before.toMutableMap())
-        transform(values)
-        (before.keys - values.map.keys).forEach { localStorage.removeItem(keyPrefix + it) }
-        values.map.forEach { (key, value) -> if (before[key] != value) localStorage.setItem(keyPrefix + key, value.toString()) }
-        writes.update { it + 1 }
+        database.edit("settings", keyPrefix, onCommitted = { changes.publish(BrowserChangeTopic.Settings) }) { stored ->
+            val values = MutableJsonValues(read(stored).toMutableMap())
+            transform(values)
+            Json.encodeToString(values.map)
+        }
     }
 
-    private fun read(): Map<String, JsonElement> = buildMap {
-        for (i in 0 until localStorage.length) {
-            val item = localStorage.key(i) ?: continue
-            if (!item.startsWith(keyPrefix)) continue
-            val value = localStorage.getItem(item)?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() } ?: continue
-            put(item.removePrefix(keyPrefix), value)
+    private suspend fun snapshot(): Map<String, JsonElement> {
+        database.read("settings", keyPrefix)?.let { return read(it) }
+        // Recheck inside the write transaction: another tab may already have migrated/edited.
+        database.edit("settings", keyPrefix) { stored -> Json.encodeToString(read(stored)) }
+        return read(database.read("settings", keyPrefix)!!)
+    }
+
+    private fun read(stored: String?): Map<String, JsonElement> {
+        val values: Map<String, JsonElement> = if (stored != null) decodeStorage(stored) else {
+            val legacy = decodeStorage<LegacySnapshot>(legacySnapshot(keyPrefix))
+            legacy.error?.let { throw storageFailure(it) }
+            decodeStorage(legacy.value!!)
         }
+        if (values.values.any { !valid(it) }) throw BrowserStorageException(BrowserStorageFailure.Corrupt)
+        return values
+    }
+
+    @Serializable
+    private data class LegacySnapshot(val value: String? = null, val error: String? = null)
+
+    private fun valid(value: JsonElement): Boolean = when (value) {
+        is JsonPrimitive -> value.isString || value.booleanOrNull != null
+        is JsonArray -> value.all { it is JsonPrimitive && it.isString }
+        else -> false
     }
 
     private open class JsonValues(val map: Map<String, JsonElement>) : SettingsValues {
@@ -56,3 +90,18 @@ class BrowserSettingsStore(private val keyPrefix: String = "cineverse.") : Setti
         override fun remove(key: String) { mutable.remove(key) }
     }
 }
+
+@JsFun("""prefix => {
+    try {
+        const values = Object.create(null);
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key?.startsWith(prefix)) {
+                const raw = localStorage.getItem(key);
+                if (raw !== null) values[key.slice(prefix.length)] = JSON.parse(raw);
+            }
+        }
+        return JSON.stringify({value:JSON.stringify(values)});
+    } catch (error) { return JSON.stringify({error:error instanceof SyntaxError ? 'Corrupt' : error.name}); }
+}""")
+private external fun legacySnapshot(prefix: String): String
