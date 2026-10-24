@@ -71,6 +71,11 @@ class WebAuthRepository(private val http: WebProxyHttp) : AuthRepository {
         }
     }
 
+    /** Root status must distinguish a verified guest from an unverified/superseded null snapshot. */
+    internal fun isVerifiedSession(expected: AuthSession?): Boolean = synchronized(lock) {
+        verified && current.value == expected
+    }
+
     internal fun capture(expected: AuthSession): Long = synchronized(lock) {
         if (!verified || current.value != expected) throw staleWebSession()
         revision

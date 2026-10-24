@@ -34,6 +34,11 @@ sealed interface ImportResult {
     data object Superseded : ImportResult
 }
 
+/** Serializes the complete operation, including preflight reads and durable bookkeeping. */
+fun interface ImportOperationGuard {
+    suspend fun run(operation: suspend () -> ImportResult): ImportResult
+}
+
 /**
  * §8.3 guest → account import: read all six lists first; union for watchlist / favourites, TMDB's rating wins;
  * per title rating → favourite → watchlist, watchlist only after the rating step is confirmed. The ledger
@@ -46,6 +51,7 @@ class LibraryImporter(
     private val guest: GuestLibrarySource,
     private val account: AccountLibrarySource,
     private val repository: LibraryRepository,
+    private val guard: ImportOperationGuard = ImportOperationGuard { it() },
 ) {
     /** Accounts whose resume prompt this process already offered ("once per launch"). */
     private val resumeOffered = mutableSetOf<String>()
@@ -55,8 +61,9 @@ class LibraryImporter(
         val offer = offers.offer(aoid)
         return when {
             offer == null -> guest.all().map { it.title.ref }.toSet().size.takeIf { it > 0 }?.let { ImportOffer.Ask(it) }
-            offer.imported && !offer.complete && resumeOffered.add(aoid) -> {
+            offer.imported && !offer.complete && aoid !in resumeOffered -> {
                 val left = guest.all().filter { ledger.state(aoid, it.title.ref, it.kind) != ImportStepState.Done }
+                resumeOffered.add(aoid)
                 ImportOffer.Resume(left.map { it.title.ref }.toSet().size)
             }
             else -> null
@@ -72,7 +79,10 @@ class LibraryImporter(
      * Runs (or resumes) the import. [retry]: unconfirmed steps the user chose to write again after the
      * warning that items removed on TMDB may be re-added.
      */
-    suspend fun import(c: AuthSession, retry: Set<ImportStep> = emptySet()): ImportResult {
+    suspend fun import(c: AuthSession, retry: Set<ImportStep> = emptySet()): ImportResult =
+        guard.run { importGuarded(c, retry) }
+
+    private suspend fun importGuarded(c: AuthSession, retry: Set<ImportStep>): ImportResult {
         val aoid = c.accountObjectId.value
         offers.put(ImportOfferRecord(aoid, imported = true, complete = false))
         account.invalidateLists() // rule 1 reads TMDB, not the 10-min list cache

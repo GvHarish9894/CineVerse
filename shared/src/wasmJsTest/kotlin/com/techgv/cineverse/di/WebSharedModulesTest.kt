@@ -1,53 +1,802 @@
+@file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+
 package com.techgv.cineverse.di
 
+import androidx.lifecycle.SavedStateHandle
 import com.techgv.cineverse.data.auth.AuthRepository
-import com.techgv.cineverse.data.auth.WebAuthRepositoryStub
-import com.techgv.cineverse.data.settings.BrowserSettingsStore
-import com.techgv.cineverse.data.settings.SettingsRepository
-import com.techgv.cineverse.data.settings.SettingsStore
-import com.techgv.cineverse.data.tmdb.Transport
+import com.techgv.cineverse.data.auth.AuthSession
+import com.techgv.cineverse.data.library.*
+import com.techgv.cineverse.data.settings.*
+import com.techgv.cineverse.data.storage.*
+import com.techgv.cineverse.data.tmdb.*
+import com.techgv.cineverse.data.web.*
+import com.techgv.cineverse.domain.*
+import com.techgv.cineverse.presentation.*
 import com.techgv.cineverse.util.GenerationCounter
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.toList
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.*
+import io.ktor.client.request.HttpRequestData
+import io.ktor.http.*
+import kotlinx.browser.document
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.test.runTest
 import org.koin.dsl.koinApplication
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import org.koin.dsl.module
+import kotlin.js.Promise
+import kotlin.test.*
 
+/** Real graph/stores/bus/locks with only the remote server replaced. All persisted names are test-local. */
 class WebSharedModulesTest {
-    @Test
-    fun everyDefinitionResolvesWithTheWebPlatformModule() {
-        val app = koinApplication { modules(sharedModules(WebConfig(proxyBaseUrl = "/api"))) }
-        try {
-            val resolved = app.koin.resolveEveryDefinition()
-            val expected = listOf(
-                GenerationCounter::class, CoroutineScope::class, SettingsRepository::class, SettingsStore::class,
-                Transport.Proxy::class, AuthRepository::class,
-            )
-            assertTrue(resolved.containsAll(expected), "missing ${expected - resolved.toSet()}")
-            assertIs<BrowserSettingsStore>(app.koin.get<SettingsStore>())
-            assertIs<WebAuthRepositoryStub>(app.koin.get<AuthRepository>())
-            assertEquals("/api", app.koin.get<Transport.Proxy>().baseUrl)
-        } finally {
-            app.close()
+    private class Fixture(
+        val name: String = "cineverse.c4.test." + uniqueId(),
+        guestStore: (GuestLibraryStore) -> GuestLibraryStore = { it },
+    ) {
+        val prefix = "$name.legacy."
+        val channel = "$name.bus"
+        val database = BrowserDatabase(name)
+        val bus = BrowserChanges(channel)
+        val calls = mutableListOf<HttpRequestData>()
+        var identity: AuthSession? = session("a", generation = Long.MAX_VALUE)
+        var sessionStatus = HttpStatusCode.OK
+        var gatePath: String? = null
+        var gate: CompletableDeferred<Unit>? = null
+        var postCheck: suspend () -> Unit = {}
+        var postStatus = HttpStatusCode.OK
+        var landed = false
+        var onCancel: () -> Unit = {}
+        var beforeSession: suspend (Int) -> Unit = {}
+        val client = HttpClient(MockEngine { request ->
+            calls += request
+            val path = request.url.encodedPath
+            try { if (path == gatePath) gate?.await() }
+            catch (canceled: CancellationException) { onCancel(); throw canceled }
+            val response = when {
+                path == "/api/session" -> {
+                    beforeSession(calls.count { it.url.encodedPath == "/api/session" })
+                    document.cookie = "cv_csrf=c4fixture; Path=/; SameSite=Strict"
+                    if (sessionStatus == HttpStatusCode.OK) identity.json() else """{"error":"upstream_error"}"""
+                }
+                path == "/api/auth/start" -> {
+                    assertEquals("c4fixture", request.headers["X-CV-CSRF"])
+                    """{"approveUrl":"https://www.themoviedb.org/auth/access?request_token=fixture","attemptId":"fixture"}"""
+                }
+                request.method != HttpMethod.Get -> {
+                    postCheck()
+                    if (postStatus == HttpStatusCode.OK) landed = true
+                    """{"status_code":1,"success":true}"""
+                }
+                path.startsWith("/api/account/states/") -> """{"watchlist":$landed,"favorite":false,"rated":false}"""
+                path.startsWith("/api/tmdb/genre/") -> """{"genres":[]}"""
+                else -> """{"page":1,"results":[],"total_pages":1,"total_results":0}"""
+            }
+            respond(response, if (path == "/api/session") sessionStatus else if (request.method != HttpMethod.Get) postStatus else HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "application/json"))
+        })
+        val app = koinApplication { modules(sharedModules(WebConfig("/api")) + module {
+            single { database }
+            single { bus }
+            single<HttpClient> { client }
+            single<SettingsStore> { BrowserSettingsStore(prefix, database, bus) }
+            single<GuestLibraryStore> { guestStore(BrowserGuestLibraryStore(database, bus)) }
+        }) }
+        val koin get() = app.koin
+        val runtime = koin.get<WebRuntime>()
+        val auth = koin.get<WebAuthRepository>()
+        val settings = koin.get<SettingsRepository>()
+        val importer = koin.get<LibraryImporter>()
+        val library = koin.get<LibraryRepository>()
+        val scope = koin.get<CoroutineScope>(AppScope)
+        val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        fun count(path: String) = calls.count { it.url.encodedPath == path }
+        suspend fun start() { runtime.start(); runtime.session.first { it is WebSessionState.Ready } }
+        suspend fun close(delete: Boolean = true) {
+            uiScope.coroutineContext.job.cancelAndJoin()
+            runtime.close(); app.close()
+            if (delete) deleteDatabase(name).await()
+            document.cookie = "cv_csrf=; Max-Age=0; Path=/"
         }
     }
 
-    @Test
-    fun theAuthStubIsAlwaysAGuestAndSignOutChangesNothing() = runTest {
-        val auth = WebAuthRepositoryStub()
-        assertNull(auth.session.first())
-        var signedOutLocally = false
-        auth.signOut { signedOutLocally = true }
-        assertTrue(signedOutLocally)
-        assertNull(auth.session.first())
-        assertEquals(emptyList(), auth.sessionExpired.toList())
-        val error = assertFailsWith<UnsupportedOperationException> { auth.createRequestCode() }
-        assertTrue("P9 via /api/auth" in error.message.orEmpty())
+    private suspend fun fixture(block: suspend (Fixture) -> Unit) {
+        val f = Fixture()
+        try { block(f) } finally { f.close() }
+    }
+
+    @Test fun everyDefinitionResolvesAndGraphsShareOnlyDurableData() = runTest {
+        val a = Fixture(); val b = Fixture(a.name)
+        try {
+            val resolved = a.koin.resolveEveryDefinition()
+            assertTrue(resolved.containsAll(listOf(WebRuntime::class, LibraryImporter::class, BrowserImportStore::class,
+                CatalogRepository::class, TmdbCache::class, WebAuthRepository::class, HttpClient::class)))
+            assertTrue(resolved.none { it.simpleName.orEmpty().contains("Credential") || it.simpleName.orEmpty().contains("Room") })
+            assertSame(a.runtime.settingsHolder, a.koin.get<SettingsStateHolder>())
+            assertSame(a.runtime.importController, a.koin.get<ImportLibraryStateHolder>())
+            assertSame(a.koin.get<BrowserImportStore>(), a.koin.get<ImportLedgerStore>())
+            assertSame<Any>(a.koin.get<ImportLedgerStore>(), a.koin.get<ImportOfferStore>())
+            assertSame(a.koin.get<BrowserAuthRepository>(), a.koin.get<AuthRepository>())
+            assertSame(a.koin.get<BrowserAccountLibrarySource>(), a.koin.get<AccountLibrarySource>())
+            assertNotSame(a.database, b.database); assertNotSame(a.bus, b.bus)
+            assertNotSame(a.runtime, b.runtime); assertNotSame(a.auth, b.auth)
+            assertNotSame(a.scope, b.scope); assertNotSame(a.koin.get<TmdbCache>(), b.koin.get<TmdbCache>())
+            assertNotSame(a.koin.get<GenerationCounter>(), b.koin.get<GenerationCounter>())
+            a.start(); b.start()
+            a.settings.update { it.copy(language = "ta-IN") }
+            assertEquals("ta-IN", b.settings.current().language)
+            a.runtime.close(); a.app.close()
+            val closedRevision = a.bus.changes.value
+            val before = b.count("/api/session")
+            focus()
+            until { b.count("/api/session") > before }
+            assertEquals(closedRevision, a.bus.changes.value)
+            assertTrue(b.scope.isActive)
+            b.settings.update { it.copy(region = "US") }
+            assertEquals("US", b.settings.current().region)
+        } finally { a.close(delete = false); b.close() }
+    }
+
+    @Test fun fixedSameOriginConfigRejectsPretendBaseUrls() {
+        assertEquals("/api", WebConfig("/api").proxyBaseUrl)
+        listOf("/api/", "https://other.invalid/api", "/custom").forEach {
+            assertFailsWith<IllegalArgumentException> { WebConfig(it) }
+        }
+    }
+
+    @Test fun startupIsAuthoritativeIdempotentAndBootstrapsInitialCsrf() = runTest { fixture { f ->
+        assertEquals(WebSessionState.Checking, f.runtime.session.value)
+        f.start(); f.runtime.start()
+        assertEquals(WebSessionState.Ready(f.identity), f.runtime.session.value)
+        assertEquals(1, f.count("/api/session"))
+        assertEquals("fixture", f.runtime.startApproval().attemptId)
+        assertEquals(1, f.count("/api/auth/start"))
+        assertEquals(f.identity, f.auth.session.value)
+        assertFailsWith<UnsupportedOperationException> { f.koin.get<AuthRepository>().createRequestCode() }
+    } }
+
+    @Test fun startupFailureIsNotSignedOutAndExplicitRetryFetchesTruth() = runTest { fixture { f ->
+        f.sessionStatus = HttpStatusCode.ServiceUnavailable
+        f.runtime.start()
+        f.runtime.session.first { it is WebSessionState.Failed }
+        assertFalse(f.runtime.session.value is WebSessionState.Ready)
+        assertNull(f.auth.session.value)
+        f.sessionStatus = HttpStatusCode.OK
+        f.runtime.revalidateSession()
+        assertEquals(WebSessionState.Ready(f.identity), f.runtime.session.first { it is WebSessionState.Ready })
+    } }
+
+    @Test fun localAndPeerContentSettingsInvalidateCacheGenerationAndVisibleHolderWithoutEcho() = runTest { fixture { f ->
+        f.identity = null; f.start()
+        f.settings.current()
+        val generation = f.koin.get<GenerationCounter>()
+        val holder = SearchStateHolder(f.koin.get(), generation, f.settings.settings,
+            SavedStateHandleStateSaver(SavedStateHandle()), f.scope)
+        holder.results.first { it is SectionState.Content || it is SectionState.Empty }
+        val before = generation.current
+        val trending = "/api/tmdb/trending/all/week"
+        val initial = f.count(trending)
+        f.settings.update { it.copy(language = "ta-IN", region = "US", includeAdult = true) }
+        until { generation.current > before && f.count(trending) > initial }
+        assertEquals("ta-IN", f.calls.last { it.url.encodedPath == trending }.url.parameters["language"])
+        val peer = realm()
+        try {
+            val current = generation.current
+            val revision = f.bus.changes.value.settings
+            peerWrite(peer, f.name, "settings", f.prefix, """{"language":"hi-IN","region":"GB","include_adult":false}""", f.channel, "Settings").await()
+            until { generation.current > current && f.bus.changes.value.settings > revision }
+            until { f.calls.last { it.url.encodedPath == trending }.url.parameters["language"] == "hi-IN" }
+            val stable = f.bus.changes.value
+            val fetched = f.count(trending)
+            tick().await(); tick().await()
+            assertEquals(stable, f.bus.changes.value)
+            assertEquals(fetched, f.count(trending))
+        } finally { removeRealm(peer) }
+    } }
+
+    @Test fun incomingSessionFocusAndVisibilityHintsDropSignedLongStaleReadsAndWritesWithoutEcho() = runTest { fixture { f ->
+        f.start()
+        val source = f.koin.get<AccountLibrarySource>()
+        val a = f.identity!!
+        val path = "/api/account/states/movie/7"
+        f.gatePath = path; f.gate = CompletableDeferred()
+        val pending = async { assertFailsWith<WebProxyException> { source.states(a, MediaRef(MediaType.Movie, 7)) } }
+        until { f.count(path) == 1 }
+        f.identity = session("b", generation = Long.MIN_VALUE)
+        val peer = realm()
+        try {
+            peerHint(peer, f.channel, "Session").await()
+            until { f.auth.session.value == f.identity }
+            f.gate!!.complete(Unit)
+            assertEquals("stale_session", pending.await().code)
+            val posts = f.calls.count { it.method != HttpMethod.Get }
+            assertFailsWith<WebProxyException> { source.write(a, MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST,
+                LibraryState(true, true, false, null, emptySet())) }
+            assertEquals(posts, f.calls.count { it.method != HttpMethod.Get })
+            val current = f.identity!!
+            source.write(current, MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST,
+                LibraryState(true, true, false, null, emptySet()))
+            assertEquals(Long.MIN_VALUE.toString(), f.calls.last { it.method == HttpMethod.Post }.headers["X-CV-Expected-Session-Generation"])
+            until { f.runtime.session.value is WebSessionState.Ready }
+            val count = f.count("/api/session")
+            focus(); until { f.count("/api/session") > count }
+            val afterFocus = f.count("/api/session")
+            visibility(); until { f.count("/api/session") > afterFocus }
+            tick().await(); val stable = f.bus.changes.value; val calls = f.count("/api/session")
+            tick().await(); tick().await()
+            assertEquals(stable, f.bus.changes.value); assertEquals(calls, f.count("/api/session"))
+        } finally { f.gate?.complete(Unit); removeRealm(peer) }
+    } }
+
+    @Test fun externalLibraryHintsReloadBoundLibraryWithoutRebroadcastAndUnknownLocalWritesNotifyPeers() = runTest { fixture { f ->
+        f.start()
+        val holder = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), f.uiScope)
+        holder.state.first { it.movies.section is SectionState.Empty }
+        val path = "/api/account/movie/watchlist"
+        val initial = f.count(path)
+        val revision = f.library.listRevision.value
+        val peer = BrowserChanges(f.channel)
+        try {
+            peer.publish(BrowserChangeTopic.Library)
+            until { f.count(path) > initial && f.library.listRevision.value > revision }
+            tick().await(); val stable = peer.changes.value
+            tick().await(); tick().await()
+            assertEquals(stable, peer.changes.value)
+            f.postStatus = HttpStatusCode.ServiceUnavailable
+            val notice = async { peer.changes.first { it.library > stable.library } }
+            assertFailsWith<WebProxyException> { f.koin.get<AccountLibrarySource>().write(f.identity!!,
+                MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet())) }
+            notice.await()
+            val settled = peer.changes.value
+            tick().await(); tick().await()
+            assertEquals(settled, peer.changes.value)
+        } finally { peer.close() }
+    } }
+
+    @Test fun actualBoundControllerWaitsForPeerLockBeforeAnyImportReadAndCancellationReleasesQueuedAndHeldLocks() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        val controller = f.koin.get<ImportLibraryStateHolder>()
+        controller.prompt.first { it is ImportPrompt.Ask }
+        val peer = realm()
+        val held = holdLock(peer, f.name + ".import").await()
+        try {
+            controller.import()
+            tick().await()
+            assertEquals(0, f.calls.count { it.url.encodedPath.startsWith("/api/account/") })
+            assertNull(f.koin.get<ImportOfferStore>().offer("a"))
+            controller.later() // Queued lock request is canceled, not leaked.
+            tick().await()
+            releaseLock(held)
+            tick().await()
+            assertEquals(0, f.calls.count { it.url.encodedPath.startsWith("/api/account/") })
+            var attempted = false
+            f.postCheck = {
+                val connection = BrowserDatabase(f.name)
+                try {
+                    assertEquals(ImportStepState.Attempting, BrowserImportStore(connection).state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+                    attempted = true
+                } finally { connection.close() }
+                awaitCancellation()
+            }
+            controller.import()
+            until { attempted }
+            controller.later() // Cancel after Attempting, while POST outcome is unknown.
+            tick().await()
+            assertEquals(ImportStepState.Attempting, f.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+            val acquired = holdLock(peer, f.name + ".import").await()
+            releaseLock(acquired)
+            // A direct caller of the ACTUAL bound importer is guarded too, not just the controller.
+            val second = holdLock(peer, f.name + ".import").await()
+            val count = f.calls.size
+            val direct = async { f.importer.import(f.identity!!) }
+            tick().await(); assertEquals(count, f.calls.size)
+            direct.cancelAndJoin(); releaseLock(second)
+        } finally { releaseLock(held); removeRealm(peer) }
+    } }
+
+    @Test fun boundImporterPersistsAttemptingBeforePostAndReopenReconcilesWithoutBlindReplay() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        f.postCheck = {
+            val connection = BrowserDatabase(f.name)
+            try { assertEquals(ImportStepState.Attempting, BrowserImportStore(connection).state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST)) }
+            finally { connection.close() }
+        }
+        assertEquals(1, (f.importer.import(f.identity!!) as ImportResult.Done).written)
+        assertEquals(ImportStepState.Done, f.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+        f.runtime.close(); f.app.close()
+        val reopened = Fixture(f.name)
+        try {
+            reopened.start()
+            assertEquals(0, (reopened.importer.import(reopened.identity!!) as ImportResult.Done).written)
+            assertEquals(0, reopened.calls.count { it.method != HttpMethod.Get })
+            assertEquals(1, reopened.koin.get<GuestLibraryStore>().all().size)
+        } finally { reopened.close(delete = false) }
+    } }
+
+    @Test fun blockedSettingsReadStaysUnknownThenRetryReadsRealValuesAndQuotaWriteRetainsThem() = runTest { fixture { f ->
+        val blocked = failOpen(f.name)
+        val observed = f.scope.launch { f.runtime.settingsHolder.state.collect() }
+        try {
+            f.runtime.start()
+            f.runtime.storageFailure.first { it == BrowserStorageFailure.Blocked }
+            assertNull(f.runtime.settingsHolder.state.value)
+        } finally { restore(blocked) }
+        f.runtime.retryStorage()
+        until { f.runtime.settingsHolder.state.value != null }
+        f.runtime.settingsHolder.cycle(Choice.Language, 1)
+        until { f.runtime.settingsHolder.state.value?.settings?.language == "hi-IN" }
+        val quota = failTransactions(f.name, "settings")
+        try {
+            f.runtime.settingsHolder.toggle(Toggle.Adult)
+            f.runtime.storageFailure.first { it == BrowserStorageFailure.Quota }
+            assertFalse(f.runtime.settingsHolder.state.value!!.settings.includeAdult)
+        } finally { restore(quota) }
+        f.runtime.retryStorage()
+        f.runtime.settingsHolder.toggle(Toggle.Adult)
+        until { f.runtime.settingsHolder.state.value?.settings?.includeAdult == true }
+        observed.cancelAndJoin()
+    } }
+
+    @Test fun quotaGuestFlowAndMutationSurfaceTypedFailureAndExplicitRetryRestartsActualConsumers() = runTest { fixture { f ->
+        f.identity = null; f.start()
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        val quota = failTransactions(f.name, "guest")
+        val holder = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), f.uiScope)
+        val outcomes = mutableListOf<LibraryWriteOutcome>()
+        val actions = f.runtime.libraryActions(f.uiScope, outcomes::add)
+        try {
+            holder.state.first { it.movies.section is SectionState.Error }
+            assertEquals(SectionState.Error(SectionErrorKind.Generic), holder.state.value.movies.section)
+            assertEquals(BrowserStorageFailure.Quota, f.runtime.storageFailure.value)
+            actions.toggleFavourite(title(7))
+            until { outcomes.isNotEmpty() }
+            assertTrue(outcomes.single().result is LibraryWriteResult.Failed)
+        } finally { restore(quota) }
+        holder.retry(MediaType.Movie)
+        holder.state.first { it.movies.section is SectionState.Content }
+        actions.toggleFavourite(title(7))
+        until { outcomes.size == 2 }
+        assertTrue(outcomes.last().result is LibraryWriteResult.Done)
+        assertEquals(2, f.koin.get<GuestLibraryStore>().all().size)
+    } }
+
+    @Test fun importOfferAndKeepSeparateStorageFailuresRetryOnlyTheFailedOperationWithoutFalseSuccess() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        val quota = failTransactions(f.name, "offers")
+        try {
+            f.start()
+            f.runtime.importController.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(BrowserStorageFailure.Quota, f.runtime.storageFailure.value)
+        } finally { restore(quota) }
+        f.runtime.importController.retryStorage()
+        f.runtime.importController.prompt.first { it is ImportPrompt.Ask }
+        val failedWrite = failTransactions(f.name, "offers")
+        try {
+            f.runtime.importController.keepSeparate()
+            f.runtime.importController.prompt.first { it == ImportPrompt.Failed }
+        } finally { restore(failedWrite) }
+        assertNull(f.koin.get<ImportOfferStore>().offer("a"))
+        f.runtime.importController.retryStorage()
+        f.runtime.importController.prompt.first { it == null }
+        assertEquals(ImportOfferRecord("a", false, true), f.koin.get<ImportOfferStore>().offer("a"))
+        assertEquals(0, f.calls.count { it.method != HttpMethod.Get })
+    } }
+
+    @Test fun missingWebLocksFailsTheBoundImportVisiblyAndRetryWorksAfterRecovery() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        f.runtime.importController.prompt.first { it is ImportPrompt.Ask }
+        val unavailable = disableLocks()
+        try {
+            f.runtime.importController.import()
+            f.runtime.importController.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(BrowserStorageFailure.Unsupported, f.runtime.storageFailure.value)
+            assertEquals(0, f.calls.count { it.method != HttpMethod.Get })
+        } finally { restore(unavailable) }
+        f.runtime.importController.retryStorage()
+        f.runtime.importController.prompt.first { it == null }
+        assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
+    } }
+
+    @Test fun settingsReadFailureRetainsPriorRealValuesAndRetryResubscribes() = runTest { fixture { f ->
+        f.identity = null; f.start()
+        val observer = f.scope.launch { f.runtime.settingsHolder.state.collect() }
+        f.settings.update { it.copy(language = "ml-IN", region = "GB", includeAdult = true) }
+        until { f.runtime.settingsHolder.state.value?.settings?.language == "ml-IN" }
+        val real = f.runtime.settingsHolder.state.value
+        val fault = failTransactions(f.name, "settings")
+        try {
+            f.bus.publish(BrowserChangeTopic.Settings)
+            f.runtime.storageFailure.first { it == BrowserStorageFailure.Quota }
+            assertEquals(real, f.runtime.settingsHolder.state.value)
+        } finally { restore(fault) }
+        f.settings.update { it.copy(language = "ta-IN") }
+        tick().await()
+        assertEquals(real, f.runtime.settingsHolder.state.value) // The failed upstream really needs a new subscription.
+        f.runtime.retryStorage()
+        until { f.runtime.settingsHolder.state.value?.settings?.language == "ta-IN" }
+        observer.cancelAndJoin()
+    } }
+
+    @Test fun ledgerFailuresBeforeAndAfterPostAreVisibleAndRetryReconcilesWithoutReplay() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        val controller = f.koin.get<ImportLibraryStateHolder>()
+        controller.prompt.first { it is ImportPrompt.Ask }
+        var completed = 0
+        val observer = f.scope.launch(start = CoroutineStart.UNDISPATCHED) { f.runtime.importsCompleted.collect { completed++ } }
+        val beforePost = failCommit(f.name, "ledger", "attempting")
+        try {
+            controller.import()
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(0, f.calls.count { it.method == HttpMethod.Post })
+            assertEquals(0, completed)
+        } finally { restore(beforePost) }
+        val afterPost = failCommit(f.name, "ledger", "done")
+        try {
+            controller.retryStorage()
+            until { f.calls.count { it.method == HttpMethod.Post } == 1 }
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(ImportStepState.Attempting, f.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+            assertEquals(0, completed)
+        } finally { restore(afterPost) }
+        controller.retryStorage()
+        controller.prompt.first { it == null }
+        until { completed == 1 }
+        assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
+        assertEquals(ImportStepState.Done, f.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+        observer.cancelAndJoin()
+    } }
+
+    @Test fun finishFailureRetriesOnlyFinishAndNeverClaimsImportedOrRepostsUnknownWrites() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        val controller = f.runtime.importController
+        controller.prompt.first { it is ImportPrompt.Ask }
+        f.postStatus = HttpStatusCode.ServiceUnavailable
+        controller.import()
+        controller.prompt.first { it is ImportPrompt.Unconfirmed }
+        assertEquals(ImportOfferRecord("a", true, false), f.koin.get<ImportOfferStore>().offer("a"))
+        val fault = failCommit(f.name, "offers", "complete")
+        try {
+            controller.close()
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(BrowserStorageFailure.Quota, f.runtime.storageFailure.value)
+        } finally { restore(fault) }
+        controller.retryStorage()
+        controller.prompt.first { it == null }
+        assertEquals(ImportOfferRecord("a", true, true), f.koin.get<ImportOfferStore>().offer("a"))
+        assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
+        assertEquals(ImportStepState.Attempting, f.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+    } }
+
+    @Test fun completionBookkeepingFailureCannotReportSuccessUntilDurableFinishRetry() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        val controller = f.runtime.importController
+        controller.prompt.first { it is ImportPrompt.Ask }
+        var completed = 0
+        val observer = f.scope.launch(start = CoroutineStart.UNDISPATCHED) { f.runtime.importsCompleted.collect { completed++ } }
+        val fault = failCommit(f.name, "offers", "complete")
+        try {
+            controller.import()
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(0, completed)
+            assertEquals(ImportOfferRecord("a", true, false), f.koin.get<ImportOfferStore>().offer("a"))
+        } finally { restore(fault) }
+        controller.retryStorage()
+        controller.prompt.first { it == null }
+        until { completed == 1 }
+        assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
+        observer.cancelAndJoin()
+    } }
+
+    @Test fun unknownAttemptSurvivesReopenAndReconcilesAbsentThenLandedWithoutBlindPost() = runTest { fixture { f ->
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start(); f.postStatus = HttpStatusCode.ServiceUnavailable
+        val unknown = f.importer.import(f.identity!!) as ImportResult.Done
+        assertEquals(1, unknown.unconfirmed.size)
+        f.runtime.close(); f.app.close()
+        val reopened = Fixture(f.name)
+        try {
+            reopened.start()
+            val absent = reopened.importer.import(reopened.identity!!) as ImportResult.Done
+            assertEquals(1, absent.unconfirmed.size)
+            assertEquals(0, reopened.calls.count { it.method == HttpMethod.Post })
+            reopened.landed = true // Authoritative reconciliation now confirms that the earlier unknown POST landed.
+            val reconciled = reopened.importer.import(reopened.identity!!) as ImportResult.Done
+            assertTrue(reconciled.unconfirmed.isEmpty())
+            assertEquals(0, reopened.calls.count { it.method == HttpMethod.Post })
+            assertEquals(ImportStepState.Done, reopened.koin.get<ImportLedgerStore>().state("a", MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST))
+        } finally { reopened.close(delete = false) }
+    } }
+
+    @Test fun actualSettingsConsumerSignOutPublishesOneLocalSessionHintWithoutEcho() = runTest { fixture { f ->
+        f.start()
+        val peer = BrowserChanges(f.channel)
+        try {
+            val before = peer.changes.value.session
+            f.runtime.settingsHolder.signOut()
+            peer.changes.first { it.session > before }
+            tick().await()
+            val stable = peer.changes.value.session
+            tick().await(); tick().await()
+            assertEquals(before + 1, stable)
+            assertEquals(stable, peer.changes.value.session)
+            assertEquals(1, f.count("/api/auth/logout"))
+        } finally { peer.close() }
+    } }
+
+    @Test fun storageRetryDoesNotReuseForceAfterPostAndLedgerFailure() = runTest { fixture { f ->
+        val ref = MediaRef(MediaType.Movie, 7)
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet()))
+        f.start()
+        val controller = f.runtime.importController
+        controller.prompt.first { it is ImportPrompt.Ask }
+        f.postStatus = HttpStatusCode.ServiceUnavailable
+        controller.import()
+        controller.prompt.first { it is ImportPrompt.Unconfirmed }
+        assertEquals(1, f.calls.count { it.method == HttpMethod.Post })
+        f.postStatus = HttpStatusCode.OK
+        val fault = failCommit(f.name, "ledger", "done")
+        try {
+            controller.retry() // New warned user authorization, not a storage recovery action.
+            controller.prompt.first { it == ImportPrompt.Failed }
+            assertEquals(2, f.calls.count { it.method == HttpMethod.Post })
+            assertEquals(ImportStepState.Attempting, f.koin.get<ImportLedgerStore>().state("a", ref, LibraryKind.WATCHLIST))
+        } finally { restore(fault) }
+        f.landed = false // A landed value may have been removed remotely.
+        controller.retryStorage()
+        val recovered = controller.prompt.first { it == null || it is ImportPrompt.Unconfirmed }
+        assertEquals(2, f.calls.count { it.method == HttpMethod.Post })
+        assertIs<ImportPrompt.Unconfirmed>(recovered)
+        assertEquals(ImportStepState.Attempting, f.koin.get<ImportLedgerStore>().state("a", ref, LibraryKind.WATCHLIST))
+        assertEquals(ImportOfferRecord("a", true, false), f.koin.get<ImportOfferStore>().offer("a"))
+        assertEquals(1, f.koin.get<GuestLibraryStore>().all().size)
+        controller.retry() // A subsequent NEW warned confirmation can authorize one later write.
+        controller.prompt.first { it == null }
+        assertEquals(3, f.calls.count { it.method == HttpMethod.Post })
+    } }
+
+    @Test fun guestLibraryStorageRefreshAndRepeatedRetryPreserveRealContentUntilRecoveryOrSelectionChange() = runTest { fixture { f ->
+        f.identity = null; f.start()
+        val target = LibraryState(true, true, false, null, emptySet())
+        f.koin.get<GuestLibrarySource>().write(title(7), LibraryKind.WATCHLIST, target)
+        val holder = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), f.uiScope)
+        holder.state.first { it.movies.section is SectionState.Content }
+        val original = holder.state.value.movies.section
+        val fault = failTransactions(f.name, "guest")
+        try {
+            f.bus.publish(BrowserChangeTopic.Library)
+            holder.state.first { it.movies.refreshError != null || it.movies.section is SectionState.Error }
+            assertEquals(original, holder.state.value.movies.section)
+            assertEquals(SectionErrorKind.Generic, holder.state.value.movies.refreshError)
+            assertEquals(BrowserStorageFailure.Quota, f.runtime.storageFailure.value)
+            holder.retry(MediaType.Movie)
+            tick().await(); tick().await()
+            assertEquals(original, holder.state.value.movies.section)
+            assertEquals(SectionErrorKind.Generic, holder.state.value.movies.refreshError)
+            holder.selectTab(LibraryTab.Favourites)
+            holder.state.first { it.movies.section is SectionState.Error }
+            assertFalse(holder.state.value.movies.section is SectionState.Content)
+        } finally { restore(fault) }
+        holder.retry(MediaType.Movie)
+        holder.state.first { it.movies.section == SectionState.Empty }
+        holder.selectTab(LibraryTab.Watchlist)
+        holder.state.first { it.movies.section is SectionState.Content }
+        f.koin.get<GuestLibrarySource>().write(title(8), LibraryKind.WATCHLIST, target)
+        holder.state.first { (it.movies.section as? SectionState.Content)?.value?.size == 2 }
+        assertEquals(listOf(8, 7), (holder.state.value.movies.section as SectionState.Content).value.map { it.title.ref.id })
+        assertNull(holder.state.value.movies.refreshError)
+    } }
+
+    @Test fun ownerDisposalStopsAbandonedLibraryLoadsWhileTheGraphRemainsUsable() = runTest { fixture { f ->
+        f.start()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val replacementOwner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val path = "/api/account/movie/watchlist"
+        f.gatePath = path; f.gate = CompletableDeferred()
+        var canceled = false
+        f.onCancel = { canceled = true }
+        try {
+            f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), owner)
+            until { f.count(path) == 1 }
+            owner.cancel(); tick().await(); tick().await()
+            assertTrue(canceled, "screen-owned load must stop, not survive on appScope")
+            assertTrue(f.scope.isActive)
+            f.gate!!.complete(Unit)
+            f.bus.publish(BrowserChangeTopic.Library)
+            tick().await(); tick().await()
+            assertEquals(1, f.count(path), "abandoned holder must not reload")
+            val replacement = f.runtime.libraryHolder(SavedStateHandleStateSaver(SavedStateHandle()), replacementOwner)
+            replacement.state.first { it.movies.section == SectionState.Empty }
+            assertEquals(2, f.count(path))
+        } finally { owner.cancel(); replacementOwner.cancel(); f.gate?.complete(Unit) }
+    } }
+
+    @Test fun ownerDisposalCancelsDialogReadButNotGraphOwnedGuestWrite() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var entered = 0; var canceledReads = 0
+        val f = Fixture(guestStore = { store -> object : GuestLibraryStore by store {
+            override fun observeTitle(ref: MediaRef): Flow<List<GuestLibraryRow>> = flow {
+                entered++
+                try { gate.await(); emitAll(store.observeTitle(ref)) }
+                finally { canceledReads++ }
+            }
+        } })
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            f.identity = null; f.start()
+            val outcomes = mutableListOf<LibraryWriteOutcome>()
+            val actions = f.runtime.libraryActions(owner, outcomes::add)
+            actions.openRate(title(7))
+            until { entered == 1 }
+            actions.toggleFavourite(title(7))
+            until { entered == 2 }
+            owner.cancel(); tick().await(); tick().await()
+            assertEquals(1, canceledReads, "only the UI dialog read is canceled; the app write waits")
+            assertTrue(outcomes.isEmpty())
+            gate.complete(Unit)
+            until { outcomes.size == 1 }
+            assertTrue(outcomes.single().result is LibraryWriteResult.Done)
+            assertNull(actions.ratePrompt.first())
+            assertEquals(LibraryKind.FAVOURITE, f.koin.get<GuestLibraryStore>().all().single().kind)
+            assertTrue(f.scope.isActive)
+        } finally { owner.cancel(); gate.complete(Unit); f.close() }
+    }
+
+    @Test fun graphCloseCancelsItsOutlivingWriteWithoutCancelingUnrelatedOwnerWork() = runTest { fixture { f ->
+        f.start()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val unrelated = owner.launch { awaitCancellation() }
+        val path = "/api/account/favorite"
+        f.gatePath = path; f.gate = CompletableDeferred()
+        var canceled = false
+        f.onCancel = { canceled = true }
+        try {
+            val actions = f.runtime.libraryActions(owner) { }
+            actions.onIdentity(f.identity)
+            actions.toggleFavourite(title(7))
+            until { f.count(path) == 1 }
+            f.runtime.close()
+            assertTrue(canceled)
+            assertTrue(owner.isActive); assertTrue(unrelated.isActive)
+        } finally { owner.cancel(); f.gate?.complete(Unit) }
+    } }
+
+    @Test fun concurrentApprovalVerificationCannotTurnSupersededBootstrapIntoVerifiedGuest() = runTest { fixture { f ->
+        val bootstrap = CompletableDeferred<Unit>(); val approval = CompletableDeferred<Unit>()
+        f.beforeSession = { n -> if (n == 1) bootstrap.await() else if (n == 2) approval.await() }
+        f.runtime.start(); until { f.count("/api/session") == 1 }
+        val explicit = async { assertFailsWith<WebProxyException> { f.auth.onApprovalReturned() } }
+        until { f.count("/api/session") == 2 }
+        bootstrap.complete(Unit)
+        f.runtime.session.first { it is WebSessionState.Failed }
+        assertNull(f.auth.session.value)
+        assertFalse(f.auth.isVerifiedSession(null))
+        f.sessionStatus = HttpStatusCode.ServiceUnavailable
+        approval.complete(Unit); explicit.await()
+        tick().await()
+        assertTrue(f.runtime.session.value is WebSessionState.Failed)
+        f.sessionStatus = HttpStatusCode.OK; f.identity = session("b", generation = Long.MIN_VALUE)
+        f.runtime.revalidateSession()
+        assertEquals(WebSessionState.Ready(f.identity), f.runtime.session.first { it is WebSessionState.Ready })
+    } }
+
+    @Test fun concurrentAccountRecoveryCannotPublishUnverifiedOldIdentityOrRetargetItsWrite() = runTest { fixture { f ->
+        f.start(); val a = f.identity!!
+        val root = CompletableDeferred<Unit>(); val recovery = CompletableDeferred<Unit>()
+        f.beforeSession = { n -> if (n == 2) root.await() else if (n == 3) recovery.await() }
+        f.runtime.revalidateSession(); until { f.count("/api/session") == 2 }
+        val expiry = async { f.koin.get<AuthRepository>().expireSession(a) }
+        until { f.count("/api/session") == 3 }
+        root.complete(Unit)
+        f.runtime.session.first { it is WebSessionState.Failed }
+        assertFalse(f.auth.isVerifiedSession(a))
+        f.sessionStatus = HttpStatusCode.ServiceUnavailable
+        recovery.complete(Unit); expiry.await(); tick().await()
+        assertTrue(f.runtime.session.value is WebSessionState.Failed)
+        f.sessionStatus = HttpStatusCode.OK; f.identity = session("b", generation = Long.MIN_VALUE)
+        f.runtime.revalidateSession()
+        f.runtime.session.first { it == WebSessionState.Ready(f.identity) }
+        assertFailsWith<WebProxyException> { f.koin.get<AccountLibrarySource>().write(a, MediaRef(MediaType.Movie, 7),
+            LibraryKind.WATCHLIST, LibraryState(true, true, false, null, emptySet())) }
+        assertEquals(0, f.calls.count { it.method != HttpMethod.Get })
+        assertEquals(f.identity, f.auth.session.value)
+        assertTrue(f.auth.isVerifiedSession(f.identity))
+    } }
+
+    @Test fun closingCancelsInflightHttpBeforeClosingDatabaseAndBusAndLeavesOtherGraphAlive() = runTest {
+        val a = Fixture(); val b = Fixture()
+        try {
+            a.gatePath = "/api/session"; a.gate = CompletableDeferred()
+            var canceled = false
+            a.onCancel = { canceled = true }
+            a.runtime.start(); until { a.count("/api/session") == 1 }
+            b.start()
+            a.app.close() // Exercise the actual Koin onClose binding, not only explicit runtime teardown.
+            a.scope.coroutineContext.job.join()
+            assertTrue(canceled); assertFalse(a.scope.isActive)
+            val revision = a.bus.changes.value
+            focus(); tick().await()
+            assertEquals(revision, a.bus.changes.value)
+            assertFailsWith<BrowserStorageException> { a.settings.current() }
+            assertTrue(b.scope.isActive)
+            b.settings.update { it.copy(language = "ml-IN") }
+            assertEquals("ml-IN", b.settings.current().language)
+        } finally { a.gate?.complete(Unit); a.close(); b.close() }
     }
 }
+
+private fun AuthSession?.json(): String = if (this == null)
+    """{"signedIn":false,"sessionGeneration":"0","accountObjectId":null,"displayName":null}"""
+else """{"signedIn":true,"sessionGeneration":"$sessionGeneration","accountObjectId":"${accountObjectId.value}","displayName":"$displayName"}"""
+
+private suspend fun until(condition: () -> Boolean) {
+    repeat(120) { if (condition()) return; tick().await() }
+    error("C4 integration condition did not settle")
+}
+
+@JsFun("() => crypto.randomUUID()")
+private external fun uniqueId(): String
+@JsFun("() => new Promise(resolve => setTimeout(() => resolve(null), 20))")
+private external fun tick(): Promise<JsAny?>
+@JsFun("name => new Promise((resolve, reject) => { const r = indexedDB.deleteDatabase(name); r.onsuccess = () => resolve(null); r.onerror = () => reject(r.error); r.onblocked = () => reject(new Error('isolated cleanup blocked')); })")
+private external fun deleteDatabase(name: String): Promise<JsAny?>
+@JsFun("() => { const f = document.createElement('iframe'); document.body.appendChild(f); return f; }")
+private external fun realm(): JsAny
+@JsFun("f => f.remove()")
+private external fun removeRealm(f: JsAny)
+@JsFun("() => window.dispatchEvent(new Event('focus'))")
+private external fun focus()
+@JsFun("() => { Object.defineProperty(document, 'visibilityState', {configurable:true,value:'visible'}); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; }")
+private external fun visibility()
+@JsFun("state => state.restore()")
+private external fun restore(state: JsAny)
+@JsFun("held => held.release()")
+private external fun releaseLock(held: JsAny)
+@JsFun("(f, name) => new f.contentWindow.Function('name', `return new Promise((resolve,reject) => navigator.locks.request(name, () => new Promise(release => resolve({release}))).catch(reject));`)(name)")
+private external fun holdLock(f: JsAny, name: String): Promise<JsAny>
+@JsFun("(f, channel, topic) => new f.contentWindow.Function('channel','topic', `const bus = new BroadcastChannel(channel); bus.postMessage({topic,revision:crypto.randomUUID()}); bus.close(); return Promise.resolve(null);`)(channel,topic)")
+private external fun peerHint(f: JsAny, channel: String, topic: String): Promise<JsAny?>
+@JsFun("""(f, name, store, key, value, channel, topic) => new f.contentWindow.Function('name','store','key','value','channel','topic', `return new Promise((resolve,reject) => {
+    const r = indexedDB.open(name,1); r.onerror = () => reject(r.error); r.onsuccess = () => {
+        const db = r.result, tx = db.transaction(store,'readwrite'); tx.objectStore(store).put(value,key);
+        tx.onabort = () => { db.close(); reject(tx.error); }; tx.oncomplete = () => {
+            db.close(); const bus = new BroadcastChannel(channel); bus.postMessage({topic,revision:crypto.randomUUID()}); bus.close(); resolve(null);
+        };
+    };
+});`)(name,store,key,value,channel,topic)""")
+private external fun peerWrite(f: JsAny, name: String, store: String, key: String, value: String, channel: String, topic: String): Promise<JsAny?>
+@JsFun("""(name, store) => {
+    const old = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function(...args) { if (this.name === name && args[0] === store) throw new DOMException('fixture','QuotaExceededError'); return old.apply(this,args); };
+    return {restore:() => { IDBDatabase.prototype.transaction = old; }};
+}""")
+private external fun failTransactions(name: String, store: String): JsAny
+@JsFun("""name => {
+    const old = IDBFactory.prototype.open;
+    IDBFactory.prototype.open = function(...args) { if (args[0] !== name) return old.apply(this,args); const request = {}; setTimeout(() => request.onblocked(),0); return request; };
+    return {restore:() => { IDBFactory.prototype.open = old; }};
+}""")
+private external fun failOpen(name: String): JsAny
+@JsFun("""() => {
+    const old = Object.getOwnPropertyDescriptor(navigator,'locks'); Object.defineProperty(navigator,'locks',{configurable:true,value:undefined});
+    return {restore:() => { if (old) Object.defineProperty(navigator,'locks',old); else delete navigator.locks; }};
+}""")
+private external fun disableLocks(): JsAny
+
+@JsFun("""(name, store, phase) => {
+    const old = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function(...args) {
+        if (this.transaction.db.name === name && this.name === store) {
+            const value = JSON.parse(args[0]);
+            if ((phase === 'attempting' && value === 'Attempting') || (phase === 'done' && value === 'Done') || (phase === 'complete' && value.complete === true)) {
+                throw new DOMException('fixture', 'QuotaExceededError');
+            }
+        }
+        return old.apply(this, args);
+    };
+    return {restore:() => { IDBObjectStore.prototype.put = old; }};
+}""")
+private external fun failCommit(name: String, store: String, phase: String): JsAny

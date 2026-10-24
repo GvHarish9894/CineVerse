@@ -10,7 +10,7 @@ import kotlin.js.Promise
 /** Failures are not empty snapshots. UI can distinguish recovery actions without exposing stored payloads. */
 enum class BrowserStorageFailure { Unsupported, Blocked, Quota, Corrupt, Closed, Aborted, Unavailable }
 
-class BrowserStorageException(val failure: BrowserStorageFailure) : Exception("Browser storage: $failure")
+class BrowserStorageException(val failure: BrowserStorageFailure) : StorageException("Browser storage: $failure")
 
 /** One shared database per browser composition root; close after its stores have stopped collecting. */
 class BrowserDatabase(val name: String = "cineverse") {

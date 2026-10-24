@@ -2,6 +2,7 @@ package com.techgv.cineverse.di
 
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.library.GuestLibrarySource
+import com.techgv.cineverse.data.library.ImportOperationGuard
 import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.settings.SettingsRepository
@@ -9,6 +10,7 @@ import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.koin.core.scope.Scope
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -29,10 +31,10 @@ fun coreModule(): Module = module {
 }
 
 /** Guest / account library over the platform's storage contracts and `AccountLibrarySource`. */
-fun libraryModule(): Module = module {
+fun libraryModule(importGuard: Scope.() -> ImportOperationGuard = { ImportOperationGuard { it() } }): Module = module {
     single { GuestLibrarySource(get()) }
     single { LibraryRepository(get<AuthRepository>().session, get(), get()) }
-    single { LibraryImporter(get(), get(), get(), get(), get()) }
+    single { LibraryImporter(get(), get(), get(), get(), get(), importGuard()) }
 }
 
 /** Storage, transport and auth of this platform; the entry point's config is declared by `sharedModules`. */
