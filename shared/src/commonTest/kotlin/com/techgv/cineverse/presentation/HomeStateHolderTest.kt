@@ -97,6 +97,28 @@ class HomeStateHolderTest {
         assertEquals(TrendingWindow.Day, holder().uiState.value.trend) // restored from the same saved state
     }
 
+    @Test fun pagingForwardsOnlyToTheRequestedRowAndGatesDuplicateLoads() = runTest {
+        api.totalPages = 2
+        val holder = holder()
+        advanceUntilIdle()
+        val otherRows = holder.uiState.value.rows - HomeRow.Trending
+        api.calls.clear()
+        val gate = api.gate("trending/week/en-US/2")
+        holder.loadMore(HomeRow.Trending)
+        holder.loadMore(HomeRow.Trending)
+        advanceUntilIdle()
+        assertEquals(listOf("trending/week/en-US/2"), api.calls)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        val page = (holder.uiState.value.rows.getValue(HomeRow.Trending) as SectionState.Content).value
+        assertEquals(2, page.page)
+        assertEquals(6, page.items.size)
+        assertEquals(otherRows, holder.uiState.value.rows - HomeRow.Trending)
+        holder.loadMore(HomeRow.Trending)
+        advanceUntilIdle()
+        assertEquals(listOf("trending/week/en-US/2"), api.calls)
+    }
+
     @Test fun trailerPlaysTheFirstYouTubeVideoWithItsNameAsKicker() = runTest {
         api.videosFor = { listOf(trailer("Official Trailer")) }
         val holder = holder()
