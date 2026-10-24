@@ -20,7 +20,7 @@ sealed interface ImportPrompt {
     data object Running : ImportPrompt
     /** Finished with unconfirmed steps left: "Couldn't confirm {n} items" + Retry (with the re-add warning). */
     data class Unconfirmed(val written: Int, val titles: List<String>) : ImportPrompt
-    /** Reading the account's lists failed; nothing was written. */
+    /** Import/preflight or local bookkeeping failed; storage diagnostics describe recovery without claiming no writes. */
     data object Failed : ImportPrompt
 }
 

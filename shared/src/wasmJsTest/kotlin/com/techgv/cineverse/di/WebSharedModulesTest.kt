@@ -527,7 +527,8 @@ class WebSharedModulesTest {
             a.onCancel = { canceled = true }
             a.runtime.start(); until { a.count("/api/session") == 1 }
             b.start()
-            a.runtime.close()
+            a.app.close() // Exercise the actual Koin onClose binding, not only explicit runtime teardown.
+            a.scope.coroutineContext.job.join()
             assertTrue(canceled); assertFalse(a.scope.isActive)
             val revision = a.bus.changes.value
             focus(); tick().await()

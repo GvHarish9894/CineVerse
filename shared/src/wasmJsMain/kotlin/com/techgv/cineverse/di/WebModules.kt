@@ -1,5 +1,9 @@
 package com.techgv.cineverse.di
 
+import com.techgv.cineverse.domain.LibraryKind
+import com.techgv.cineverse.domain.LibraryState
+import com.techgv.cineverse.domain.MediaRef
+import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.library.*
 import com.techgv.cineverse.data.settings.*
@@ -64,11 +68,11 @@ internal class BrowserAccountLibrarySource(
     private val changes: BrowserChanges,
     private val auth: BrowserAuthRepository,
 ) : AccountLibrarySource by source {
-    override suspend fun page(session: AuthSession, kind: com.techgv.cineverse.domain.LibraryKind,
-                              media: com.techgv.cineverse.domain.MediaType, page: Int): LibraryPage =
+    override suspend fun page(session: AuthSession, kind: LibraryKind,
+                              media: MediaType, page: Int): LibraryPage =
         observeVerification { source.page(session, kind, media, page) }
 
-    override suspend fun states(session: AuthSession, ref: com.techgv.cineverse.domain.MediaRef) =
+    override suspend fun states(session: AuthSession, ref: MediaRef) =
         observeVerification { source.states(session, ref) }
 
     private suspend fun <T> observeVerification(operation: suspend () -> T): T = try { operation() }
@@ -76,8 +80,8 @@ internal class BrowserAccountLibrarySource(
         if (failure.code in setOf("stale_session", "session_expired", "not_signed_in")) auth.requestVerification()
         throw failure
     }
-    override suspend fun write(session: com.techgv.cineverse.data.auth.AuthSession, ref: com.techgv.cineverse.domain.MediaRef,
-                               kind: com.techgv.cineverse.domain.LibraryKind, target: com.techgv.cineverse.domain.LibraryState) {
+    override suspend fun write(session: AuthSession, ref: MediaRef,
+                               kind: LibraryKind, target: LibraryState) {
         try { observeVerification { source.write(session, ref, kind, target) } }
         finally { changes.publish(BrowserChangeTopic.Library) } // Includes possibly-landed and canceled writes.
     }
