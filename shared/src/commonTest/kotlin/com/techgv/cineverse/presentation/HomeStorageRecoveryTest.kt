@@ -155,6 +155,23 @@ class HomeStorageRecoveryTest {
         assertEquals("trending@fr-FR-1-0", (f.holder.uiState.value.hero as Hero.OfTitle).title.title)
     }
 
+    @Test fun firstSuccessfulObservationAfterFailureReloadsUnknownPriorPreferences() = runTest {
+        val f = Fixture()
+        f.failObserve = true
+        advanceUntilIdle()
+        assertTrue(f.holder.uiState.value.rows.values.all { it is SectionState.Content })
+        assertEquals(SectionErrorKind.Generic, f.holder.uiState.value.settingsError)
+        f.holder.selectHero(Hero.OfTitle(title(88)))
+        advanceUntilIdle()
+        f.preferences = Settings(language = "hi-IN")
+        f.failObserve = false
+        f.holder.retryStorage()
+        advanceUntilIdle()
+        assertEquals("trending@hi-IN-1-0", (f.holder.uiState.value.hero as Hero.OfTitle).title.title)
+        assertEquals(mapOf(28 to "movie@hi-IN", 18 to "tv@hi-IN"), f.holder.uiState.value.genres)
+        assertNull(f.holder.uiState.value.settingsError)
+    }
+
     @Test fun trendAndAppGenerationSwitchesDoNotRestoreOldSelectionOrItems() = runTest {
         val f = Fixture()
         advanceUntilIdle()

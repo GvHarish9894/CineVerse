@@ -58,6 +58,7 @@ data class HomeUiState(
     val genres: Map<Int, String> = emptyMap(),
     /** Title whose Play-trailer videos are loading: its button is disabled. */
     val trailerLoading: MediaRef? = null,
+    /** Unknown/failed reads stay explicit without replacing the last real content. */
     val settingsError: SectionErrorKind? = null,
     val genresError: SectionErrorKind? = null,
 )
@@ -81,6 +82,7 @@ fun trailerOf(title: String, videoKey: String, videoName: String) = TrailerEvent
  * focused).
  *
  * [scope]: the owner's scope when another ViewModel wraps this holder (TV adapters); default = its own viewModelScope.
+ * [onStorageFailure] receives typed diagnostics for live, current-context failures; shells wire their storage Retry to [retryStorage].
  */
 class HomeStateHolder(
     private val catalog: CatalogRepository,
@@ -138,7 +140,8 @@ class HomeStateHolder(
                     settings.collect { value ->
                         currentCoroutineContext().ensureActive()
                         val next = Triple(value.language, value.region, value.includeAdult)
-                        val changed = (contentSettings != null && contentSettings != next) || settingsApp != appGeneration.current
+                        val changed = (contentSettings != null && contentSettings != next) ||
+                            settingsApp != appGeneration.current || (first && read > 0 && contentSettings == null)
                         contentSettings = next
                         settingsApp = appGeneration.current
                         app = settingsApp
