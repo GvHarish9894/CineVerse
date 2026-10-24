@@ -155,8 +155,8 @@ tasks.register("checkWasmHasNoSecrets") {
         layout.buildDirectory.dir("compileSync/wasmJs/main/productionExecutable"),
         layout.buildDirectory.dir("kotlin-webpack/wasmJs/productionExecutable"),
     )
-    // Positive control: a string literal from GalleryScreen.kt (GALLERY_NETWORK_POSTER) that must be found, proving the scan can see Kotlin strings in .wasm.
-    val controlLiteral = "qJ2tW6WMUDux911r6m7haRef0WH"
+    // Positive control: reachable product UI copy from WebHome.kt, proving the scan can see Kotlin strings in .wasm.
+    val controlLiteral = "Discover your next favourite"
     doLast {
         val token = nativeReadToken.get()
         check(token.isNotEmpty()) {
