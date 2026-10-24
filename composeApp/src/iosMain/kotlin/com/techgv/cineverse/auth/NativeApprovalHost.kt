@@ -21,6 +21,17 @@ fun detachNativeApprovalWindow(window: UIWindow) {
     }
 }
 
+/** Only a background scene stops verification; system authentication presentation may make it inactive. */
+fun handleNativeApprovalScenePhase(isBackground: Boolean) {
+    callbackScope.launch {
+        handleNativeApprovalScenePhase(isBackground, KoinPlatform.getKoin().get<NativeApprovalCoordinator>())
+    }
+}
+
+internal suspend fun handleNativeApprovalScenePhase(isBackground: Boolean, coordinator: NativeApprovalCoordinator) {
+    if (isBackground) coordinator.cancel()
+}
+
 /** SwiftUI openURL covers an external/cold-start return; the retained session also feeds this verifier. */
 fun handleNativeApprovalUrl(uri: String) {
     callbackScope.launch {
