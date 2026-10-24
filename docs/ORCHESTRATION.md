@@ -28,13 +28,15 @@ ownership rules (TV UI untouched; `shared` contracts canonical).
 
 ```
 brief → implement in own worktree → gates green → FINAL REPORT
-  → orchestrator sends to reviewer (intercom 01a15a3b) → findings
+  → orchestrator sends to a GPT reviewer (intercom 01a15a3b, or a fresh reviewer child when context capacity requires) → findings
   → orchestrator resumes/relaunches the lane worker with the findings → fixes → report
   → repeat until "REVIEW COMPLETE: no further blocking gaps"
   → integrator merges to master (fast-forward or merge commit) → master gate
 ```
 Workers have no intercom; the orchestrator brokers all reviewer traffic and all supervisor decisions.
 Workers raise blockers/decisions via `contact_supervisor`; they never wait silently.
+Fresh reviewer handoffs retain the exact base/head, prior findings, unchanged deterministic probes and acceptance
+limits. Reviewer context exhaustion never waives review or changes the GPT-only model policy.
 
 ## Gates
 
