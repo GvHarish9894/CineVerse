@@ -25,6 +25,7 @@ Native/web foundation work below does not require that pending UI merge.
 | C3 browser durability | `../CineVerse-c3-browser-storage` / `c3-browser-storage` | Browser settings/guest/ledger/offers over durable transactions; migration/error behavior; non-secret revision notifications and lifecycle revalidation signals. Own browser storage code/tests, including existing BrowserSettingsStore. | Implement/test/commit only; no merge/push; no HTTP/auth policy edits. | Browser durability/reload/quota/blocked/concurrent-tab fixtures; committed constructors/event API handoff. | No network/session protocols, catalog methods or UI ownership. |
 | C4 browser integration | Reuse `../CineVerse-c2-web-http` / branch `c4-web-integration` after C2 review/merge | Compose reviewed C2+C3 into wasm DI/lifetime wiring; guarded import entry, no echo-loop notifications, startup/teardown and visible failures. Own browser DI/runtime/main/tests; no catalog/native/UI behavior. | Implement/test/commit; no merge/push. | Real graph/isolation/lifecycle/invalidation/import-lock integration tests + independent review. | C2/C3 writers finished; this owner wires their contracts, not their implementations. |
 | C5 catalog extensions | `../CineVerse-c5-catalog` / `c5-catalog` | Discover genre/sort and keywords across common API/repository, direct+proxy adapters and affected fakes/tests. | Implement/test/commit; no merge/push. | Exact endpoint/query/cache/normalization tests on all targets + TV compatibility/review. | One tightly coupled API surface across the same files; splitting discover/keywords would overlap those owners. No browser DI/native auth edits. |
+| UI dependency staging | Reuse `../CineVerse-c1-native-auth` / `p7-ui-stage` after native merge | Integrate source-approved L3 with reviewed foundations in a NON-MAIN candidate; reconcile build/CI seams only. Keep original L3 worktree/8765 unchanged. | Commit only; no main promotion/push/product acceptance. | All-target UI/TV compatibility and reconciliation review; actual owner Safari still required. | Prepares screen dependencies without pretending P7 acceptance. |
 | Final integration | main checkout | Merge reviewed C4/C5/C1 handoffs, resolve only contract/build seams; product screen lanes follow. | Merged gates; push as GvHarish9894. | Shared/TV/server/mobile/web combined gates + required independent reviews. | No simultaneous root writer; no component reimplementation. |
 
 All component writers leave `shared/.../di/WebModules.kt` and the common `SharedModules.kt` to integration.
@@ -64,10 +65,12 @@ exact commits, changed contracts, focused tests, actual runtime evidence, and un
 
 - C1 native `311f4e9` and C5 catalog `3b4be68` are reviewed and merged as `113fea1` / `ca2f39b`. Combined
   JVM256/Android250/iOS253/Wasm195, compose2+3/TVunit63/server52 and native/web build/scan gates pass.
-- C4 browser integration `227b77f` is implemented/gated, pending independent review:212 browser tests,
-  JVM237/Android231/TVunit63, production scan and prior scoped TV runtime evidence. Do not merge before verdict.
+- C4 browser integration `518b45f` is reviewed and merged as `8c186d6`. Full combined JVM265/Android259/iOS262/
+  Wasm229, compose2+3/TVunit63/server52, builds/scan/Swift host pass; integrated TV UI38 and R8 boot pass.
 
-- P7/L3 remains unmerged pending the owner's actual Safari result. No human/platform gate is waived.
+- P7/L3 remains unmerged into main pending the owner's actual Safari result. A separate `p7-ui-stage` may
+  integrate its source for screen development, but cannot be promoted/accepted without that result. Original
+  b5e69a6 preview/worktree stays untouched. No human/platform gate is waived.
 
 ## Next slices after foundations
 
