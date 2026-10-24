@@ -12,6 +12,7 @@ const artifacts = fs.mkdtempSync(path.join(os.tmpdir(), 'w1-bootstrap-FIXTURE-')
 const report = {fixture: true, distribution: dist, artifacts, steps: []};
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const mime = {'.html': 'text/html', '.js': 'application/javascript', '.wasm': 'application/wasm', '.ttf': 'font/ttf', '.json': 'application/json'};
+const requiredFonts = ['bricolage_grotesque_medium.ttf', 'bricolage_grotesque_bold.ttf', 'bricolage_grotesque_extrabold.ttf', 'inter_regular.ttf', 'inter_medium.ttf', 'inter_semibold.ttf', 'inter_bold.ttf'];
 
 // Observation only: native promises/readers/results and all original arguments/receivers are returned unchanged.
 function installReadTrace() {
@@ -211,19 +212,7 @@ function checkOutcomeGuards() {
     assert.equal(authoritativeAxState(tree('Sign in', 'button'), current, current, {...current, backendNodeId: 8}), 'RejectedIdentity');
     assert.equal(authoritativeAxState({nodes: [{...root, frameId: 'old'}, tree('Sign in', 'button').nodes[1]]}, current, current, current), 'RejectedIdentity');
     assert.equal(authoritativeAxState({nodes: [...tree('Sign in', 'button').nodes, tree('Verifying').nodes[1]]}, current, current, current), 'UnknownOrConflicting');
-    const event = {method: 'Network.loadingFailed', params: {requestId: 'session', canceled: true, type: 'Fetch'}};
-    const request = {method: 'GET', url: 'http://fixture/api/session', frameId: 'frame', loaderId: 'new'};
-    for (const [candidate, accepted] of [[request, true], [{...request, method: 'POST'}, false], [{...request, url: 'http://other/api/session'}, false], [{...request, loaderId: 'old'}, false]]) {
-        assert.equal(exactSessionAbort(event, {requests: new Map([['session', candidate]])}, current, 'http://fixture'), accepted);
-    }
-    console.log('PASS: same-document AX Ready/Checking/Failed and exact session request guards reject stale/ambiguous outcomes.');
-}
-
-function exactSessionAbort(event, cdp, expected, origin) {
-    const request = cdp.requests.get(event.params?.requestId);
-    return event.method === 'Network.loadingFailed' && event.params.canceled && event.params.type === 'Fetch' &&
-        request?.method === 'GET' && request.url === origin + '/api/session' &&
-        request.frameId === expected?.frameId && request.loaderId === expected?.loaderId;
+    console.log('PASS: same-document AX Ready/Checking/Failed guards reject stale/ambiguous outcomes.');
 }
 
 function consumedApiAbort(event, cdp, expected, origin) {
@@ -239,11 +228,14 @@ function consumedApiAbort(event, cdp, expected, origin) {
         Math.abs(trace.timeOrigin + trace.at - request.wallTime * 1000) < 50);
     if (starts.length !== 1) return null;
     const traces = cdp.readTraces.filter(trace => trace.id === starts[0].id && trace.executionContextId === starts[0].executionContextId);
+    const responseTrace = traces.find(trace => trace.phase === 'response');
     const end = traces.find(trace => trace.phase === 'end');
     const abort = traces.find(trace => trace.phase === 'abort');
-    if (!end || !abort || end.sequence >= abort.sequence || end.at > abort.at || traces.some(trace => ['alreadyAborted', 'readRejected', 'fetchRejected'].includes(trace.phase))) return null;
+    if (!responseTrace || responseTrace.status !== response.status || !end || !abort || starts[0].sequence >= responseTrace.sequence ||
+        responseTrace.sequence >= end.sequence || end.sequence >= abort.sequence || end.at > abort.at ||
+        traces.some(trace => ['alreadyAborted', 'readRejected', 'fetchRejected'].includes(trace.phase))) return null;
     return {requestId: request.requestId, url: request.url, frameId: request.frameId, loaderId: request.loaderId,
-        timeOrigin: expected.timeOrigin, end, abort, catalog: url.pathname.startsWith('/api/tmdb/')};
+        documentUrl: expected.url, timeOrigin: expected.timeOrigin, end, abort, catalog: url.pathname.startsWith('/api/tmdb/')};
 }
 
 function checkConsumptionProof() {
@@ -252,15 +244,16 @@ function checkConsumptionProof() {
     const request = {requestId: 'read', method: 'GET', url: 'http://fixture/api/session', frameId: 'frame', loaderId: 'loader', wallTime: 1,
         lifecycle: [{method: 'Network.responseReceived', response: {status: 200, mimeType: 'application/json'}}]};
     const trace = {id: 1, executionContextId: 1, url: request.url, method: 'GET', isDefault: true, frameId: 'frame', documentUrl: expected.url, timeOrigin: 1000};
-    const traces = [{...trace, phase: 'fetch', sequence: 1, at: 0}, {...trace, phase: 'end', sequence: 2, at: 1}, {...trace, phase: 'abort', sequence: 3, at: 2}];
+    const traces = [{...trace, phase: 'fetch', sequence: 1, at: 0}, {...trace, phase: 'response', status: 200, sequence: 2, at: 0.5}, {...trace, phase: 'end', sequence: 3, at: 1}, {...trace, phase: 'abort', sequence: 4, at: 2}];
     const prove = (candidate = request, events = traces, failure = event, identity = expected) => consumedApiAbort(failure, {requests: new Map([['read', candidate]]), readTraces: events}, identity, 'http://fixture');
     assert.ok(prove());
     for (const candidate of [{...request, method: 'POST'}, {...request, url: 'http://other/api/session'}, {...request, url: 'http://fixture/api/auth/start'},
         {...request, loaderId: 'old'}, {...request, frameId: 'old'}, {...request, lifecycle: []},
-        {...request, lifecycle: [{method: 'Network.responseReceived', response: {status: 500, mimeType: 'application/json'}}]},
+        ...[199, 300, 500].map(status => ({...request, lifecycle: [{method: 'Network.responseReceived', response: {status, mimeType: 'application/json'}}]})),
         {...request, lifecycle: [{method: 'Network.responseReceived', response: {status: 200, mimeType: 'text/html'}}]}]) assert.equal(prove(candidate), null);
     for (const events of [traces.filter(item => item.phase !== 'end'), traces.filter(item => item.phase !== 'abort'),
-        traces.map(item => item.phase === 'end' ? {...item, sequence: 4} : item),
+        traces.filter(item => item.phase !== 'response'), traces.map(item => item.phase === 'response' ? {...item, status: 500} : item),
+        traces.map(item => item.phase === 'end' ? {...item, sequence: 5} : item),
         traces.map(item => item.phase === 'end' ? {...item, at: 3} : item),
         traces.map(item => ({...item, timeOrigin: 0})), traces.map(item => ({...item, documentUrl: 'http://fixture/old'})),
         traces.map(item => ({...item, isDefault: false})), [...traces, {...traces[0], id: 2}],
@@ -268,7 +261,19 @@ function checkConsumptionProof() {
     assert.equal(prove(request, traces, {...event, params: {...event.params, canceled: false}}), null);
     assert.equal(prove(request, traces, {...event, params: {...event.params, type: 'Script'}}), null);
     assert.equal(prove(request, traces, {method: 'Runtime.exceptionThrown', params: {}}), null);
-    console.log('PASS: consumed-before-abort proof rejects unknown/early/ambiguous/wrong-document/non-JSON/non-GET/non-fixture failures.');
+    const proof = prove();
+    const document = {...expected, backendNodeId: 7};
+    const sample = {state: 'Ready', before: document, after: document, axFrameId: 'frame', axUrl: expected.url, axBackendNodeId: 7, homeEmpty: true};
+    assert.ok(validApplicationOutcome(proof, sample));
+    assert.ok(validApplicationOutcome({...proof, catalog: true}, sample));
+    for (const outcome of [...['Checking', 'Failed', 'UnknownOrConflicting', 'RejectedIdentity'].map(state => ({...sample, state})),
+        {...sample, before: {...document, loaderId: 'old'}}, {...sample, after: {...document, timeOrigin: 0}},
+        {...sample, axFrameId: 'old'}, {...sample, axUrl: 'http://fixture/old'}, {...sample, axBackendNodeId: 8}, {...sample, axBackendNodeId: undefined},
+        {...sample, after: {...document, backendNodeId: 8}}]) assert.equal(validApplicationOutcome(proof, outcome), false);
+    assert.equal(validApplicationOutcome({...proof, catalog: true}, {...sample, homeEmpty: false}), false);
+    assert.equal(validApplicationOutcome(null, sample), false);
+    assert.equal(validApplicationOutcome(proof, null), false);
+    console.log('PASS: completed-read policy rejects unknown/early/ambiguous/foreign/method/status/MIME/identity/state/empty-data failures.');
 }
 
 function parsedHomeEmpty(tree) {
@@ -278,11 +283,35 @@ function parsedHomeEmpty(tree) {
         nodes.some(node => node.role?.value === 'button' && node.name?.value === 'Refresh Trending');
 }
 
-async function observeSessionOutcome(cdp, origin, step, precedingFetches) {
+function validApplicationOutcome(proof, sample) {
+    if (!proof || !sample || sample.state !== 'Ready') return false;
+    const expected = {frameId: proof.frameId, loaderId: proof.loaderId, url: proof.documentUrl, timeOrigin: proof.timeOrigin};
+    return sameDocument(expected, sample.before) && sameDocument(expected, sample.after) && sample.axFrameId === expected.frameId &&
+        sample.axUrl === expected.url && sample.axBackendNodeId !== undefined && sample.axBackendNodeId === sample.before.backendNodeId &&
+        sample.axBackendNodeId === sample.after.backendNodeId && (!proof.catalog || sample.homeEmpty === true);
+}
+
+async function applicationSample(cdp, expected) {
+    const before = await cdp.documentIdentity(true);
+    const tree = await cdp.call('Accessibility.getFullAXTree');
+    const after = await cdp.documentIdentity(true);
+    const root = tree.nodes.find(node => !node.ignored && node.role?.value === 'RootWebArea');
+    return {tree, sample: {receivedAt: Date.now(), before, after, state: authoritativeAxState(tree, expected, before, after),
+        homeEmpty: parsedHomeEmpty(tree), axFrameId: root?.frameId, axBackendNodeId: root?.backendDOMNodeId,
+        axUrl: root?.properties?.find(property => property.name === 'url')?.value?.value}};
+}
+
+function remainingFailures(cdp, origin, step, precedingFetches) {
+    const expected = step.observations.at(-1);
+    const outcome = step.completionProbe?.samples.at(-1);
+    return bootstrapFailures(cdp.events, precedingFetches).filter(event => !validApplicationOutcome(consumedApiAbort(event, cdp, expected, origin), outcome));
+}
+
+async function observeCompletionOutcome(cdp, origin, step, precedingFetches) {
     const expected = step.observations.at(-1);
     const navigation = cdp.events.findLast(event => event.method === 'Page.frameNavigated' && event.params.frame.id === expected?.frameId && event.params.frame.loaderId === expected?.loaderId);
     const probe = {startedAt: Date.now(), expected, samples: [], outcome: 'NotEligible'};
-    step.sessionOutcomeProbe = probe;
+    step.completionProbe = probe;
     try {
         if (!navigation || navigation.params.frame.url !== expected.url || sameDocument(expected, step.before) ||
             !bootstrapFailures(cdp.events, precedingFetches).every(event => consumedApiAbort(event, cdp, expected, origin))) return;
@@ -291,22 +320,17 @@ async function observeSessionOutcome(cdp, origin, step, precedingFetches) {
         do {
             const failures = bootstrapFailures(cdp.events, precedingFetches);
             if (failures.some(event => !consumedApiAbort(event, cdp, expected, origin))) { probe.outcome = 'UnrelatedStrictFailure'; return; }
-            const before = await cdp.documentIdentity(true);
-            const tree = await cdp.call('Accessibility.getFullAXTree');
-            const after = await cdp.documentIdentity(true);
-            const state = authoritativeAxState(tree, expected, before, after);
-            const homeEmpty = parsedHomeEmpty(tree);
-            probe.samples.push({receivedAt: Date.now(), before, after, state, homeEmpty});
+            const {sample} = await applicationSample(cdp, expected);
+            probe.samples.push(sample);
             const proofs = bootstrapFailures(cdp.events, precedingFetches).map(event => consumedApiAbort(event, cdp, expected, origin));
             if (proofs.some(proof => !proof)) { probe.outcome = 'UnrelatedStrictFailure'; return; }
-            if (state === 'Ready' && (!proofs.some(proof => proof.catalog) || homeEmpty)) { probe.outcome = state; probe.proofs = proofs; return; }
-            if (['Failed', 'RejectedIdentity'].includes(state)) { probe.outcome = state; return; }
+            if (proofs.every(proof => validApplicationOutcome(proof, sample))) { probe.outcome = 'Ready'; probe.proofs = proofs; return; }
+            if (['Failed', 'RejectedIdentity'].includes(sample.state)) { probe.outcome = sample.state; return; }
             await sleep(100);
         } while (Date.now() < deadline);
         probe.timedOut = true;
     } finally {
         probe.finishedAt = Date.now();
-        probe.sessionRequests = [...cdp.requests.values()].filter(request => request.url === origin + '/api/session');
     }
 }
 
@@ -322,24 +346,33 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
     const tree = await until(async () => {
         step.observations.push(await cdp.documentIdentity());
         const strictFailures = bootstrapFailures(cdp.events, precedingFetches);
-        if (strictFailures.length && !step.sessionOutcomeProbe) {
+        if (strictFailures.length) {
             step.originalStrictFailures = strictFailures;
-            await observeSessionOutcome(cdp, origin, step, precedingFetches);
+            await observeCompletionOutcome(cdp, origin, step, precedingFetches);
         }
-        assert.deepEqual(bootstrapFailures(cdp.events, precedingFetches), [], label + ': resource/runtime failure');
-        const tree = await cdp.call('Accessibility.getFullAXTree');
+        step.rejectedFailures = remainingFailures(cdp, origin, step, precedingFetches);
+        assert.deepEqual(step.rejectedFailures, [], label + ': resource/runtime failure');
+        const identity = step.observations.at(-1);
+        const navigation = cdp.events.findLast(event => event.method === 'Page.frameNavigated' && event.params.frame.id === identity.frameId && event.params.frame.loaderId === identity.loaderId);
+        if (!navigation || sameDocument(identity, step.before)) return false;
+        const {tree, sample} = await applicationSample(cdp, identity);
         const names = tree.nodes.filter(node => !node.ignored).map(node => node.name?.value);
-        step.axObservations.push({receivedAt: Date.now(), expectedMatched: names.includes(expected), guestMatched: names.includes('Sign in'), after: await cdp.documentIdentity()});
-        if (!names.includes(expected) || !names.includes('Sign in')) return false;
-        const responses = cdp.events.filter(event => event.method === 'Network.responseReceived').map(event => event.params.response);
-        const fonts = responses.filter(response => response.url.includes('/composeResources/') && response.url.endsWith('.ttf'));
-        return !bootstrapRequired || (fonts.some(font => font.url.endsWith('/inter_regular.ttf')) && fonts.some(font => font.url.endsWith('/bricolage_grotesque_extrabold.ttf'))) ? tree : false;
+        step.axObservations.push(sample);
+        if (!names.includes(expected) || sample.state !== 'Ready' || (identity.url === origin + '/' && !sample.homeEmpty)) return false;
+        step.applicationOutcome = sample;
+        const responses = cdp.events.filter(event => event.method === 'Network.responseReceived' && event.params.loaderId === identity.loaderId);
+        const fonts = responses.filter(event => event.params.response.url.includes('/composeResources/') && event.params.response.url.endsWith('.ttf'));
+        const resources = responses.filter(event => event.params.response.url === origin + '/composeApp.js' || event.params.response.url.endsWith('.wasm') || fonts.includes(event));
+        const finished = new Set(cdp.events.filter(event => event.method === 'Network.loadingFinished').map(event => event.params.requestId));
+        return !bootstrapRequired || (requiredFonts.every(name => fonts.some(event => event.params.response.url.endsWith('/' + name))) &&
+            resources.every(event => finished.has(event.params.requestId))) ? tree : false;
     }, label + ': Kotlin route and bundled fonts');
     const document = (await cdp.call('Runtime.evaluate', {expression: 'JSON.stringify({url:location.href,base:document.baseURI,script:document.querySelector("script[src]").src})', returnByValue: true})).result.value;
     step.document = JSON.parse(document);
     assert.equal(step.document.base, origin + '/');
     assert.equal(step.document.script, origin + '/composeApp.js');
-    step.responses = cdp.events.filter(event => event.method === 'Network.responseReceived').map(event => ({url: event.params.response.url, status: event.params.response.status, mime: event.params.response.mimeType}));
+    step.responses = cdp.events.filter(event => event.method === 'Network.responseReceived' && event.params.loaderId === step.observations.at(-1).loaderId)
+        .map(event => ({url: event.params.response.url, status: event.params.response.status, mime: event.params.response.mimeType}));
     const script = step.responses.find(response => response.url === origin + '/composeApp.js');
     if (bootstrapRequired) assert.ok(script && script.status === 200 && script.mime.includes('javascript'), label + ': real JS, not fallback HTML');
     const wasm = step.responses.filter(response => response.url.endsWith('.wasm'));
@@ -347,11 +380,12 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
     assert.ok(wasm.every(response => response.status === 200 && response.mime === 'application/wasm'));
     assert.ok(step.responses.filter(response => response.url.includes('/composeResources/')).every(response => response.url.startsWith(origin + '/composeResources/') && response.status === 200 && response.mime !== 'text/html'));
     const finalFailures = bootstrapFailures(cdp.events, precedingFetches);
-    if (finalFailures.length && !step.sessionOutcomeProbe) {
+    if (finalFailures.length) {
         step.originalStrictFailures = finalFailures;
-        await observeSessionOutcome(cdp, origin, step, precedingFetches);
+        await observeCompletionOutcome(cdp, origin, step, precedingFetches);
     }
-    assert.deepEqual(bootstrapFailures(cdp.events, precedingFetches), []);
+    step.rejectedFailures = remainingFailures(cdp, origin, step, precedingFetches);
+    assert.deepEqual(step.rejectedFailures, []);
     fs.writeFileSync(path.join(artifacts, label + '-ax.json'), JSON.stringify(tree, null, 2));
     fs.writeFileSync(path.join(artifacts, label + '-events.json'), JSON.stringify(cdp.events, null, 2));
     const screenshot = await cdp.call('Page.captureScreenshot', {format: 'png'});
@@ -416,7 +450,8 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
         if (chrome && chrome.exitCode === null) { chrome.kill('SIGTERM'); await new Promise(resolve => chrome.once('exit', resolve)); }
         await new Promise(resolve => server.close(resolve));
         report.resourcesReleased = true;
-        report.failureEvents = pages.flatMap(cdp => bootstrapFailures(cdp.events, cdp.precedingFetches));
+        report.observedStrictEvents = pages.flatMap(cdp => bootstrapFailures(cdp.events, cdp.precedingFetches));
+        report.failureEvents = report.steps.flatMap(step => step.rejectedFailures || []);
         fs.writeFileSync(path.join(artifacts, 'report.json'), JSON.stringify(report, null, 2));
         console.log('FIXTURE evidence: ' + artifacts);
     }
