@@ -41,12 +41,11 @@ class BrowserSettingsStore(
         .map { JsonValues(snapshot()) }.distinctUntilChanged()
 
     override suspend fun edit(transform: (MutableSettingsValues) -> Unit) {
-        database.edit("settings", keyPrefix) { stored ->
+        database.edit("settings", keyPrefix, onCommitted = { changes.publish(BrowserChangeTopic.Settings) }) { stored ->
             val values = MutableJsonValues(read(stored).toMutableMap())
             transform(values)
             Json.encodeToString(values.map)
         }
-        changes.publish(BrowserChangeTopic.Settings)
     }
 
     private suspend fun snapshot(): Map<String, JsonElement> {

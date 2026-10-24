@@ -43,10 +43,10 @@ class BrowserDatabase(val name: String = "cineverse") {
     internal suspend fun all(store: String): String =
         result(databaseRead(connection(), store, "", true).await())!!
 
-    /** Transform runs synchronously in the readwrite transaction, not after awaiting a request. */
-    internal suspend fun edit(store: String, key: String, transform: (String?) -> String?) {
+    /** Transform runs in the transaction; commit notification must not depend on the cancellable caller resuming. */
+    internal suspend fun edit(store: String, key: String, onCommitted: () -> Unit = {}, transform: (String?) -> String?) {
         var transformFailure: Throwable? = null
-        val response = databaseEdit(connection(), store, key) { old ->
+        val response = databaseEdit(connection(), store, key, onCommitted) { old ->
             try {
                 (transform(old?.toString()) ?: "null").toJsString()
             } catch (failure: Throwable) {
@@ -147,14 +147,14 @@ private external fun closeDatabase(db: JsAny)
 })""")
 private external fun databaseRead(db: JsAny, store: String, key: String, all: Boolean): Promise<JsString>
 
-@JsFun("""(db, store, key, transform) => new Promise(resolve => {
+@JsFun("""(db, store, key, onCommitted, transform) => new Promise(resolve => {
     let tx, failure;
     const fail = name => resolve(JSON.stringify({error:name}));
     try {
         // strict requests physical durability where supported; older Safari uses its default commit policy.
         try { tx = db.transaction(store, 'readwrite', {durability:'strict'}); }
         catch (e) { if (e instanceof TypeError) tx = db.transaction(store, 'readwrite'); else throw e; }
-        tx.oncomplete = () => resolve(JSON.stringify({value:null}));
+        tx.oncomplete = () => { try { onCommitted(); } finally { resolve(JSON.stringify({value:null})); } };
         tx.onabort = () => fail(failure || tx.error?.name || 'AbortError');
         const objectStore = tx.objectStore(store), request = objectStore.get(key);
         request.onsuccess = () => {
@@ -169,4 +169,4 @@ private external fun databaseRead(db: JsAny, store: String, key: String, all: Bo
         };
     } catch (e) { fail(e.name); }
 })""")
-private external fun databaseEdit(db: JsAny, store: String, key: String, transform: (JsString?) -> JsString): Promise<JsString>
+private external fun databaseEdit(db: JsAny, store: String, key: String, onCommitted: () -> Unit, transform: (JsString?) -> JsString): Promise<JsString>

@@ -13,9 +13,11 @@ import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import kotlinx.browser.localStorage
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.await
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -278,6 +280,82 @@ class BrowserStorageTest {
     } }
 
     @Test
+    fun cancellationAfterRealCommitStillInvalidatesLiveSettingsObservers() = runTest { fixture { f ->
+        f.settings.edit { it.setString("language", "old") }
+        val initial = CompletableDeferred<Unit>()
+        var last: String? = null
+        val observer = backgroundScope.launch {
+            f.settings.data.collect {
+                last = it.string("language")
+                if (last == "old") initial.complete(Unit)
+            }
+        }
+        var restore: JsAny? = null
+        try {
+            initial.await()
+            val before = f.changes.changes.value.settings
+            val committed = CompletableDeferred<Unit>()
+            lateinit var writer: Job
+            restore = cancelOnRealCommit(f.name, "settings") { writer.cancel(); committed.complete(Unit) }
+            var returned = false
+            writer = launch { f.settings.edit { it.setString("language", "new") }; returned = true }
+            committed.await(); writer.join()
+            restoreGlobals(restore); restore = null
+            assertTrue(writer.isCancelled); assertFalse(returned)
+            val reopened = BrowserDatabase(f.name)
+            try {
+                assertEquals("new", BrowserSettingsStore(f.prefix, reopened, f.changes).data.first().string("language"))
+            } finally { reopened.close() }
+            tick().await()
+            assertTrue(f.changes.changes.value.settings > before, "Commit must invalidate even when its caller cannot resume")
+            assertEquals("new", last)
+        } finally { restore?.let(::restoreGlobals); observer.cancelAndJoin() }
+    } }
+
+    @Test
+    fun cancellationAfterRealCommitStillInvalidatesLiveGuestUpsertObservers() = canceledGuestCommit(delete = false)
+
+    @Test
+    fun cancellationAfterRealCommitStillInvalidatesLiveGuestDeleteObservers() = canceledGuestCommit(delete = true)
+
+    private fun canceledGuestCommit(delete: Boolean) = runTest { fixture { f ->
+        val old = GuestLibraryRow(movie, rating, 4.5, 1, "old")
+        val new = old.copy(value = 8.5, titleJson = "new")
+        val expected = if (delete) emptyList() else listOf(new)
+        f.guest.upsert(old)
+        val initial = CompletableDeferred<Unit>()
+        var last: List<GuestLibraryRow>? = null
+        val observer = backgroundScope.launch {
+            f.guest.observeTitle(movie).collect {
+                last = it
+                if (it == listOf(old)) initial.complete(Unit)
+            }
+        }
+        var restore: JsAny? = null
+        try {
+            initial.await()
+            val before = f.changes.changes.value.library
+            val committed = CompletableDeferred<Unit>()
+            lateinit var writer: Job
+            restore = cancelOnRealCommit(f.name, "guest") { writer.cancel(); committed.complete(Unit) }
+            var returned = false
+            writer = launch {
+                if (delete) f.guest.delete(movie, rating) else f.guest.upsert(new)
+                returned = true
+            }
+            committed.await(); writer.join()
+            restoreGlobals(restore); restore = null
+            assertTrue(writer.isCancelled); assertFalse(returned)
+            val reopened = BrowserDatabase(f.name)
+            try { assertEquals(expected, BrowserGuestLibraryStore(reopened, f.changes).all()) }
+            finally { reopened.close() }
+            tick().await()
+            assertTrue(f.changes.changes.value.library > before, "Commit must invalidate even when its caller cannot resume")
+            assertEquals(expected, last)
+        } finally { restore?.let(::restoreGlobals); observer.cancelAndJoin() }
+    } }
+
+    @Test
     fun requestSuccessFollowedByAbortDoesNotReturnSuccessOrPublish() = runTest { fixture { f ->
         f.settings.edit { it.setString("language", "old"); it.setBoolean("motion", false) }
         val before = f.changes.changes.value
@@ -519,3 +597,17 @@ private external fun denyLegacyReads(): JsAny
     return {restore:() => { IDBFactory.prototype.open = old; }};
 }""")
 private external fun delayOpenSuccess(): JsAny
+
+@JsFun("""(name, store, cancel) => {
+    const old = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function(...args) {
+        const tx = old.apply(this, args);
+        if (this.name === name && args[0] === store && args[1] === 'readwrite') {
+            // Runs on real commit, before the production completion handler can resume the canceled writer.
+            tx.addEventListener('complete', () => cancel(), {once:true});
+        }
+        return tx;
+    };
+    return {restore:() => { IDBDatabase.prototype.transaction = old; }};
+}""")
+private external fun cancelOnRealCommit(name: String, store: String, cancel: () -> Unit): JsAny

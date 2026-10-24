@@ -30,13 +30,13 @@ class BrowserGuestLibraryStore(private val database: BrowserDatabase, private va
 
     override suspend fun upsert(row: GuestLibraryRow) {
         val stored = StoredGuestRow(row.ref.mediaType.path, row.ref.id, row.kind.name, row.value, row.addedAt, row.titleJson)
-        database.edit("guest", key(row.ref, row.kind)) { Json.encodeToString(stored) }
-        changes.publish(BrowserChangeTopic.Library)
+        database.edit("guest", key(row.ref, row.kind), onCommitted = { changes.publish(BrowserChangeTopic.Library) }) {
+            Json.encodeToString(stored)
+        }
     }
 
     override suspend fun delete(ref: MediaRef, kind: LibraryKind) {
-        database.edit("guest", key(ref, kind)) { null }
-        changes.publish(BrowserChangeTopic.Library)
+        database.edit("guest", key(ref, kind), onCommitted = { changes.publish(BrowserChangeTopic.Library) }) { null }
     }
 
     @Serializable
