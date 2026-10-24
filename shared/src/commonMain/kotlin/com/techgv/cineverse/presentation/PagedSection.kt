@@ -1,5 +1,6 @@
 package com.techgv.cineverse.presentation
 
+import com.techgv.cineverse.data.storage.StorageException
 import com.techgv.cineverse.data.tmdb.MediaItemDto
 import com.techgv.cineverse.data.tmdb.PageDto
 import com.techgv.cineverse.data.tmdb.TmdbException
@@ -9,6 +10,8 @@ import com.techgv.cineverse.domain.key
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,64 +35,104 @@ class PageSource(val fetch: suspend (page: Int) -> PageDto<MediaItemDto>, val ma
  * if both that generation and the app generation (auth / settings) are unchanged. A result that only
  * missed a newer app generation is reloaded, so the section never stays on stale data or "Loading".
  */
-class PagedSection(private val scope: CoroutineScope, private val appGeneration: GenerationCounter) {
+class PagedSection(
+    private val scope: CoroutineScope,
+    private val appGeneration: GenerationCounter,
+    private val onStorageFailure: (StorageException) -> Unit = {},
+) {
     private val generation = GenerationCounter()
     private val mutableState = MutableStateFlow<SectionState<PagedItems>>(SectionState.Loading)
     val state: StateFlow<SectionState<PagedItems>> = mutableState
     private var source: PageSource? = null
     private var job: Job? = null
+    private var content: PagedItems? = null
+    private var contentApp: Long? = null
+    private var storageFailedPage: Int? = null
 
     /** Replaces the list with page 1 of [source], after [debounceMillis] (Search, §7.7). */
     fun load(source: PageSource, debounceMillis: Long = 0) {
         this.source = source
+        content = null
+        contentApp = null
+        start(source, 1, debounceMillis)
+    }
+
+    private fun start(source: PageSource, page: Int, debounceMillis: Long = 0, retainContent: Boolean = false) {
         val gen = generation.bump()
         job?.cancel()
-        mutableState.value = SectionState.Loading
+        storageFailedPage = null
+        if (contentApp != appGeneration.current) content = null
+        val loaded = content.takeIf { retainContent }
+        mutableState.value = loaded?.let { SectionState.Content(it.copy(loadingMore = page > 1)) } ?: SectionState.Loading
+        val app = appGeneration.current
         job = scope.launch {
             delay(debounceMillis)
-            fetch(gen, source, 1)
+            fetch(gen, app, source, page)
         }
     }
 
     /** Reloads page 1 of the current source (Try again, settings change). */
-    fun reload() {
-        source?.let { load(it) }
+    fun reload(retainContent: Boolean = false) {
+        source?.let { start(it, 1, retainContent = retainContent) }
+    }
+
+    /** Retries only a storage-failed read, including the failed next page; never repeats a UI intent. */
+    fun retryStorage() {
+        val page = storageFailedPage ?: return
+        source?.let { start(it, if (contentApp == appGeneration.current) page else 1, retainContent = true) }
     }
 
     /** Appends the next page; no-op while loading, after the last page, or before page 1 arrived. */
     fun loadMore() {
         val source = source ?: return
         val content = (mutableState.value as? SectionState.Content)?.value ?: return
+        if (contentApp != appGeneration.current) return reload()
         if (!content.hasMore || content.loadingMore || job?.isActive == true) return
         mutableState.value = SectionState.Content(content.copy(loadingMore = true, moreError = null))
         val gen = generation.current
-        job = scope.launch { fetch(gen, source, content.page + 1) }
+        val app = appGeneration.current
+        job = scope.launch { fetch(gen, app, source, content.page + 1) }
     }
 
-    private suspend fun fetch(gen: Long, source: PageSource, page: Int) {
-        val app = appGeneration.current
+    private suspend fun fetch(gen: Long, app: Long, source: PageSource, page: Int) {
+        currentCoroutineContext().ensureActive()
+        if (gen != generation.current) return
+        if (app != appGeneration.current) return reload()
         val result = try {
             Result.success(source.fetch(page))
         } catch (e: TmdbException) {
             Result.failure(e)
+        } catch (e: StorageException) {
+            Result.failure(e)
         }
+        currentCoroutineContext().ensureActive()
         if (gen != generation.current) return
         if (app != appGeneration.current) return reload()
         mutableState.value = result.fold(
-            onSuccess = { dto -> commit(dto, source, page) },
+            onSuccess = { dto ->
+                storageFailedPage = null
+                commit(dto, source, page).also {
+                    content = (it as? SectionState.Content)?.value
+                    contentApp = app
+                }
+            },
             onFailure = { error ->
-                val loaded = (mutableState.value as? SectionState.Content)?.value
-                if (page > 1 && loaded != null) {
+                val loaded = if (contentApp == app) content else null
+                if (error is StorageException) {
+                    storageFailedPage = page
+                }
+                if (loaded != null && (page > 1 || error is StorageException)) {
                     SectionState.Content(loaded.copy(loadingMore = false, moreError = error.toSectionErrorKind()))
                 } else {
                     SectionState.Error(error.toSectionErrorKind())
                 }
             },
         )
+        (result.exceptionOrNull() as? StorageException)?.let(onStorageFailure)
     }
 
     private fun commit(dto: PageDto<MediaItemDto>, source: PageSource, page: Int): SectionState<PagedItems> {
-        val previous = if (page > 1) (mutableState.value as? SectionState.Content)?.value?.items.orEmpty() else emptyList()
+        val previous = if (page > 1) content?.items.orEmpty() else emptyList()
         // Pages shift while TMDB re-ranks: drop repeats so lazy keys stay unique.
         val items = (previous + dto.results.mapNotNull(source.map)).distinctBy { it.key }
         return if (items.isEmpty()) SectionState.Empty else SectionState.Content(PagedItems(items, page, dto.hasNextPage))

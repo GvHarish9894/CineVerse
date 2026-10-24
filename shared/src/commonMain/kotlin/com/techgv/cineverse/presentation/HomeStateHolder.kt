@@ -2,6 +2,7 @@ package com.techgv.cineverse.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.techgv.cineverse.data.storage.StorageException
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.tmdb.CatalogRepository
 import com.techgv.cineverse.data.tmdb.MovieList
@@ -19,6 +20,8 @@ import com.techgv.cineverse.domain.Title
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -26,9 +29,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -55,6 +58,8 @@ data class HomeUiState(
     val genres: Map<Int, String> = emptyMap(),
     /** Title whose Play-trailer videos are loading: its button is disabled. */
     val trailerLoading: MediaRef? = null,
+    val settingsError: SectionErrorKind? = null,
+    val genresError: SectionErrorKind? = null,
 )
 
 /** Outcome of a Play-trailer press (§7.2); each shell maps it to its player route / toast. */
@@ -83,13 +88,20 @@ class HomeStateHolder(
     private val settings: Flow<Settings>,
     private val saver: StateSaver,
     scope: CoroutineScope? = null,
+    private val onStorageFailure: (StorageException) -> Unit = {},
 ) : ViewModel() {
     private val scope: CoroutineScope = scope ?: viewModelScope
-    private val sections = HomeRow.entries.associateWith { PagedSection(this.scope, appGeneration) }
+    private val sections = HomeRow.entries.associateWith { PagedSection(this.scope, appGeneration, onStorageFailure) }
     private val trend = MutableStateFlow(saver.getString(TREND)?.let { TrendingWindow.valueOf(it) } ?: TrendingWindow.Week)
     private val selectedHero = MutableStateFlow<Hero?>(null)
     private val genres = MutableStateFlow<Map<Int, String>>(emptyMap())
     private val trailerLoading = MutableStateFlow<MediaRef?>(null)
+    private val settingsError = MutableStateFlow<SectionErrorKind?>(null)
+    private val genresError = MutableStateFlow<SectionErrorKind?>(null)
+    private val settingsReads = MutableStateFlow(0L)
+    private var contentSettings: Triple<String, String, Boolean>? = null
+    private var settingsApp = appGeneration.current
+    private var genresApp = appGeneration.current
     private var heroJob: Job? = null
     private var trailerJob: Job? = null
     private var genresJob: Job? = null
@@ -110,22 +122,56 @@ class HomeStateHolder(
         combine(trend, selectedHero, rows, genres, trailerLoading) { trend, selected, rows, genres, trailer ->
             val firstTrending = (rows[HomeRow.Trending] as? SectionState.Content)?.value?.items?.firstOrNull()
             HomeUiState(trend, selected ?: firstTrending, rows, genres, trailer)
-        }.stateIn(this.scope, SharingStarted.Eagerly, HomeUiState(trend.value))
+        }.combine(settingsError) { state, error -> state.copy(settingsError = error) }
+            .combine(genresError) { state, error -> state.copy(genresError = error) }
+            .stateIn(this.scope, SharingStarted.Eagerly, HomeUiState(trend.value))
 
     init {
         HomeRow.entries.forEach { load(it) }
         loadGenres()
-        // §3.4: a language / region / adult change reloads what is visible.
+        // Keep the last real tuple across subscriptions: retry must detect changes missed while storage was down.
         this.scope.launch {
-            settings.map { Triple(it.language, it.region, it.includeAdult) }.distinctUntilChanged().drop(1).collect {
-                sections.values.forEach { it.reload() }
-                loadGenres()
-                // The selected hero belongs to the old language; fall back to the new first trending item.
-                heroJob?.cancel()
-                selectedHero.value = null
-                cancelTrailer()
+            settingsReads.collectLatest { read ->
+                var first = true
+                var app = appGeneration.current
+                try {
+                    settings.collect { value ->
+                        currentCoroutineContext().ensureActive()
+                        val next = Triple(value.language, value.region, value.includeAdult)
+                        val changed = (contentSettings != null && contentSettings != next) || settingsApp != appGeneration.current
+                        contentSettings = next
+                        settingsApp = appGeneration.current
+                        app = settingsApp
+                        settingsError.value = null
+                        if (changed) {
+                            resetContent()
+                        } else if (first && read > 0) {
+                            sections.values.forEach { it.retryStorage() }
+                            if (genresError.value != null) loadGenres()
+                        }
+                        first = false
+                    }
+                } catch (failure: StorageException) {
+                    currentCoroutineContext().ensureActive()
+                    if (app == appGeneration.current) {
+                        settingsError.value = SectionErrorKind.Generic
+                        onStorageFailure(failure)
+                    }
+                }
             }
         }
+    }
+
+    /** Re-subscribe settings, then recover failed reads; never replay a previous trailer press. */
+    fun retryStorage() { settingsReads.update { it + 1 } }
+
+    private fun resetContent() {
+        HomeRow.entries.forEach { load(it) }
+        genres.value = emptyMap()
+        loadGenres()
+        heroJob?.cancel()
+        selectedHero.value = null
+        cancelTrailer()
     }
 
     /** Genre names of the current settings; a newer load (or a newer app generation) supersedes this one. */
@@ -133,11 +179,27 @@ class HomeStateHolder(
         genresJob?.cancel()
         val gen = genresGeneration.bump()
         val app = appGeneration.current
+        if (genresApp != app) genres.value = emptyMap()
         genresJob = scope.launch {
-            val names = catalog.genreNames()
+            val result = try {
+                Result.success(catalog.genreNames())
+            } catch (failure: StorageException) {
+                Result.failure(failure)
+            }
+            currentCoroutineContext().ensureActive()
             if (gen != genresGeneration.current) return@launch
             if (app != appGeneration.current) return@launch loadGenres()
-            genres.value = names
+            result.fold(
+                onSuccess = {
+                    genres.value = it
+                    genresApp = app
+                    genresError.value = null
+                },
+                onFailure = {
+                    genresError.value = SectionErrorKind.Generic
+                    onStorageFailure(it as StorageException)
+                },
+            )
         }
     }
 
@@ -168,7 +230,10 @@ class HomeStateHolder(
 
     private fun movies(list: MovieList) = PageSource({ catalog.movieList(list, it) }) { it.toHero(MediaType.Movie) }
 
-    fun retry(row: HomeRow) = sections.getValue(row).reload()
+    fun retry(row: HomeRow) {
+        if (settingsError.value != null) retryStorage()
+        else sections.getValue(row).reload(retainContent = true)
+    }
 
     fun loadMore(row: HomeRow) = sections.getValue(row).loadMore()
 
@@ -177,15 +242,20 @@ class HomeStateHolder(
         if (window == trend.value) return
         trend.value = window
         saver.putString(TREND, window.name)
+        heroJob?.cancel()
+        selectedHero.value = null
+        cancelTrailer()
         load(HomeRow.Trending)
     }
 
     /** The hero shows [hero] after [delayMillis] (TV: focus debounce, mobile: pager page); a newer call cancels it. */
     fun selectHero(hero: Hero, delayMillis: Long = 0) {
         heroJob?.cancel()
+        val app = appGeneration.current
         heroJob = scope.launch {
             delay(delayMillis)
-            selectedHero.value = hero
+            currentCoroutineContext().ensureActive()
+            if (app == appGeneration.current) selectedHero.value = hero
         }
     }
 
@@ -199,6 +269,7 @@ class HomeStateHolder(
         val app = appGeneration.current
         trailerLoading.value = title.ref
         trailerJob = scope.launch {
+            var storageFailure: StorageException? = null
             val event = try {
                 var videos = catalog.videos(title.mediaType, title.ref.id).results.youTubeInTrailerOrder()
                 if (videos.isEmpty() && settings.first().language != ENGLISH) {
@@ -207,11 +278,18 @@ class HomeStateHolder(
                 videos.firstOrNull()?.let { trailerOf(title.title, it.key, it.name) } ?: TrailerEvent.Unavailable(title.title)
             } catch (_: TmdbException) {
                 TrailerEvent.Failed
+            } catch (failure: StorageException) {
+                storageFailure = failure
+                TrailerEvent.Failed
             }
+            currentCoroutineContext().ensureActive()
             // Superseded: cancelTrailer() already cleared the loading flag.
             if (gen != trailerGeneration.current || !active) return@launch
             trailerLoading.value = null
-            if (app == appGeneration.current) mutableEvents.emit(event)
+            if (app == appGeneration.current) {
+                storageFailure?.let(onStorageFailure)
+                mutableEvents.emit(event)
+            }
         }
     }
 
