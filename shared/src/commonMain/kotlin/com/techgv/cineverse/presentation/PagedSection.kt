@@ -77,9 +77,11 @@ class PagedSection(
     }
 
     /** Retries only a storage-failed read, including the failed next page; never repeats a UI intent. */
-    fun retryStorage() {
-        val page = storageFailedPage ?: return
-        source?.let { start(it, if (contentApp == appGeneration.current) page else 1, retainContent = true) }
+    fun retryStorage(): Boolean {
+        val page = storageFailedPage ?: return false
+        val source = source ?: return false
+        start(source, if (contentApp == appGeneration.current) page else 1, retainContent = true)
+        return true
     }
 
     /** Appends the next page; no-op while loading, after the last page, or before page 1 arrived. */
