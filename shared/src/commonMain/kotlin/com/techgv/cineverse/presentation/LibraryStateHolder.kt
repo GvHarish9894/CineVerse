@@ -1,5 +1,9 @@
 package com.techgv.cineverse.presentation
 
+import com.techgv.cineverse.data.storage.StorageException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techgv.cineverse.data.auth.AuthSession
@@ -55,12 +59,15 @@ data class LibraryUiState(
  * revalidate on entry and after any library mutation; a revalidation keeps the shown items until it lands.
  * [scope]: see [HomeStateHolder].
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryStateHolder(
     private val repository: LibraryRepository,
     private val saver: StateSaver,
     scope: CoroutineScope? = null,
+    private val onStorageFailure: (StorageException) -> Unit = {},
 ) : ViewModel() {
     private val scope: CoroutineScope = scope ?: viewModelScope
+    private val guestReads = MutableStateFlow(0L)
     private val tab = MutableStateFlow(saver.getString(TAB)?.let(LibraryTab::valueOf) ?: LibraryTab.Watchlist)
     private val _state = MutableStateFlow(LibraryUiState(tab = tab.value))
     val state: StateFlow<LibraryUiState> = _state.asStateFlow()
@@ -79,9 +86,14 @@ class LibraryStateHolder(
                 listScope = c?.let { it to t }
                 _state.update { it.copy(accountName = c?.displayName, signedIn = c != null, tab = t, movies = LibraryGroup(), tv = LibraryGroup()) }
                 if (c == null) {
-                    combine(repository.guestEntries(t.kind, MediaType.Movie), repository.guestEntries(t.kind, MediaType.Tv)) { m, tv ->
+                    guestReads.flatMapLatest { combine(repository.guestEntries(t.kind, MediaType.Movie), repository.guestEntries(t.kind, MediaType.Tv)) { m, tv ->
                         LibraryGroup(m.toSection()) to LibraryGroup(tv.toSection())
-                    }.collect { (m, tv) -> _state.update { it.copy(movies = m, tv = tv) } }
+                    }.catch { failure ->
+                        if (failure !is StorageException) throw failure
+                        onStorageFailure(failure)
+                        val error = LibraryGroup(SectionState.Error(SectionErrorKind.Generic))
+                        _state.update { it.copy(movies = error, tv = error) }
+                    } }.collect { (m, tv) -> _state.update { it.copy(movies = m, tv = tv) } }
                 } else {
                     MediaType.entries.forEach(::reload)
                     repository.listRevision.drop(1).collect { MediaType.entries.forEach(::reload) }
@@ -106,6 +118,7 @@ class LibraryStateHolder(
     }
 
     fun retry(media: MediaType) {
+        if (listScope == null) { guestReads.update { it + 1 }; return }
         val group = _state.value.group(media)
         if (group.section is SectionState.Content && group.refreshError == null) loadMore(media) else reload(media)
     }
@@ -131,6 +144,11 @@ class LibraryStateHolder(
                         hasMore = page.hasMore, loadingMore = false, moreError = null,
                     )
                 }
+            } catch (failure: StorageException) {
+                if (generations.getValue(media).isCurrent(generation)) {
+                    onStorageFailure(failure)
+                    setGroup(media) { it.copy(section = SectionState.Error(SectionErrorKind.Generic), loadingMore = false) }
+                }
             } catch (e: TmdbException) {
                 if (generations.getValue(media).isCurrent(generation)) {
                     setGroup(media) { it.copy(loadingMore = false, moreError = e.toSectionErrorKind()) }
@@ -155,6 +173,11 @@ class LibraryStateHolder(
                 if (!generations.getValue(media).isCurrent(generation)) return@launch
                 loadedPages[media] = pages.size
                 setGroup(media) { LibraryGroup(pages.flatMap { it.entries }.distinctBy { it.title.ref }.toSection(), pages.last().hasMore) }
+            } catch (failure: StorageException) {
+                if (generations.getValue(media).isCurrent(generation)) {
+                    onStorageFailure(failure)
+                    setGroup(media) { it.copy(section = SectionState.Error(SectionErrorKind.Generic), loadingMore = false) }
+                }
             } catch (e: TmdbException) {
                 if (!generations.getValue(media).isCurrent(generation)) return@launch
                 // A failed revalidation keeps the items already shown, marked stale with the error and a retry.

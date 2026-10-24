@@ -1,5 +1,6 @@
 package com.techgv.cineverse.presentation
 
+import com.techgv.cineverse.data.storage.StorageException
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.ImportOffer
 import com.techgv.cineverse.data.library.ImportResult
@@ -32,12 +33,18 @@ class ImportLibraryStateHolder(
     private val importer: LibraryImporter,
     private val scope: CoroutineScope,
     private val onImported: () -> Unit,
+    private val onStorageFailure: (StorageException) -> Unit,
 ) {
+    constructor(importer: LibraryImporter, scope: CoroutineScope, onImported: () -> Unit) :
+        this(importer, scope, onImported, {})
     private val dialog = MutableStateFlow<ImportPrompt?>(null)
     private val playerActive = MutableStateFlow(false)
     private var account: AuthSession? = null
     private var unconfirmed = emptySet<ImportStep>()
     private var job: Job? = null
+    private var revision = 0L
+    private enum class Action { Offer, KeepSeparate, Finish, Import }
+    private var failed: Pair<Action, Set<ImportStep>>? = null
 
     /** The dialog to display: null while the Player is up. */
     val prompt: Flow<ImportPrompt?> = combine(dialog, playerActive) { d, player -> d.takeUnless { player } }
@@ -48,54 +55,87 @@ class ImportLibraryStateHolder(
 
     /** The signed-in account changed: the previous account's import stops; offer or resume for [c]. */
     suspend fun onAccount(c: AuthSession?) {
+        revision++
         job?.cancel()
+        failed = null
+        unconfirmed = emptySet()
         dialog.value = null
         account = c
-        c ?: return
-        when (val offer = importer.offer(c)) {
-            is ImportOffer.Ask -> dialog.value = ImportPrompt.Ask(c.displayName, offer.items)
-            is ImportOffer.Resume -> dialog.value = ImportPrompt.Ask(c.displayName, offer.items, resume = true)
-            null -> Unit
-        }
+        if (c != null) perform(c, revision, Action.Offer, emptySet())
     }
 
-    fun keepSeparate() {
-        val c = account ?: return
-        dialog.value = null
-        scope.launch { importer.keepSeparate(c) }
+    fun keepSeparate() = launch(Action.KeepSeparate)
+
+    fun import() = launch(Action.Import)
+
+    fun retry() {
+        val failure = failed
+        if (failure != null) launch(failure.first, failure.second) else launch(Action.Import, unconfirmed)
     }
 
-    fun import() = run(emptySet())
-
-    fun retry() = run(unconfirmed)
+    /** Retries exactly the failed local operation; a failed offer/finish never starts account POSTs. */
+    fun retryStorage() { if (failed != null) retry() }
 
     fun close() {
-        val c = account ?: return
-        if (dialog.value is ImportPrompt.Unconfirmed) scope.launch { importer.finish(c) }
-        dialog.value = null
+        if (dialog.value is ImportPrompt.Unconfirmed) launch(Action.Finish) else dialog.value = null
     }
 
-    /** Running / resume prompt → Later: stops the import. The ledger (incl. `attempting` steps) stays, so resuming reconciles. */
+    /** Stops work without clearing the durable attempting ledger. */
     fun later() {
+        revision++
         job?.cancel()
+        failed = null
         dialog.value = null
     }
 
-    private fun run(retry: Set<ImportStep>) {
+    private fun launch(action: Action, retry: Set<ImportStep> = emptySet()) {
         val c = account ?: return
         job?.cancel()
-        job = scope.launch {
-            dialog.value = ImportPrompt.Running
-            dialog.value = when (val result = importer.import(c, retry)) {
-                is ImportResult.Aborted -> ImportPrompt.Failed
-                ImportResult.Superseded -> null // signed out: the new account's flow owns the dialog
-                is ImportResult.Done -> if (result.unconfirmed.isEmpty()) {
-                    onImported()
-                    null
-                } else {
-                    unconfirmed = result.unconfirmed.toSet()
-                    ImportPrompt.Unconfirmed(result.written, result.unconfirmedTitles)
+        val ticket = ++revision
+        job = scope.launch { perform(c, ticket, action, retry) }
+    }
+
+    private suspend fun perform(c: AuthSession, ticket: Long, action: Action, retry: Set<ImportStep>) {
+        fun current() = account == c && revision == ticket
+        if (!current()) return
+        failed = null
+        try {
+            when (action) {
+                Action.Offer -> {
+                    val offer = importer.offer(c)
+                    if (!current()) return
+                    dialog.value = when (offer) {
+                        is ImportOffer.Ask -> ImportPrompt.Ask(c.displayName, offer.items)
+                        is ImportOffer.Resume -> ImportPrompt.Ask(c.displayName, offer.items, resume = true)
+                        null -> null
+                    }
                 }
+                Action.KeepSeparate, Action.Finish -> {
+                    if (action == Action.KeepSeparate) importer.keepSeparate(c) else importer.finish(c)
+                    if (current()) dialog.value = null
+                }
+                Action.Import -> {
+                    dialog.value = ImportPrompt.Running
+                    val result = importer.import(c, retry)
+                    if (!current()) return
+                    dialog.value = when (result) {
+                        is ImportResult.Aborted -> ImportPrompt.Failed
+                        ImportResult.Superseded -> null
+                        is ImportResult.Done -> if (result.unconfirmed.isEmpty()) {
+                            onImported()
+                            null
+                        } else {
+                            unconfirmed = result.unconfirmed.toSet()
+                            ImportPrompt.Unconfirmed(result.written, result.unconfirmedTitles)
+                        }
+                    }
+                }
+            }
+        } catch (failure: StorageException) {
+            if (current()) {
+                failed = action to retry
+                dialog.value = ImportPrompt.Failed
+                onStorageFailure(failure)
             }
         }
     }

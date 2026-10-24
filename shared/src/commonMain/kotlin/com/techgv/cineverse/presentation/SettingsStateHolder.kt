@@ -1,5 +1,11 @@
 package com.techgv.cineverse.presentation
 
+import com.techgv.cineverse.data.storage.StorageException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.update
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.techgv.cineverse.data.auth.AuthRepository
@@ -64,22 +70,31 @@ data class SettingsUiState(
  * §7.9 Settings: the toggles and ←→ choices (language / region changes invalidate the TMDB cache at the composition
  * root, §3.4), the signed-in account's defaults offer and §4.2 sign-out. [scope]: see [HomeStateHolder].
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsStateHolder(
     private val settings: SettingsRepository,
     private val auth: AuthRepository,
     scope: CoroutineScope? = null,
+    private val onStorageFailure: (StorageException) -> Unit = {},
 ) : ViewModel() {
     private val scope: CoroutineScope = scope ?: viewModelScope
 
+    private val reads = MutableStateFlow(0L)
+
+    /** Retry a failed read; mutations are never replayed automatically. */
+    fun retryStorage() { reads.update { it + 1 } }
+
     /** Null until the first settings read: a shell restores focus only once real values show. */
     val state: StateFlow<SettingsUiState?> =
-        combine(settings.settings, auth.session, settings.pendingAccountDefaults) { s, session, pending ->
+        reads.flatMapLatest { combine(settings.settings, auth.session, settings.pendingAccountDefaults) { s, session, pending ->
             SettingsUiState(
                 settings = s,
                 accountName = session?.displayName,
                 accountDefaults = session?.let { pending[it.accountObjectId.value] },
             )
-        }.stateIn(this.scope, SharingStarted.WhileSubscribed(5_000), null)
+        }.catch { failure ->
+            if (failure is StorageException) onStorageFailure(failure) else throw failure
+        } }.stateIn(this.scope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun toggle(toggle: Toggle) = edit {
         when (toggle) {
@@ -102,9 +117,11 @@ class SettingsStateHolder(
     /** Resolves [offer] only while its account is still the signed-in one (a stale screen's click does nothing). */
     fun resolveAccountDefaults(offer: AccountDefaults, apply: Boolean) {
         scope.launch {
-            if (auth.session.first()?.accountObjectId?.value == offer.accountObjectId) {
-                settings.resolveAccountDefaults(offer.accountObjectId, apply)
-            }
+            try {
+                if (auth.session.first()?.accountObjectId?.value == offer.accountObjectId) {
+                    settings.resolveAccountDefaults(offer.accountObjectId, apply)
+                }
+            } catch (failure: StorageException) { onStorageFailure(failure) }
         }
     }
 
@@ -137,6 +154,9 @@ class SettingsStateHolder(
     }
 
     private fun edit(transform: (Settings) -> Settings) {
-        scope.launch { settings.update(transform) }
+        scope.launch {
+            try { settings.update(transform) }
+            catch (failure: StorageException) { onStorageFailure(failure) }
+        }
     }
 }

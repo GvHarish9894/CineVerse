@@ -1,7 +1,14 @@
 package com.techgv.cineverse.di
 
-import org.koin.core.module.Module
-import org.koin.dsl.module
+import org.koin.core.KoinApplication
+import org.koin.dsl.koinApplication
 
-/** Web app definitions (P9 registers its shared state holders here). */
-fun webModule(): Module = module { }
+/** The browser host owns one isolated graph and explicitly starts/stops its asynchronous runtime. */
+class BrowserApplication {
+    val graph: KoinApplication = koinApplication { modules(sharedModules(WebConfig("/api"))) }
+    val runtime: WebRuntime = graph.koin.get()
+
+    init { runtime.start() }
+
+    fun stop() { runtime.stop(); graph.close() }
+}
