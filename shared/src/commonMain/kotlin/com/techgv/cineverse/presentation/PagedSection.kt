@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** Loaded pages of one list; [moreError] is a failed next page (the loaded items stay). */
+/** Loaded pages of one list; [moreError] marks a failed next page or storage refresh (the loaded items stay). */
 data class PagedItems(
     val items: List<Hero>,
     val page: Int,
@@ -76,7 +76,7 @@ class PagedSection(
         source?.let { start(it, 1, retainContent = retainContent) }
     }
 
-    /** Retries only a storage-failed read, including the failed next page; never repeats a UI intent. */
+    /** Retries only a storage-failed read, including the failed next page; returns whether a retry started. */
     fun retryStorage(): Boolean {
         val page = storageFailedPage ?: return false
         val source = source ?: return false
