@@ -89,7 +89,7 @@ internal fun MobileHomeScreen(
                     ErrorState("Genre names unavailable; keeping loaded content.", model::retryStorage, Modifier.padding(horizontal = 20.dp).testTag("home-genres-recovery"))
                 }
                 if (homeStorageFailed && !settingsFailed && state.settingsError == null && state.genresError == null) item("home-storage-error") {
-                    ErrorState("Home storage unavailable. Retry reads; previous trailer actions are not replayed.", model::retryStorage, Modifier.padding(horizontal = 20.dp).testTag("home-storage-recovery"))
+                    ErrorState("A Home storage read failed. Retry reads; previous trailer actions are not replayed.", model::retryStorage, Modifier.padding(horizontal = 20.dp).testTag("home-storage-recovery"))
                 }
                 if (identityFailed) item("identity-error") {
                     ErrorState("Account state unavailable. Watchlist is disabled.", graph::retryIdentity, Modifier.padding(horizontal = 20.dp))
