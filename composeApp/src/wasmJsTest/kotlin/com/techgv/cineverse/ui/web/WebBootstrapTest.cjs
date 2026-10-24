@@ -46,15 +46,39 @@ class Cdp {
     constructor(socket) {
         this.socket = socket; this.serial = 0; this.pending = new Map(); this.events = [];
         this.fetches = new Set(); this.precedingFetches = new Set();
+        this.requests = new Map(); this.timeline = []; this.boundary = 'setup';
         socket.addEventListener('message', event => {
             const message = JSON.parse(event.data);
             if (message.id) {
                 const pending = this.pending.get(message.id); this.pending.delete(message.id);
                 if (message.error) pending.reject(Error(JSON.stringify(message.error))); else pending.resolve(message.result);
             } else {
-                if (message.method === 'Network.requestWillBeSent' && message.params.type === 'Fetch') this.fetches.add(message.params.requestId);
-                if (message.method === 'Network.loadingFinished' || message.method === 'Network.loadingFailed') this.fetches.delete(message.params.requestId);
+                const params = message.params;
+                const receivedAt = Date.now();
+                if (message.method === 'Network.requestWillBeSent') {
+                    const request = {requestId: params.requestId, url: params.request.url, type: params.type, frameId: params.frameId,
+                        loaderId: params.loaderId, timestamp: params.timestamp, wallTime: params.wallTime, initiator: params.initiator,
+                        boundary: this.boundary, receivedAt, lifecycle: []};
+                    this.requests.set(params.requestId, request);
+                    if (params.type === 'Fetch') this.fetches.add(params.requestId);
+                    message.params = request;
+                } else if (message.method === 'Network.responseReceived') {
+                    message.params = {requestId: params.requestId, timestamp: params.timestamp, type: params.type, frameId: params.frameId,
+                        loaderId: params.loaderId, response: {url: params.response.url, status: params.response.status, mimeType: params.response.mimeType}};
+                } else if (message.method === 'Runtime.exceptionThrown') {
+                    const details = params.exceptionDetails;
+                    message.params = {exceptionDetails: {text: details.text, url: details.url, lineNumber: details.lineNumber,
+                        columnNumber: details.columnNumber, exception: {className: details.exception?.className, description: details.exception?.description}}};
+                } else if (message.method.startsWith('Network.')) {
+                    // Diagnostic whitelist: never persist headers, cookies, bodies or credential-bearing extra-info events.
+                    if (!['Network.loadingFinished', 'Network.loadingFailed'].includes(message.method)) return;
+                } else if (!message.method.startsWith('Page.')) return;
+                if (message.method === 'Network.responseReceived' || message.method === 'Network.loadingFinished' || message.method === 'Network.loadingFailed') {
+                    this.requests.get(params.requestId)?.lifecycle.push({method: message.method, receivedAt, boundary: this.boundary, ...message.params});
+                }
+                if (message.method === 'Network.loadingFinished' || message.method === 'Network.loadingFailed') this.fetches.delete(params.requestId);
                 this.events.push(message);
+                this.timeline.push({...message, receivedAt, boundary: this.boundary});
             }
         });
     }
@@ -66,6 +90,13 @@ class Cdp {
     call(method, params = {}) {
         const id = ++this.serial;
         return new Promise((resolve, reject) => { this.pending.set(id, {resolve, reject}); this.socket.send(JSON.stringify({id, method, params})); });
+    }
+    async documentIdentity() {
+        try {
+            const frame = (await this.call('Page.getFrameTree')).frameTree.frame;
+            const evaluation = await this.call('Runtime.evaluate', {expression: 'JSON.stringify({url:location.href,timeOrigin:performance.timeOrigin,readyState:document.readyState})', returnByValue: true});
+            return {receivedAt: Date.now(), frameId: frame.id, loaderId: frame.loaderId, frameUrl: frame.url, ...JSON.parse(evaluation.result.value)};
+        } catch (error) { return {receivedAt: Date.now(), unavailable: error.message}; }
     }
     close() { this.socket.close(); }
 }
@@ -89,15 +120,20 @@ function checkFailureClassification() {
 }
 
 async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRequired = true) {
+    const before = await cdp.documentIdentity();
     const precedingFetches = new Set(cdp.fetches);
     cdp.precedingFetches = precedingFetches;
-    const step = {label, expected, responses: [], precedingFetches: [...precedingFetches]}; report.steps.push(step);
-    cdp.events = [];
-    await navigate();
+    const step = {label, expected, responses: [], precedingFetches: [...precedingFetches], before, observations: [], axObservations: []}; report.steps.push(step);
+    cdp.events = []; cdp.boundary = label;
+    step.navigationRequestedAt = Date.now();
+    step.navigationResult = await navigate();
+    step.navigationReturnedAt = Date.now();
     const tree = await until(async () => {
+        step.observations.push(await cdp.documentIdentity());
         assert.deepEqual(bootstrapFailures(cdp.events, precedingFetches), [], label + ': resource/runtime failure');
         const tree = await cdp.call('Accessibility.getFullAXTree');
         const names = tree.nodes.filter(node => !node.ignored).map(node => node.name?.value);
+        step.axObservations.push({receivedAt: Date.now(), expectedMatched: names.includes(expected), guestMatched: names.includes('Sign in'), after: await cdp.documentIdentity()});
         if (!names.includes(expected) || !names.includes('Sign in')) return false;
         const responses = cdp.events.filter(event => event.method === 'Network.responseReceived').map(event => event.params.response);
         const fonts = responses.filter(response => response.url.includes('/composeResources/') && response.url.endsWith('.ttf'));
@@ -147,7 +183,8 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
         for (const [label, route, expected] of cases) {
             const target = await (await fetch(debugging + '/json/new?about:blank', {method: 'PUT'})).json();
             const cdp = await Cdp.connect(target.webSocketDebuggerUrl); pages.push(cdp);
-            await cdp.call('Page.enable'); await cdp.call('Runtime.enable'); await cdp.call('Network.enable'); await cdp.call('Accessibility.enable');
+            await cdp.call('Page.enable'); await cdp.call('Page.setLifecycleEventsEnabled', {enabled: true});
+            await cdp.call('Runtime.enable'); await cdp.call('Network.enable'); await cdp.call('Accessibility.enable');
             await cdp.call('Network.setCacheDisabled', {cacheDisabled: true});
             await cdp.call('Emulation.setDeviceMetricsOverride', {width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false});
             await checkDocument(cdp, origin, label + '-direct', expected, () => cdp.call('Page.navigate', {url: origin + route}));
@@ -165,6 +202,11 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
         }
         report.passed = true;
     } finally {
+        for (const [index, cdp] of pages.entries()) {
+            if (cdp.socket.readyState === WebSocket.OPEN) cdp.finalIdentity = await cdp.documentIdentity();
+            fs.writeFileSync(path.join(artifacts, 'page-' + index + '-diagnostics.json'), JSON.stringify({finalIdentity: cdp.finalIdentity,
+                requests: [...cdp.requests.values()], timeline: cdp.timeline, eventsAtExit: cdp.events}, null, 2));
+        }
         for (const cdp of pages) cdp.close();
         if (chrome && chrome.exitCode === null) { chrome.kill('SIGTERM'); await new Promise(resolve => chrome.once('exit', resolve)); }
         await new Promise(resolve => server.close(resolve));
