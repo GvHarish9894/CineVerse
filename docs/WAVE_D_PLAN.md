@@ -2,7 +2,7 @@
 
 ## Starting point and authority
 
-- Main is `5f624d8` (reviewed CI-only health-token fix); corrected hosted CI must be checked separately.
+- Main shared-only source is `a50c20d`: reviewed D0 storage recovery and S1 defaults contract integrated without UI. Combined302JVM/296Android/299iOS/267Wasm/TV63/server57 and build/scan gates pass. Hosted CI is a separate exact-head gate.
 - Reviewed **non-main** UI dependency base: `p7-ui-stage @ 711d339` (source merge `db16271`, docs `8571e38`). Staging review: `c7048de8-bc1c-4c20-b773-ca8b85861fc3/ui-stage-review.md` in managed artifacts.
 - P7 is NOT accepted/promoted. Original `l3-design @ b5e69a6`, its worktree and `http://localhost:8765/?build=b5e69a6` stay untouched pending actual owner Safari render/Tab/Escape/handle/focus-return/console result.
 - User authorized all remaining implementation and GPT delegation. Every worker/reviewer uses `cliproxyapi/gpt-6.1-sol`; no model/provider/auth/CLI fallback. No nested agents, merges, pushes or new worktrees by workers.

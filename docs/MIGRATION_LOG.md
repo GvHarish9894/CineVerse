@@ -40,6 +40,15 @@ acceptance is implied. Logs: `/tmp/cineverse-supervisor-review-gates/c4-all-merg
 P7 design source may be integrated into an isolated **non-main UI staging branch** for continued development;
 this does not approve/promote P7, alter the owner's b5e69a6 preview, or waive its manual Safari gate.
 
+Reviewed Wave D shared-only integration at `a50c20d`: Home paging/storage recovery (D0 final
+`adb67d4`, including independently re-reviewed marker correction) and identity-bound defaults read
+(S1 `dbfb69e`) were cherry-picked without any P7/mobile/web UI source. Combined shared JVM **302**,
+Android-host **296**, iOS **299**, Wasm **267**, TV unit **63**, server **57**, compose host **2** /
+iOS **3** all pass with zero failures/errors/skips; native/web builds, lint/release and **18-file**
+secret scan pass. Evidence: `/tmp/cineverse-supervisor-review-gates/wave-d-core-merged-*`.
+These core iOS results do not clear the separate interrupted mobile-UI iOS suite. P7 owner Safari,
+M1 source-fix re-review/recovery wiring and W1 strict reload diagnosis/recovery wiring remain open.
+
 Hosted CI indexing was subsequently resolved. All three workflows passed on `66e219b` and `87cb193`:
 [TV](https://github.com/GvHarish9894/CineVerse/actions/runs/39845723853),
 [shared/server/web](https://github.com/GvHarish9894/CineVerse/actions/runs/39845723753),
