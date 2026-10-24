@@ -10,7 +10,9 @@
 | P7 design system (L3) | l3-design @ b5e69a6 | not merged | Source/tests approved after r4; acceptance INCOMPLETE | Owner's actual Safari render/Tab/Escape/focus-return/console check |
 | P9 browser-storage foundation (C3) | c3-browser-storage @ 94be9d9 | 76d1e02 | COMPLETE after r2; commit-owned invalidation survives caller cancellation | Browser DI/session/import-lock integration; Firefox/Safari/private-mode/full-product/top-level-tab and durability-policy acceptance remain pending |
 | P9 HTTP foundation (C2) | c2-web-http @ 2556dff | ed3982e | COMPLETE after r2; delivery-time expiry freshness + supported Settings logout failure fixed | Browser DI/lifecycle/import integration and deployed browser/auth/product gates; prior TV UI evidence is not new-head device acceptance |
-| P8 native-approval foundation (C1) | c1-native-auth @ 5bd81ca + partial lifecycle fix | not merged | INCOMPLETE: iOS background cancellation; GPT proxy interrupted the fix | Finish lifecycle hook/test, re-review; human approval and production-app persistence remain pending |
+| P8 native-approval foundation (C1) | c1-native-auth @ 311f4e9 | 113fea1 | COMPLETE after r2; background cancellation preserves pending recovery | Real Android/iOS approval/return and production-app persistence; physical/release and full historical upgrade gates |
+| P8/P9 catalog extensions (C5) | c5-catalog @ 3b4be68 | ca2f39b | COMPLETE; discover/keywords direct+proxy/cache contracts | Product Browse/Detail behavior and live/platform acceptance |
+| P9 browser integration (C4) | c4-web-integration @ 227b77f | not merged | Implementation/gates complete; independent review pending | Root/lifetime/import/storage-error review, merged gates and deployed product acceptance |
 
 C3 merged gate at `76d1e02`: JVM **206**, Android-host **200**, Chromium/Wasm **160**, all zero
 failures/errors/skips; production distribution and **18-file** secret scan passed. Log:
@@ -20,6 +22,12 @@ Combined C2+C3 gate at `ed3982e`: JVM **231**, Android-host **225**, iOS **228**
 server **52**, TV unit **63**; all zero failures/errors/skips. TV debug/lint/release, phone debug, iOS
 framework link and **18-file** production secret scan passed. Log:
 `/tmp/cineverse-supervisor-review-gates/c2-c3-merged-gates.log`. No combined live-account/device-UI acceptance is implied.
+
+Combined C1+C5 source at `113fea1`: JVM **256**, Android-host **250**, iOS **253**, compose Android
+**2**, compose iOS **3**, TV unit **63**, server **52**, Wasm **195**, all zero failures/errors/skips.
+TV debug/lint/release, phone debug/release, production iOS framework/Swift host and **18-file** secret scan
+passed. Logs: `/tmp/cineverse-supervisor-review-gates/c1-c5-merged-{native,browser,swift}.log`.
+These are automated combined gates, not real sign-in/product/hardware acceptance.
 
 Hosted CI indexing was subsequently resolved. All three workflows passed on `66e219b` and `87cb193`:
 [TV](https://github.com/GvHarish9894/CineVerse/actions/runs/39845723853),

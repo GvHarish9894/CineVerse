@@ -62,14 +62,16 @@ exact commits, changed contracts, focused tests, actual runtime evidence, and un
 - C4/C5 start from this reviewed combined foundation (plus the lane-board documentation). Six total worktrees
   maximum; no temporary branch/history is deleted to make room. Native C1 recovery remains on its own branch.
 
-- C1 native candidate `5bd81ca` has one required iOS scene-background cancellation fix unfinished after a GPT proxy
-  stream failure. Its partial patch is retained at `/tmp/cineverse-review-diffs/c1-r2-interrupted-5bd81ca.patch`;
-  no alternate model/execution mode was selected.
+- C1 native `311f4e9` and C5 catalog `3b4be68` are reviewed and merged as `113fea1` / `ca2f39b`. Combined
+  JVM256/Android250/iOS253/Wasm195, compose2+3/TVunit63/server52 and native/web build/scan gates pass.
+- C4 browser integration `227b77f` is implemented/gated, pending independent review:212 browser tests,
+  JVM237/Android231/TVunit63, production scan and prior scoped TV runtime evidence. Do not merge before verdict.
+
 - P7/L3 remains unmerged pending the owner's actual Safari result. No human/platform gate is waived.
 
 ## Next slices after foundations
 
-Add reviewed discover/keywords/recent-search/catalog capabilities just in time, then run the existing
+Consume reviewed discover/keywords; add recent-search persistence just in time, then run the existing
 M1–M3/W1–W3 screen ownership groups from ORCHESTRATION.md in bounded waves (never seven simultaneous worktrees).
 Separate mobile and web shells consume shared primitives/holders. No UI lane invents credentials/storage.
 
