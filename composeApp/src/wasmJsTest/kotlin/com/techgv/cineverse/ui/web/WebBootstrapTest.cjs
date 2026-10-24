@@ -13,6 +13,50 @@ const report = {fixture: true, distribution: dist, artifacts, steps: []};
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const mime = {'.html': 'text/html', '.js': 'application/javascript', '.wasm': 'application/wasm', '.ttf': 'font/ttf', '.json': 'application/json'};
 
+// Observation only: native promises/readers/results and all original arguments/receivers are returned unchanged.
+function installReadTrace() {
+    const streams = new WeakMap(), readers = new WeakMap();
+    let serial = 0, sequence = 0;
+    const emit = (record, phase, extra = {}) => {
+        try { globalThis.__w1ReadTrace(JSON.stringify({...record, phase, sequence: ++sequence,
+            timeOrigin: performance.timeOrigin, at: performance.now(), documentUrl: location.href, ...extra})); } catch (_) {}
+    };
+    const fetch = globalThis.fetch;
+    globalThis.fetch = function (...args) {
+        let record;
+        try {
+            const url = typeof args[0] === 'string' ? new URL(args[0], document.baseURI) : null;
+            const method = args[1] ? Object.getOwnPropertyDescriptor(args[1], 'method')?.value || 'GET' : 'GET';
+            if (url?.origin === location.origin && (url.pathname === '/api/session' || url.pathname.startsWith('/api/tmdb/'))) {
+                record = {id: ++serial, url: url.href, method};
+                emit(record, 'fetch');
+                const signal = args[1] && Object.getOwnPropertyDescriptor(args[1], 'signal')?.value;
+                if (signal?.aborted) emit(record, 'alreadyAborted');
+                signal?.addEventListener('abort', () => emit(record, 'abort'), {once: true});
+            }
+        } catch (_) {}
+        const promise = Reflect.apply(fetch, this, args);
+        if (record) promise.then(response => {
+            try { if (response.body) streams.set(response.body, record); emit(record, 'response', {status: response.status}); } catch (_) {}
+        }, () => emit(record, 'fetchRejected'));
+        return promise;
+    };
+    const getReader = ReadableStream.prototype.getReader;
+    ReadableStream.prototype.getReader = function (...args) {
+        const reader = Reflect.apply(getReader, this, args);
+        const record = streams.get(this);
+        if (record) readers.set(reader, record);
+        return reader;
+    };
+    const read = ReadableStreamDefaultReader.prototype.read;
+    ReadableStreamDefaultReader.prototype.read = function (...args) {
+        const promise = Reflect.apply(read, this, args);
+        const record = readers.get(this);
+        if (record) promise.then(result => { if (result.done === true) emit(record, 'end'); }, () => emit(record, 'readRejected'));
+        return promise;
+    };
+}
+
 function serve(request, response) {
     const pathname = new URL(request.url, 'http://localhost').pathname;
     const json = (status, body) => { response.writeHead(status, {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}); response.end(JSON.stringify(body)); };
@@ -47,6 +91,7 @@ class Cdp {
         this.socket = socket; this.serial = 0; this.pending = new Map(); this.events = [];
         this.fetches = new Set(); this.precedingFetches = new Set();
         this.requests = new Map(); this.timeline = []; this.boundary = 'setup';
+        this.contexts = new Map(); this.readTraces = [];
         socket.addEventListener('message', event => {
             const message = JSON.parse(event.data);
             if (message.id) {
@@ -55,6 +100,18 @@ class Cdp {
             } else {
                 const params = message.params;
                 const receivedAt = Date.now();
+                if (message.method === 'Runtime.executionContextCreated') {
+                    const context = params.context;
+                    this.contexts.set(context.id, {frameId: context.auxData?.frameId, isDefault: context.auxData?.isDefault});
+                    return;
+                }
+                if (message.method === 'Runtime.bindingCalled' && params.name === '__w1ReadTrace') {
+                    const value = JSON.parse(params.payload);
+                    const context = this.contexts.get(params.executionContextId);
+                    this.readTraces.push({...value, frameId: context?.frameId, isDefault: context?.isDefault,
+                        executionContextId: params.executionContextId, receivedAt, boundary: this.boundary});
+                    return;
+                }
                 if (message.method === 'Network.requestWillBeSent') {
                     const request = {requestId: params.requestId, url: params.request.url, method: params.request.method, type: params.type, frameId: params.frameId,
                         loaderId: params.loaderId, timestamp: params.timestamp, wallTime: params.wallTime, initiator: params.initiator,
@@ -169,6 +226,58 @@ function exactSessionAbort(event, cdp, expected, origin) {
         request.frameId === expected?.frameId && request.loaderId === expected?.loaderId;
 }
 
+function consumedApiAbort(event, cdp, expected, origin) {
+    const request = cdp.requests.get(event.params?.requestId);
+    if (event.method !== 'Network.loadingFailed' || !event.params.canceled || event.params.type !== 'Fetch' ||
+        request?.method !== 'GET' || request.frameId !== expected?.frameId || request.loaderId !== expected?.loaderId) return null;
+    const url = new URL(request.url);
+    if (url.origin !== origin || !(url.pathname === '/api/session' || url.pathname.startsWith('/api/tmdb/'))) return null;
+    const response = request.lifecycle.find(item => item.method === 'Network.responseReceived')?.response;
+    if (!response || response.status < 200 || response.status >= 300 || response.mimeType !== 'application/json') return null;
+    const starts = cdp.readTraces.filter(trace => trace.phase === 'fetch' && trace.isDefault && trace.url === request.url && trace.method === 'GET' &&
+        trace.frameId === expected.frameId && trace.documentUrl === expected.url && trace.timeOrigin === expected.timeOrigin &&
+        Math.abs(trace.timeOrigin + trace.at - request.wallTime * 1000) < 50);
+    if (starts.length !== 1) return null;
+    const traces = cdp.readTraces.filter(trace => trace.id === starts[0].id && trace.executionContextId === starts[0].executionContextId);
+    const end = traces.find(trace => trace.phase === 'end');
+    const abort = traces.find(trace => trace.phase === 'abort');
+    if (!end || !abort || end.sequence >= abort.sequence || end.at > abort.at || traces.some(trace => ['alreadyAborted', 'readRejected', 'fetchRejected'].includes(trace.phase))) return null;
+    return {requestId: request.requestId, url: request.url, frameId: request.frameId, loaderId: request.loaderId,
+        timeOrigin: expected.timeOrigin, end, abort, catalog: url.pathname.startsWith('/api/tmdb/')};
+}
+
+function checkConsumptionProof() {
+    const expected = {frameId: 'frame', loaderId: 'loader', url: 'http://fixture/', timeOrigin: 1000};
+    const event = {method: 'Network.loadingFailed', params: {requestId: 'read', canceled: true, type: 'Fetch'}};
+    const request = {requestId: 'read', method: 'GET', url: 'http://fixture/api/session', frameId: 'frame', loaderId: 'loader', wallTime: 1,
+        lifecycle: [{method: 'Network.responseReceived', response: {status: 200, mimeType: 'application/json'}}]};
+    const trace = {id: 1, executionContextId: 1, url: request.url, method: 'GET', isDefault: true, frameId: 'frame', documentUrl: expected.url, timeOrigin: 1000};
+    const traces = [{...trace, phase: 'fetch', sequence: 1, at: 0}, {...trace, phase: 'end', sequence: 2, at: 1}, {...trace, phase: 'abort', sequence: 3, at: 2}];
+    const prove = (candidate = request, events = traces, failure = event, identity = expected) => consumedApiAbort(failure, {requests: new Map([['read', candidate]]), readTraces: events}, identity, 'http://fixture');
+    assert.ok(prove());
+    for (const candidate of [{...request, method: 'POST'}, {...request, url: 'http://other/api/session'}, {...request, url: 'http://fixture/api/auth/start'},
+        {...request, loaderId: 'old'}, {...request, frameId: 'old'}, {...request, lifecycle: []},
+        {...request, lifecycle: [{method: 'Network.responseReceived', response: {status: 500, mimeType: 'application/json'}}]},
+        {...request, lifecycle: [{method: 'Network.responseReceived', response: {status: 200, mimeType: 'text/html'}}]}]) assert.equal(prove(candidate), null);
+    for (const events of [traces.filter(item => item.phase !== 'end'), traces.filter(item => item.phase !== 'abort'),
+        traces.map(item => item.phase === 'end' ? {...item, sequence: 4} : item),
+        traces.map(item => item.phase === 'end' ? {...item, at: 3} : item),
+        traces.map(item => ({...item, timeOrigin: 0})), traces.map(item => ({...item, documentUrl: 'http://fixture/old'})),
+        traces.map(item => ({...item, isDefault: false})), [...traces, {...traces[0], id: 2}],
+        ...['alreadyAborted', 'readRejected', 'fetchRejected'].map(phase => [...traces, {...trace, phase}])]) assert.equal(prove(request, events), null);
+    assert.equal(prove(request, traces, {...event, params: {...event.params, canceled: false}}), null);
+    assert.equal(prove(request, traces, {...event, params: {...event.params, type: 'Script'}}), null);
+    assert.equal(prove(request, traces, {method: 'Runtime.exceptionThrown', params: {}}), null);
+    console.log('PASS: consumed-before-abort proof rejects unknown/early/ambiguous/wrong-document/non-JSON/non-GET/non-fixture failures.');
+}
+
+function parsedHomeEmpty(tree) {
+    const nodes = tree.nodes.filter(node => !node.ignored);
+    return nodes.some(node => node.name?.value === 'No titles yet') &&
+        nodes.some(node => node.name?.value === 'There are no results for this section.') &&
+        nodes.some(node => node.role?.value === 'button' && node.name?.value === 'Refresh Trending');
+}
+
 async function observeSessionOutcome(cdp, origin, step, precedingFetches) {
     const expected = step.observations.at(-1);
     const navigation = cdp.events.findLast(event => event.method === 'Page.frameNavigated' && event.params.frame.id === expected?.frameId && event.params.frame.loaderId === expected?.loaderId);
@@ -176,19 +285,22 @@ async function observeSessionOutcome(cdp, origin, step, precedingFetches) {
     step.sessionOutcomeProbe = probe;
     try {
         if (!navigation || navigation.params.frame.url !== expected.url || sameDocument(expected, step.before) ||
-            !bootstrapFailures(cdp.events, precedingFetches).every(event => exactSessionAbort(event, cdp, expected, origin))) return;
+            !bootstrapFailures(cdp.events, precedingFetches).every(event => consumedApiAbort(event, cdp, expected, origin))) return;
         const deadline = Date.now() + 5000;
         probe.outcome = 'Pending';
         do {
             const failures = bootstrapFailures(cdp.events, precedingFetches);
-            if (failures.some(event => !exactSessionAbort(event, cdp, expected, origin))) { probe.outcome = 'UnrelatedStrictFailure'; return; }
+            if (failures.some(event => !consumedApiAbort(event, cdp, expected, origin))) { probe.outcome = 'UnrelatedStrictFailure'; return; }
             const before = await cdp.documentIdentity(true);
             const tree = await cdp.call('Accessibility.getFullAXTree');
             const after = await cdp.documentIdentity(true);
             const state = authoritativeAxState(tree, expected, before, after);
-            probe.samples.push({receivedAt: Date.now(), before, after, state});
-            if (bootstrapFailures(cdp.events, precedingFetches).some(event => !exactSessionAbort(event, cdp, expected, origin))) { probe.outcome = 'UnrelatedStrictFailure'; return; }
-            if (['Ready', 'Failed', 'RejectedIdentity'].includes(state)) { probe.outcome = state; return; }
+            const homeEmpty = parsedHomeEmpty(tree);
+            probe.samples.push({receivedAt: Date.now(), before, after, state, homeEmpty});
+            const proofs = bootstrapFailures(cdp.events, precedingFetches).map(event => consumedApiAbort(event, cdp, expected, origin));
+            if (proofs.some(proof => !proof)) { probe.outcome = 'UnrelatedStrictFailure'; return; }
+            if (state === 'Ready' && (!proofs.some(proof => proof.catalog) || homeEmpty)) { probe.outcome = state; probe.proofs = proofs; return; }
+            if (['Failed', 'RejectedIdentity'].includes(state)) { probe.outcome = state; return; }
             await sleep(100);
         } while (Date.now() < deadline);
         probe.timedOut = true;
@@ -250,6 +362,7 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
 (async () => {
     checkFailureClassification();
     checkOutcomeGuards();
+    checkConsumptionProof();
     assert.ok(fs.existsSync(path.join(dist, 'index.html')), 'Build the production distribution first');
     assert.ok(process.env.CHROME_BIN, 'Set CHROME_BIN to the leased Chrome executable');
     const server = http.createServer(serve);
@@ -274,7 +387,9 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
             const target = await (await fetch(debugging + '/json/new?about:blank', {method: 'PUT'})).json();
             const cdp = await Cdp.connect(target.webSocketDebuggerUrl); pages.push(cdp);
             await cdp.call('Page.enable'); await cdp.call('Page.setLifecycleEventsEnabled', {enabled: true});
-            await cdp.call('Runtime.enable'); await cdp.call('Network.enable'); await cdp.call('Accessibility.enable');
+            await cdp.call('Runtime.enable'); await cdp.call('Runtime.addBinding', {name: '__w1ReadTrace'});
+            await cdp.call('Page.addScriptToEvaluateOnNewDocument', {source: '(' + installReadTrace.toString() + ')()'});
+            await cdp.call('Network.enable'); await cdp.call('Accessibility.enable');
             await cdp.call('Network.setCacheDisabled', {cacheDisabled: true});
             await cdp.call('Emulation.setDeviceMetricsOverride', {width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false});
             await checkDocument(cdp, origin, label + '-direct', expected, () => cdp.call('Page.navigate', {url: origin + route}));
@@ -295,7 +410,7 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
         for (const [index, cdp] of pages.entries()) {
             if (cdp.socket.readyState === WebSocket.OPEN) cdp.finalIdentity = await cdp.documentIdentity();
             fs.writeFileSync(path.join(artifacts, 'page-' + index + '-diagnostics.json'), JSON.stringify({finalIdentity: cdp.finalIdentity,
-                requests: [...cdp.requests.values()], timeline: cdp.timeline, eventsAtExit: cdp.events}, null, 2));
+                requests: [...cdp.requests.values()], readTraces: cdp.readTraces, timeline: cdp.timeline, eventsAtExit: cdp.events}, null, 2));
         }
         for (const cdp of pages) cdp.close();
         if (chrome && chrome.exitCode === null) { chrome.kill('SIGTERM'); await new Promise(resolve => chrome.once('exit', resolve)); }
