@@ -1,5 +1,6 @@
 package com.techgv.cineverse.di
 
+import com.techgv.cineverse.data.auth.AccountDefaultsMetadata
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
@@ -9,6 +10,7 @@ import com.techgv.cineverse.data.tmdb.CatalogRepository
 import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.TmdbException
 import com.techgv.cineverse.data.web.WebApprovalAttempt
+import com.techgv.cineverse.data.web.WebProxyException
 import com.techgv.cineverse.presentation.*
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.*
@@ -139,6 +141,13 @@ class WebRuntime internal constructor(
                 if (!closed && ticket == syncRevision) sessionState.value = WebSessionState.Failed(failure.error)
             }
         }
+    }
+
+    /** Read only after capturing Ready.session; failures do not undo a committed sign-in or apply preferences. */
+    suspend fun accountDefaults(expected: AuthSession): AccountDefaultsMetadata = try { auth.accountDefaults(expected) }
+    catch (failure: WebProxyException) {
+        if (failure.code in setOf("stale_session", "session_expired", "not_signed_in")) browserAuth.requestVerification()
+        throw failure
     }
 
     suspend fun startApproval(): WebApprovalAttempt = auth.startApproval()

@@ -11,9 +11,20 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.LongAsStringSerializer
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+
+/** Only metadata retained during verified account resolution; null means unavailable, never an invented default. */
+@Serializable
+private class AccountDefaultsResponse(
+    val accountObjectId: String,
+    @Serializable(with = LongAsStringSerializer::class) val sessionGeneration: Long,
+    val language: String?,
+    val region: String?,
+    val includeAdult: Boolean?,
+)
 
 @Serializable
 private class WatchlistRequest(
@@ -75,6 +86,14 @@ fun Route.accountRoutes(config: ServerConfig, tmdb: Tmdb, sessions: SessionLooku
     }
 
     rateLimit(ACCOUNT_READ_BY_IP) {
+        get("/api/account/defaults") {
+            val session = boundSession(mutation = false)
+            if (!call.request.queryParameters.isEmpty()) throw NOT_ALLOWED
+            call.respondJson(apiJson.encodeToString(AccountDefaultsResponse(
+                session.accountObjectId, session.generation, session.language, session.region, session.includeAdult,
+            )))
+        }
+
         get("/api/account/{media}/{list}") {
             val session = boundSession(mutation = false)
             val list = call.parameters["list"]?.takeIf { it in accountLists } ?: throw NOT_ALLOWED

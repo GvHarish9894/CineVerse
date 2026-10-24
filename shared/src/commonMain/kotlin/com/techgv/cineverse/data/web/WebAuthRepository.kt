@@ -22,13 +22,18 @@ class WebApprovalAttempt(val approveUrl: String, val attemptId: String) {
     override fun toString() = "WebApprovalAttempt(<redacted>)"
 }
 
+private fun JsonElement?.webGeneration(): Long {
+    val value = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
+        ?: throw SerializationException("Invalid web generation")
+    if (!Regex("-?(0|[1-9][0-9]*)").matches(value)) throw SerializationException("Invalid web generation")
+    return value.toLongOrNull() ?: throw SerializationException("Invalid web generation")
+}
+
 internal fun decodeWebSession(text: String): AuthSession? {
     fun malformed(): Nothing = throw SerializationException("Invalid web session")
     val obj = WebJson.parseToJsonElement(text) as? JsonObject ?: malformed()
     val signedIn = (obj["signedIn"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull ?: malformed()
-    val revision = (obj["sessionGeneration"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: malformed()
-    if (!Regex("-?(0|[1-9][0-9]*)").matches(revision)) malformed()
-    val generation = revision.toLongOrNull() ?: malformed()
+    val generation = obj["sessionGeneration"].webGeneration()
     if (!signedIn) {
         if (obj["accountObjectId"] != JsonNull || obj["displayName"] != JsonNull || generation != 0L) malformed()
         return null
@@ -36,6 +41,22 @@ internal fun decodeWebSession(text: String): AuthSession? {
     val account = (obj["accountObjectId"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() } ?: malformed()
     val name = (obj["displayName"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: malformed()
     return AuthSession(AccountObjectId(account), name, generation)
+}
+
+internal fun decodeWebAccountDefaults(text: String): AccountDefaultsMetadata {
+    fun malformed(): Nothing = throw SerializationException("Invalid web account defaults")
+    val obj = WebJson.parseToJsonElement(text) as? JsonObject ?: malformed()
+    fun optionalString(key: String): String? = when (val value = obj[key]) {
+        null, JsonNull -> null
+        else -> (value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: malformed()
+    }
+    val account = optionalString("accountObjectId")?.takeIf { it.isNotBlank() } ?: malformed()
+    val adult = when (val value = obj["includeAdult"]) {
+        null, JsonNull -> null
+        else -> (value as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull ?: malformed()
+    }
+    return AccountDefaultsMetadata(AccountObjectId(account), obj["sessionGeneration"].webGeneration(),
+        optionalString("language"), optionalString("region"), adult)
 }
 
 /** Explicit browser approval controller + AuthRepository. Only /api/session establishes identity. */
@@ -98,6 +119,25 @@ class WebAuthRepository(private val http: WebProxyHttp) : AuthRepository {
             }
         } catch (e: CancellationException) { throw e
         } catch (_: TmdbException) { /* Keep unverified until an authoritative sync succeeds. */ }
+    }
+
+    /** Explicit private read for the caller's captured sign-in; never applies settings or participates in login. */
+    suspend fun accountDefaults(expected: AuthSession): AccountDefaultsMetadata {
+        val ticket = capture(expected)
+        try {
+            val metadata = try { decodeWebAccountDefaults(http.call("/api/account/defaults", expected = expected)) }
+            catch (_: SerializationException) {
+                throw WebProxyException("malformed_response", null, null, WebWriteOutcome.NotApplicable, TmdbError.Malformed)
+            }
+            check(expected, ticket)
+            if (metadata.accountObjectId != expected.accountObjectId || metadata.sessionGeneration != expected.sessionGeneration) {
+                throw staleWebSession()
+            }
+            return metadata
+        } catch (failure: WebProxyException) {
+            recover(failure)
+            throw failure
+        }
     }
 
     /** Bootstrap CSRF, then start the server-owned attempt. Open approveUrl using the browser shell. */

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.techgv.cineverse.data.auth.AccountDefaultsMetadata
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.settings.AccountDefaults
@@ -51,6 +52,16 @@ fun accountDefaultsOffer(session: AuthSession, account: AccountDto, current: Set
     val region = account.region?.takeIf { it in Settings.REGIONS } ?: current.region
     if (language == current.language && region == current.region && account.includeAdult == current.includeAdult) return null
     return AccountDefaults(session.accountObjectId.value, language, region, account.includeAdult)
+}
+
+/** Browser metadata only: unknown/unsupported fields keep current values; never offer another sign-in's defaults. */
+fun accountDefaultsOffer(session: AuthSession, metadata: AccountDefaultsMetadata, current: Settings): AccountDefaults? {
+    if (metadata.accountObjectId != session.accountObjectId || metadata.sessionGeneration != session.sessionGeneration) return null
+    val language = Settings.LANGUAGES.firstOrNull { it.substringBefore('-') == metadata.language } ?: current.language
+    val region = metadata.region?.takeIf { it in Settings.REGIONS } ?: current.region
+    val adult = metadata.includeAdult ?: current.includeAdult
+    if (language == current.language && region == current.region && adult == current.includeAdult) return null
+    return AccountDefaults(session.accountObjectId.value, language, region, adult)
 }
 
 /** §7.9 on/off rows. */

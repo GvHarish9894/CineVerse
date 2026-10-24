@@ -1,5 +1,6 @@
 package com.techgv.cineverse.presentation
 
+import com.techgv.cineverse.data.auth.AccountDefaultsMetadata
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.settings.AccountDefaults
 import com.techgv.cineverse.data.settings.HapticStrength
@@ -77,6 +78,26 @@ class SettingsStateHolderTest {
     @Test fun noOfferWhenTheAccountDefaultsMatchTheCurrentSettings() {
         assertNull(accountDefaultsOffer(session(), AccountDto(1, language = "en", region = "IN"), Settings()))
         assertNull(accountDefaultsOffer(session(), AccountDto(1, language = null, region = null), Settings()))
+    }
+
+    @Test fun safeMetadataPreservesUnknownUnsupportedFieldsAndDistinguishesFalse() {
+        val a = session()
+        val unknown = AccountDefaultsMetadata(a.accountObjectId, a.sessionGeneration, null, null, null)
+        val current = Settings(language = "ta-IN", region = "GB", includeAdult = true)
+        assertNull(accountDefaultsOffer(a, unknown, current))
+        assertNull(accountDefaultsOffer(a, unknown.copy(language = "fr", region = "FR"), current))
+        assertEquals(AccountDefaults(a.accountObjectId.value, "hi-IN", "GB", true),
+            accountDefaultsOffer(a, unknown.copy(language = "hi"), current))
+        assertEquals(AccountDefaults(a.accountObjectId.value, "ta-IN", "US", false),
+            accountDefaultsOffer(a, unknown.copy(region = "US", includeAdult = false), current))
+        assertNull(accountDefaultsOffer(a, unknown.copy(includeAdult = false), Settings()))
+    }
+
+    @Test fun safeMetadataCannotOfferAnotherAccountOrOlderGeneration() {
+        val a = session()
+        val defaults = AccountDefaultsMetadata(a.accountObjectId, a.sessionGeneration, "hi", "US", true)
+        assertNull(accountDefaultsOffer(a.copy(sessionGeneration = a.sessionGeneration + 1), defaults, Settings()))
+        assertNull(accountDefaultsOffer(bob, defaults, Settings()))
     }
 
     @Test fun togglesAndChoicesEditTheSettings() = runTest(dispatcher) {

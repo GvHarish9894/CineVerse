@@ -67,6 +67,9 @@ class UserSession(
     val userAccessToken: String,
     val sessionId: String,
     val expiresAt: Long,
+    val language: String?,
+    val region: String?,
+    val includeAdult: Boolean?,
 ) {
     fun toAuthSession() = AuthSession(true, accountObjectId, displayName, generation)
     override fun toString() = "UserSession(redacted)"
@@ -183,6 +186,9 @@ class AuthStore(private val config: ServerConfig, private val nowMillis: () -> L
             userAccessToken = tokens.accessToken,
             sessionId = sessionId,
             expiresAt = now + config.sessionTtl.inWholeMilliseconds,
+            language = account.language,
+            region = account.region,
+            includeAdult = account.includeAdult,
         )
         sessions[session.id] = session
         owners[session.id] = SessionOwner(binding, session.expiresAt)

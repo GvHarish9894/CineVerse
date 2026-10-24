@@ -39,6 +39,7 @@ class WebSharedModulesTest {
         val calls = mutableListOf<HttpRequestData>()
         var identity: AuthSession? = session("a", generation = Long.MAX_VALUE)
         var sessionStatus = HttpStatusCode.OK
+        var defaultsBody: String? = null
         var gatePath: String? = null
         var gate: CompletableDeferred<Unit>? = null
         var postCheck: suspend () -> Unit = {}
@@ -57,6 +58,7 @@ class WebSharedModulesTest {
                     document.cookie = "cv_csrf=c4fixture; Path=/; SameSite=Strict"
                     if (sessionStatus == HttpStatusCode.OK) identity.json() else """{"error":"upstream_error"}"""
                 }
+                path == "/api/account/defaults" -> defaultsBody ?: """{"accountObjectId":"${identity!!.accountObjectId.value}","sessionGeneration":"${identity!!.sessionGeneration}","language":"hi","region":null,"includeAdult":false}"""
                 path == "/api/auth/start" -> {
                     assertEquals("c4fixture", request.headers["X-CV-CSRF"])
                     """{"approveUrl":"https://www.themoviedb.org/auth/access?request_token=fixture","attemptId":"fixture"}"""
@@ -151,6 +153,35 @@ class WebSharedModulesTest {
         assertEquals(1, f.count("/api/auth/start"))
         assertEquals(f.identity, f.auth.session.value)
         assertFailsWith<UnsupportedOperationException> { f.koin.get<AuthRepository>().createRequestCode() }
+    } }
+
+    @Test fun defaultsAccessorIsExplicitBoundReadOnlyAndFailureDoesNotUndoSignIn() = runTest { fixture { f ->
+        f.start()
+        val a = (f.runtime.session.value as WebSessionState.Ready).session!!
+        assertEquals(0, f.count("/api/account/defaults"), "no automatic bootstrap/offer")
+        val before = f.settings.current()
+        val metadata = f.runtime.accountDefaults(a)
+        assertEquals(a.accountObjectId, metadata.accountObjectId)
+        assertEquals(Long.MAX_VALUE, metadata.sessionGeneration)
+        assertEquals("hi", metadata.language)
+        assertNull(metadata.region)
+        assertEquals(false, metadata.includeAdult)
+        val request = f.calls.last { it.url.encodedPath == "/api/account/defaults" }
+        assertEquals(Long.MAX_VALUE.toString(), request.headers["X-CV-Expected-Session-Generation"])
+        assertEquals(a.accountObjectId.value, request.headers["X-CV-Expected-Account"])
+        assertEquals(before, f.settings.current())
+        assertTrue(f.settings.pendingAccountDefaults.first().isEmpty())
+        f.defaultsBody = "malformed"
+        assertEquals("malformed_response", assertFailsWith<WebProxyException> { f.runtime.accountDefaults(a) }.code)
+        assertEquals(WebSessionState.Ready(a), f.runtime.session.value)
+        assertEquals(a, f.auth.session.value)
+        f.identity = session("b", generation = Long.MIN_VALUE)
+        f.runtime.revalidateSession()
+        f.runtime.session.first { it == WebSessionState.Ready(f.identity) }
+        val reads = f.count("/api/account/defaults")
+        assertFailsWith<WebProxyException> { f.runtime.accountDefaults(a) }
+        assertEquals(reads, f.count("/api/account/defaults"))
+        assertEquals(WebSessionState.Ready(f.identity), f.runtime.session.value)
     } }
 
     @Test fun startupFailureIsNotSignedOutAndExplicitRetryFetchesTruth() = runTest { fixture { f ->

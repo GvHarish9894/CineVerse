@@ -160,4 +160,11 @@ class AccessTokenDto(
 class SessionDto(@SerialName("session_id") val sessionId: String)
 
 @Serializable
-class AccountDto(val id: Int, val username: String = "", val name: String? = null)
+class AccountDto(
+    val id: Int,
+    val username: String = "",
+    val name: String? = null,
+    @SerialName("iso_639_1") val language: String? = null,
+    @SerialName("iso_3166_1") val region: String? = null,
+    @SerialName("include_adult") val includeAdult: Boolean? = null,
+)
