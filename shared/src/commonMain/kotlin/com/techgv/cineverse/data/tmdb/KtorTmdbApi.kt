@@ -51,6 +51,21 @@ class KtorTmdbApi(private val client: HttpClient) : TmdbApi {
     override suspend fun tvList(list: TvList, language: String, timezone: String?, page: Int): PageDto<MediaItemDto> =
         call("3/tv/$list", "language" to language, "timezone" to timezone, "page" to page)
 
+    override suspend fun discover(
+        media: MediaType,
+        genreIds: List<Int>,
+        sort: DiscoverSort,
+        language: String,
+        region: String?,
+        page: Int,
+    ): PageDto<MediaItemDto> =
+        call("3/discover/$media", *discoverQuery(media, genreIds, sort, language, region, page).toTypedArray())
+
+    override suspend fun keywords(media: MediaType, id: Int): KeywordsDto {
+        requireCatalogId(id)
+        return decodeKeywords(media, client.request("3/$media/$id/keywords").bodyAsText())
+    }
+
     override suspend fun popularPeople(language: String, page: Int): PageDto<MediaItemDto> =
         call("3/person/popular", "language" to language, "page" to page)
 

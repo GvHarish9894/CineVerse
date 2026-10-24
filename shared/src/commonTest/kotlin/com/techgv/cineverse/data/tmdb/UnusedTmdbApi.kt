@@ -11,6 +11,8 @@ open class UnusedTmdbApi : TmdbApi {
     override suspend fun trending(window: TrendingWindow, language: String, page: Int): PageDto<MediaItemDto> = unused("trending")
     override suspend fun movieList(list: MovieList, language: String, region: String, page: Int): PageDto<MediaItemDto> = unused("movieList")
     override suspend fun tvList(list: TvList, language: String, timezone: String?, page: Int): PageDto<MediaItemDto> = unused("tvList")
+    override suspend fun discover(media: MediaType, genreIds: List<Int>, sort: DiscoverSort, language: String, region: String?, page: Int): PageDto<MediaItemDto> = unused("discover")
+    override suspend fun keywords(media: MediaType, id: Int): KeywordsDto = unused("keywords")
     override suspend fun popularPeople(language: String, page: Int): PageDto<MediaItemDto> = unused("popularPeople")
     override suspend fun movieDetail(id: Int, language: String, append: String, sessionId: String?): MovieDetailDto = unused("movieDetail")
     override suspend fun tvDetail(id: Int, language: String, append: String, sessionId: String?): TvDetailDto = unused("tvDetail")

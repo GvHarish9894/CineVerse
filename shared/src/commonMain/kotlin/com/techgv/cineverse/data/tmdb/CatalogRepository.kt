@@ -68,6 +68,26 @@ class CatalogRepository(
         return catalog(key, TmdbCache.LIST_TTL) { api.tvList(list, s.language, tz, page) }
     }
 
+    /** Generic discover only; curated movie/TV lists retain their separate endpoint semantics. */
+    suspend fun discover(
+        media: MediaType,
+        genreIds: List<Int> = emptyList(),
+        sort: DiscoverSort = DiscoverSort.Popularity,
+        page: Int = 1,
+    ): PageDto<MediaItemDto> {
+        val genres = canonicalGenreIds(genreIds)
+        val s = settings()
+        val region = s.region.takeIf { media == MediaType.Movie }
+        discoverQuery(media, genres, sort, s.language, region, page)
+        val key = CacheKey("discover/$media", ids = "${sort.name}:${genres.joinToString(",")}", language = s.language, region = region, page = page)
+        return catalog(key, TmdbCache.LIST_TTL) { api.discover(media, genres, sort, s.language, region, page) }
+    }
+
+    suspend fun keywords(media: MediaType, id: Int): KeywordsDto {
+        requireCatalogId(id)
+        return catalog(CacheKey("keywords", ids = "$media:$id"), TmdbCache.DETAIL_TTL) { api.keywords(media, id) }
+    }
+
     suspend fun popularPeople(page: Int = 1): PageDto<MediaItemDto> {
         val s = settings()
         return catalog(CacheKey("person/popular", language = s.language, page = page), TmdbCache.LIST_TTL) {
