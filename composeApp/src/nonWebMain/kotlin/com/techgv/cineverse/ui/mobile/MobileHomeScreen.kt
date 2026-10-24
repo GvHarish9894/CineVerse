@@ -131,7 +131,7 @@ internal fun MobileHomeScreen(
 @Composable
 private fun HomeHero(graph: MobileApplication, home: HomeStateHolder, state: HomeUiState, titles: List<Title>, navigator: MobileNavigator) {
     val pager = rememberPagerState(pageCount = { titles.size })
-    val haptics = LocalHaptics.current
+    val haptics by rememberUpdatedState(LocalHaptics.current)
     LaunchedEffect(pager, titles) {
         var first = true
         snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { page ->

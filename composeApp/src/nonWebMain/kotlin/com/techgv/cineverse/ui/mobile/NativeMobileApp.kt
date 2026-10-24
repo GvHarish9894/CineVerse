@@ -92,7 +92,7 @@ internal fun MobileRoot(graph: MobileApplication, home: HomeStateHolder) {
         }
         selected = tab
         // Re-select at the root does not change the active effect's key.
-        if (resumed && tab == MobileTab.Home && controller.currentDestination?.hasRoute<MobileTabRoot>() == true) home.setActive(true)
+        if (resumed && tab == MobileTab.Home && controllers[tab.ordinal].currentDestination?.hasRoute<MobileTabRoot>() == true) home.setActive(true)
     }
     val navigator = MobileNavigator { destination ->
         home.setActive(false)

@@ -96,6 +96,7 @@ internal class MobileCatalogApi : MobileUnusedTmdbApi() {
     override suspend fun tvList(list: TvList, language: String, timezone: String?, page: Int) = page("tv-$language", page, "tv")
     override suspend fun popularPeople(language: String, page: Int) = page("people-$language", page, "person")
     override suspend fun videos(media: MediaType, id: Int, language: String): VideosDto {
+        calls += "videos/$id/$language"
         trailerGate?.await()
         return VideosDto(listOf(VideoDto(key = "fake-video", name = "Fixture trailer", site = "YouTube", type = "Trailer")))
     }
