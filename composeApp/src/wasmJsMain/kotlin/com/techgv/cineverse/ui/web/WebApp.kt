@@ -132,6 +132,7 @@ private fun SearchField(query: String, change: (String) -> Unit, focus: FocusReq
     OutlinedTextField(query, change, modifier.focusRequester(focus), singleLine = true, label = { Text("Search movies, TV and people") })
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun NavigationMenu(label: String, links: List<Pair<String, WebRoute>>, navigate: (WebRoute, Boolean) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
