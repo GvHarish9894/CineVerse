@@ -90,6 +90,7 @@ class PagedSection(
         val content = (mutableState.value as? SectionState.Content)?.value ?: return
         if (contentApp != appGeneration.current) return reload()
         if (!content.hasMore || content.loadingMore || job?.isActive == true) return
+        storageFailedPage = null
         mutableState.value = SectionState.Content(content.copy(loadingMore = true, moreError = null))
         val gen = generation.current
         val app = appGeneration.current

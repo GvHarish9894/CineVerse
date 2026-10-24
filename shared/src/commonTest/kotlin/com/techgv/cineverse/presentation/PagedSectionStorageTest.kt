@@ -3,6 +3,8 @@ package com.techgv.cineverse.presentation
 import com.techgv.cineverse.data.storage.StorageException
 import com.techgv.cineverse.data.tmdb.MediaItemDto
 import com.techgv.cineverse.data.tmdb.PageDto
+import com.techgv.cineverse.data.tmdb.TmdbError
+import com.techgv.cineverse.data.tmdb.TmdbException
 import com.techgv.cineverse.data.tmdb.toHero
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.*
@@ -62,6 +64,74 @@ class PagedSectionStorageTest {
         section.retryStorage()
         advanceUntilIdle()
         assertEquals(4, pages.size)
+    }
+
+    @Test fun ordinaryPagingConsumesStorageRetryEligibilityWithoutCancelingThePendingRequest() = runTest {
+        val section = PagedSection(this, app, reports::add)
+        val gate = CompletableDeferred<Unit>()
+        var pending: Job? = null
+        section.load(PageSource({ page ->
+            pages += page
+            if (page == 2) {
+                if (pages.size == 2) throw failure
+                pending = currentCoroutineContext()[Job]
+                gate.await()
+            }
+            PageDto(page, listOf(MediaItemDto(id = page, mediaType = "movie", title = "a-$page")), 3)
+        }) { it.toHero() })
+        advanceUntilIdle()
+        section.loadMore()
+        advanceUntilIdle()
+        assertEquals(SectionErrorKind.Generic, section.content().moreError)
+        section.loadMore()
+        runCurrent()
+        val request = assertNotNull(pending)
+        section.loadMore() // A no-op must not disturb the ordinary retry already in flight.
+        assertFalse(section.retryStorage())
+        runCurrent()
+        assertTrue(request.isActive)
+        assertEquals(listOf(1, 2, 2), pages)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(2, section.content().page)
+        assertEquals(2, section.content().items.size)
+        assertFalse(section.content().loadingMore)
+        assertNull(section.content().moreError)
+        assertEquals(listOf(failure), reports)
+    }
+
+    @Test fun ordinaryTmdbFailureDoesNotKeepOldStorageEligibilityButANewStorageFailureRestoresIt() = runTest {
+        val section = PagedSection(this, app, reports::add)
+        var error: Exception? = failure
+        section.load(PageSource({ page ->
+            pages += page
+            if (page == 2) error?.let { throw it }
+            PageDto(page, listOf(MediaItemDto(id = page, mediaType = "movie", title = "a-$page")), 3)
+        }) { it.toHero() })
+        advanceUntilIdle()
+        val before = section.content()
+        section.loadMore()
+        advanceUntilIdle()
+        assertEquals(before.copy(moreError = SectionErrorKind.Generic), section.content())
+        error = TmdbException(TmdbError.Network)
+        section.loadMore()
+        advanceUntilIdle()
+        assertEquals(before.copy(moreError = SectionErrorKind.Offline), section.content())
+        assertFalse(section.retryStorage())
+        advanceUntilIdle()
+        assertEquals(listOf(1, 2, 2), pages)
+        error = failure
+        section.loadMore()
+        advanceUntilIdle()
+        assertEquals(before.copy(moreError = SectionErrorKind.Generic), section.content())
+        error = null
+        assertTrue(section.retryStorage())
+        advanceUntilIdle()
+        assertEquals(listOf(1, 2, 2, 2, 2), pages)
+        assertEquals(2, section.content().page)
+        assertEquals(2, section.content().items.size)
+        assertNull(section.content().moreError)
+        assertEquals(listOf(failure, failure), reports)
     }
 
     @Test fun refreshStorageFailureAndRepeatedRetriesKeepTheLastRealPages() = runTest {
