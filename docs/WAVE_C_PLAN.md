@@ -50,6 +50,16 @@ exact commits, changed contracts, focused tests, actual runtime evidence, and un
   coordination cancels/joins replaced work; callbacks are hints and must match the current persisted attempt.
 - TV identity/schema/file/key aliases and all TV UI behavior remain unchanged.
 
+## Current status
+
+- C3 browser-storage component merged as `76d1e02` after round-2 REVIEW COMPLETE; merged JVM206/Android200/Wasm160
+  and production secret scan pass. Its worktree is retained; browser DI/product acceptance is still pending.
+- C2 HTTP candidate `2556dff` fixes the two reproduced expiry/Settings-consumer findings; re-review precedes merge.
+- C1 native candidate `5bd81ca` has one required iOS scene-background cancellation fix unfinished after a GPT proxy
+  stream failure. Its partial patch is retained at `/tmp/cineverse-review-diffs/c1-r2-interrupted-5bd81ca.patch`;
+  no alternate model/execution mode was selected.
+- P7/L3 remains unmerged pending the owner's actual Safari result. No human/platform gate is waived.
+
 ## Next slices after foundations
 
 Add reviewed discover/keywords/recent-search/catalog capabilities just in time, then run the existing
