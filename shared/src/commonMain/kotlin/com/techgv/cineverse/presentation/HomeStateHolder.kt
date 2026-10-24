@@ -170,6 +170,8 @@ class HomeStateHolder(
 
     fun retry(row: HomeRow) = sections.getValue(row).reload()
 
+    fun loadMore(row: HomeRow) = sections.getValue(row).loadMore()
+
     /** Switches the trending window and reloads only the trending row (its own generation). */
     fun selectTrend(window: TrendingWindow) {
         if (window == trend.value) return
