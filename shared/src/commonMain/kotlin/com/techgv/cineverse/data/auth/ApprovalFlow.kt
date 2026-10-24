@@ -58,9 +58,9 @@ fun approvalCallbackUri(attempt: ApprovalAttempt) = "$APPROVAL_CALLBACK_URI?atte
 
 /** True when [uri] is `cineverse://auth?attempt=<id>` naming the pending attempt; anything else is ignored. */
 suspend fun PendingAttemptStore.isPendingCallback(uri: String): Boolean {
-    if (!uri.startsWith("$APPROVAL_CALLBACK_URI?")) return false
-    val id = uri.substringAfter('?').split('&').firstOrNull { it.startsWith("attempt=") }?.substringAfter('=')
-    return id != null && id == load()?.id
+    val id = Regex("cineverse://auth\\?attempt=([A-Za-z0-9_-]+)").matchEntire(uri)?.groupValues?.get(1)
+        ?: return false
+    return id == load()?.id
 }
 
 /** TV: the QR shows the approval URL for another device; "I've approved it" polls the exchange (§4.1). No callback. */

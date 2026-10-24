@@ -49,8 +49,12 @@ class NativeAuthRepositoryTest {
     private var accountChanges = 0
     private lateinit var clock: TestScope
 
+    private val requestBodies = mutableListOf<RequestTokenBody>()
     private val api = object : UnusedTmdbApi() {
-        override suspend fun createRequestToken(body: RequestTokenBody) = RequestTokenDto("request-token")
+        override suspend fun createRequestToken(body: RequestTokenBody): RequestTokenDto {
+            requestBodies += body
+            return RequestTokenDto("request-token")
+        }
         override suspend fun createAccessToken(body: AccessTokenBody): AccessTokenDto {
             exchangeCalls++
             exchangeTimes += clock.currentTime
@@ -89,6 +93,18 @@ class NativeAuthRepositoryTest {
     private fun authTest(block: suspend TestScope.() -> Unit) = runTest {
         clock = this
         block()
+    }
+
+    @Test
+    fun mobileCreationBindsTheExactAttemptRedirectWithoutChangingTv() = authTest {
+        assertEquals("request-token", repo.createRequestCode("already-generated-id").requestToken)
+        repo.createRequestCode()
+        assertEquals(listOf("cineverse://auth?attempt=already-generated-id", "https://www.themoviedb.org/"),
+            requestBodies.map { it.redirectTo })
+        for (invalid in listOf("", "a&attempt=b", "a#x", "a?x", "a%26x")) {
+            kotlin.test.assertFailsWith<IllegalArgumentException> { repo.createRequestCode(invalid) }
+        }
+        assertEquals(2, requestBodies.size)
     }
 
     @Test

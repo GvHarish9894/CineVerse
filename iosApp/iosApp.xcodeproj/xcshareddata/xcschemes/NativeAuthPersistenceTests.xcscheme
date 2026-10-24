@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion="2700" version="1.7">
+  <BuildAction parallelizeBuildables="NO" buildImplicitDependencies="YES">
+    <BuildActionEntries>
+      <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="C1E000000000000000000001" BuildableName="NativeAuthPersistenceTests.xctest" BlueprintName="NativeAuthPersistenceTests" ReferencedContainer="container:iosApp.xcodeproj"/>
+      </BuildActionEntry>
+    </BuildActionEntries>
+  </BuildAction>
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.PosixSpawn" shouldUseLaunchSchemeArgsEnv="YES">
+    <Testables>
+      <TestableReference skipped="NO" parallelizable="NO">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="C1E000000000000000000001" BuildableName="NativeAuthPersistenceTests.xctest" BlueprintName="NativeAuthPersistenceTests" ReferencedContainer="container:iosApp.xcodeproj"/>
+      </TestableReference>
+    </Testables>
+  </TestAction>
+</Scheme>

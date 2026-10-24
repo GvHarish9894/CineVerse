@@ -9,6 +9,7 @@ tvFoundation = "1.0.0-alpha07"
 tvMaterial = "1.0.0-alpha07"
 lifecycle = "2.11.0"
 activityCompose = "1.13.0"
+browser = "1.9.0"
 navigation = "2.10.2"
 kotlinxSerialization = "1.9.0"
 kotlinxCoroutines = "1.11.0"
@@ -34,6 +35,7 @@ kotlinxBrowser = "0.5.0"
 slf4j = "2.0.19"
 
 [libraries]
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }

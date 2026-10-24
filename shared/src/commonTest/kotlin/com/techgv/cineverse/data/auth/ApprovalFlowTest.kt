@@ -28,7 +28,17 @@ class ApprovalFlowTest {
         assertFalse(store.isPendingCallback(approvalCallbackUri(first)), "an older attempt's redirect")
         assertFalse(store.isPendingCallback("cineverse://other?attempt=${second.id}"))
         assertFalse(store.isPendingCallback("https://evil.example/?attempt=${second.id}"))
-        assertTrue(store.isPendingCallback("cineverse://auth?x=1&attempt=${second.id}"))
+        for (uri in listOf(
+            "cineverse://auth?x=1&attempt=${second.id}",
+            "cineverse://auth?attempt=${second.id}&attempt=${second.id}",
+            "cineverse://auth?attempt=${second.id}#fragment",
+            "cineverse://auth/?attempt=${second.id}",
+            "cineverse://auth.evil?attempt=${second.id}",
+            "cineverse://user@auth?attempt=${second.id}",
+            "CINEVERSE://auth?attempt=${second.id}",
+            "cineverse://auth:80?attempt=${second.id}",
+            "cineverse://auth?%61ttempt=${second.id}",
+        )) assertFalse(store.isPendingCallback(uri), uri)
         store.clear()
         assertFalse(store.isPendingCallback(approvalCallbackUri(second)), "nothing pending")
     }

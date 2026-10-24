@@ -1,21 +1,36 @@
 package com.techgv.cineverse.auth
 
-import com.techgv.cineverse.data.auth.ApprovalAttempt
+import android.app.Activity
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import com.techgv.cineverse.data.auth.ApprovalFlow
+import com.techgv.cineverse.data.auth.NativeApprovalCoordinator
+import com.techgv.cineverse.data.auth.NativeApprovalOpener
+import com.techgv.cineverse.data.auth.NativeAuthRepository
 import com.techgv.cineverse.data.auth.PendingAttemptStore
-import com.techgv.cineverse.data.auth.SignInOutcome
-import com.techgv.cineverse.data.auth.isPendingCallback
+import java.lang.ref.WeakReference
 
-/**
- * Phone approval (plan §3, K11): the approval page in a Custom Tab, back through the `cineverse://auth?attempt=…`
- * deep link (also on cold start). [pending] must survive process death (a persistent store, P8).
- */
-class CustomTabsApprovalFlow(private val pending: PendingAttemptStore) : ApprovalFlow {
-    override suspend fun start(attempt: ApprovalAttempt): Unit =
-        TODO("P8: save the attempt in [pending], then open attempt.code.approvalUrl in a Custom Tab")
+/** Phone flow; the application owns the coordinator, the current Activity only supplies presentation. */
+class CustomTabsApprovalFlow(val coordinator: NativeApprovalCoordinator) : ApprovalFlow by coordinator {
+    constructor(auth: NativeAuthRepository, pending: PendingAttemptStore, opener: NativeApprovalOpener) :
+        this(NativeApprovalCoordinator(auth, pending, opener, auth::createRequestCode))
+}
 
-    override suspend fun onCallback(uri: String): Boolean = pending.isPendingCallback(uri)
+class AndroidCustomTabsOpener : NativeApprovalOpener {
+    private var activity = WeakReference<Activity>(null)
 
-    override suspend fun awaitApproval(attempt: ApprovalAttempt): SignInOutcome =
-        TODO("P8: wait for the bound callback (or \"I've approved it\"), then verify by the token exchange")
+    fun attach(activity: Activity) { this.activity = WeakReference(activity) }
+    fun detach(activity: Activity) {
+        if (this.activity.get() === activity) this.activity.clear()
+    }
+
+    override fun open(url: String, onCallback: (String) -> Unit, onCancel: () -> Unit) {
+        val host = checkNotNull(activity.get()?.takeUnless { it.isFinishing || it.isDestroyed }) {
+            "Approval requires a resumed Activity"
+        }
+        CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(host, Uri.parse(url))
+    }
+
+    // Custom Tabs are browser-owned: Back returns to the app; checkAgain() is the explicit manual-return action.
+    override fun cancel() = Unit
 }

@@ -6,9 +6,18 @@
 	objectVersion = 56;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+        C1E000000000000000000012 = {isa = PBXContainerItemProxy; containerPortal = C0FFEE000000000000000E00; proxyType = 1; remoteGlobalIDString = C1E000000000000000000011; remoteInfo = NativeAuthFixtureHost; };
+/* End PBXContainerItemProxy section */
+/* Begin PBXTargetDependency section */
+        C1E000000000000000000013 = {isa = PBXTargetDependency; target = C1E000000000000000000011; targetProxy = C1E000000000000000000012; };
+/* End PBXTargetDependency section */
+
 /* Begin PBXBuildFile section */
 		C0FFEE000000000000000A01 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000B01 /* iOSApp.swift */; };
 		C0FFEE000000000000000A02 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000B02 /* ContentView.swift */; };
+		C1A000000000000000000001 = {isa = PBXBuildFile; fileRef = C1B000000000000000000001; };
+		C1A000000000000000000011 = {isa = PBXBuildFile; fileRef = C1B000000000000000000011; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -16,6 +25,10 @@
 		C0FFEE000000000000000B02 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000B03 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C0FFEE000000000000000B04 /* iosApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iosApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1B000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAuthPersistenceTests.swift; sourceTree = "<group>"; };
+		C1B000000000000000000002 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NativeAuthPersistenceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1B000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAuthFixtureHost.swift; sourceTree = "<group>"; };
+		C1B000000000000000000012 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NativeAuthFixtureHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -26,6 +39,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C1C000000000000000000001 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		C1C000000000000000000011 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -34,6 +49,8 @@
 			children = (
 				C0FFEE000000000000000D01 /* iosApp */,
 				C0FFEE000000000000000D02 /* Products */,
+                C1D000000000000000000001,
+                C1D000000000000000000011,
 			);
 			sourceTree = "<group>";
 		};
@@ -51,10 +68,14 @@
 			isa = PBXGroup;
 			children = (
 				C0FFEE000000000000000B04 /* iosApp.app */,
+                C1B000000000000000000002,
+                C1B000000000000000000012,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
+		C1D000000000000000000001 = {isa = PBXGroup; children = (C1B000000000000000000001,); path = NativeAuthPersistenceTests; sourceTree = "<group>"; };
+		C1D000000000000000000011 = {isa = PBXGroup; children = (C1B000000000000000000011,); path = NativeAuthFixtureHost; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -77,6 +98,23 @@
 			productReference = C0FFEE000000000000000B04 /* iosApp.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C1E000000000000000000001 = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = C1F000000000000000000001;
+            buildPhases = (C1A000000000000000000002, C1C000000000000000000001,);
+            buildRules = (); dependencies = (C1E000000000000000000013,);
+            name = NativeAuthPersistenceTests;
+            productName = NativeAuthPersistenceTests;
+            productReference = C1B000000000000000000002;
+            productType = "com.apple.product-type.bundle.unit-test";
+        };
+		C1E000000000000000000011 = {
+            isa = PBXNativeTarget; buildConfigurationList = C1F000000000000000000011;
+            buildPhases = (C1A000000000000000000003, C1A000000000000000000012, C1C000000000000000000011,);
+            buildRules = (); dependencies = ();
+            name = NativeAuthFixtureHost; productName = NativeAuthFixtureHost;
+            productReference = C1B000000000000000000012; productType = "com.apple.product-type.application";
+        };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -101,6 +139,8 @@
 			projectRoot = "";
 			targets = (
 				C0FFEE000000000000000E01 /* iosApp */,
+                C1E000000000000000000001,
+                C1E000000000000000000011,
 			);
 		};
 /* End PBXProject section */
@@ -133,7 +173,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n./gradlew :composeApp:embedAndSignAppleFrameworkForXcode\n";
+			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n./gradlew :composeApp:embedAndSignAppleFrameworkForXcode --max-workers=2 --console=plain\n";
 		};
 		C0FFEE000000000000000A13 /* Inject native read token */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -155,6 +195,12 @@
 			shellPath = /bin/sh;
 			shellScript = "# Native read token: same git-ignored secrets.properties as the Android apps (missing file/key -> empty).\nTOKEN=\"\"\nif [ -f \"$SRCROOT/../secrets.properties\" ]; then\n  TOKEN=$(sed -n 's/^TMDB_READ_ACCESS_TOKEN[[:space:]]*=//p' \"$SRCROOT/../secrets.properties\" | tail -n 1 | tr -d '[:space:]')\nfi\n/usr/libexec/PlistBuddy -c \"Set :TMDBReadAccessToken $TOKEN\" \"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n";
 		};
+		C1A000000000000000000003 = {
+            isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; buildActionMask = 2147483647;
+            files = (); inputPaths = (); outputPaths = (); runOnlyForDeploymentPostprocessing = 0;
+            name = "Compile verification-only AuthFixture"; shellPath = /bin/sh;
+            shellScript = "cd \"$SRCROOT/..\"\n./gradlew :composeApp:linkAuthFixtureDebugFrameworkIosSimulatorArm64 -PnativeAuthFixture=true --max-workers=2 --console=plain\n";
+        };
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -167,6 +213,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C1A000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (C1A000000000000000000001,); runOnlyForDeploymentPostprocessing = 0; };
+		C1A000000000000000000012 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (C1A000000000000000000011,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -262,6 +310,52 @@
 			};
 			name = Release;
 		};
+		C1F000000000000000000002 = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                BUNDLE_LOADER = "$(TEST_HOST)";
+                TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NativeAuthFixtureHost.app/NativeAuthFixtureHost";
+                PRODUCT_BUNDLE_IDENTIFIER = com.techgv.cineverse.nativeauthtests;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                GENERATE_INFOPLIST_FILE = YES;
+                ENABLE_USER_SCRIPT_SANDBOXING = NO;
+                "EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+                FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../composeApp/build/bin/iosSimulatorArm64/authFixtureDebugFramework";
+                OTHER_LDFLAGS = ("$(inherited)", "-framework", AuthFixture,);
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+            };
+            name = Debug;
+        };
+		C1F000000000000000000003 = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                BUNDLE_LOADER = "$(TEST_HOST)";
+                TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NativeAuthFixtureHost.app/NativeAuthFixtureHost";
+                PRODUCT_BUNDLE_IDENTIFIER = com.techgv.cineverse.nativeauthtests;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                GENERATE_INFOPLIST_FILE = YES;
+                ENABLE_USER_SCRIPT_SANDBOXING = NO;
+                "EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+                FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../composeApp/build/bin/iosSimulatorArm64/authFixtureDebugFramework";
+                OTHER_LDFLAGS = ("$(inherited)", "-framework", AuthFixture,);
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+            };
+            name = Release;
+        };
+		C1F000000000000000000012 = {
+            isa = XCBuildConfiguration; buildSettings = {
+                PRODUCT_BUNDLE_IDENTIFIER = com.techgv.cineverse.nativeauthfixture;
+                PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES;
+                CODE_SIGN_STYLE = Automatic;
+                ENABLE_USER_SCRIPT_SANDBOXING = NO;
+                "EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+                FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../composeApp/build/bin/iosSimulatorArm64/authFixtureDebugFramework";
+                OTHER_LDFLAGS = ("$(inherited)", "-framework", AuthFixture,);
+                SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
+            }; name = Debug;
+        };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -283,6 +377,8 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		C1F000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (C1F000000000000000000002, C1F000000000000000000003,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		C1F000000000000000000011 = {isa = XCConfigurationList; buildConfigurations = (C1F000000000000000000012,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 /* End XCConfigurationList section */
 	};
 	rootObject = C0FFEE000000000000000E00 /* Project object */;
