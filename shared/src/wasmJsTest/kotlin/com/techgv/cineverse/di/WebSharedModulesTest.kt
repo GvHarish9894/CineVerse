@@ -170,7 +170,10 @@ class WebSharedModulesTest {
         recents.clear()
         assertEquals("private-payload", generic.data.first().string("strength"))
         assertEquals("kept", generic.data.first().string("unknown"))
+        f.postCheck = { f.identity = null } // The fake server must report guest after accepting logout.
+        val signedOut = async(start = CoroutineStart.UNDISPATCHED) { f.runtime.settingsHolder.signOutResults.first() }
         f.runtime.settingsHolder.signOut()
+        assertTrue(signedOut.await())
         until { f.count("/api/auth/logout") == 1 }
         until { f.auth.session.value == null }
         assertEquals("private-payload", generic.data.first().string("strength"))
