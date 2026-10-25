@@ -227,12 +227,14 @@ class ProductSearchStateHolder(
         invalidateSource()
         replaceSource(0)
         readSettings(recoverPage = true)
-        retryRecentRead()
+        readRecent()
         return false
     }
 
     /** Read recovery only: never record/clear, even after a failed explicit mutation. */
-    fun retryRecentRead() {
+    fun retryRecentRead() { if (liveContext()) readRecent() }
+
+    private fun readRecent() {
         if (!ownerJob.isActive) return
         recentJob?.cancel()
         val read = recentGeneration.bump()
@@ -283,10 +285,12 @@ class ProductSearchStateHolder(
                 currentCoroutineContext().ensureActive()
                 val failure = try { operation(); null } catch (failure: StorageException) { failure }
                 currentCoroutineContext().ensureActive()
+                val contextWasCurrent = liveContext()
+                // Recover the current reader even when this accepted write's feedback is obsolete.
+                if (contextWasCurrent && failure == null && state.value.recentReadError != null) retryRecentRead()
                 if (mutation != mutationGeneration.current || source != sourceGeneration.current || app != appGeneration.current) return@withLock
                 state.update { it.copy(recentMutation = if (failure == null) RecentMutationStatus.Succeeded else RecentMutationStatus.Failed) }
                 if (failure != null) onStorageFailure(failure)
-                else if (state.value.recentReadError != null) retryRecentRead()
             }
         }
     }
