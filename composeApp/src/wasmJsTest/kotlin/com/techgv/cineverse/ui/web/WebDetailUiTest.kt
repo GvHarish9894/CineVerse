@@ -70,8 +70,8 @@ class WebDetailUiTest {
         onNodeWithText("Add to watchlist").assertDoesNotExist()
     }
 
-    @Test fun castLeadCrewRecommendationsAndFooterEmitActualTypedDestinations() = runComposeUiTest {
-        val detail = movie()
+    @Test fun castAndLeadCrewEmitActualPersonIdsAndBackReachesItsCallback() = runComposeUiTest {
+        val detail = movie().copy(videos = emptyList(), recommendations = emptyList(), facts = emptyList())
         val routes = mutableListOf<WebRoute>()
         var back = 0
         val entry = WebDetailOwnerTest.entry()
@@ -83,12 +83,33 @@ class WebDetailUiTest {
         onNodeWithTag("web-detail").performScrollToIndex(2)
         onNodeWithTag("detail-person-42").performClick()
         onNodeWithTag("detail-person-43").performClick()
-        onNodeWithTag("web-detail").performScrollToNode(hasAnyDescendant(hasTestTag("detail-recommendation-movie-81")))
-        onNodeWithTag("detail-recommendation-movie-81").performClick()
-        onNodeWithTag("web-detail").performScrollToNode(hasText("My Library"))
-        onNodeWithText("My Library").performClick()
         assertEquals(1, back)
-        assertEquals(listOf(WebRoute.Person(42), WebRoute.Person(43), WebRoute.Detail("movie", 81), WebRoute.Library()), routes)
+        assertEquals(listOf(WebRoute.Person(42), WebRoute.Person(43)), routes)
+    }
+
+    @Test fun recommendationEmitsActualMediaAndTitleId() = runComposeUiTest {
+        val detail = movie().copy(cast = emptyList(), leadCrew = null, videos = emptyList(), facts = emptyList())
+        val routes = mutableListOf<WebRoute>()
+        val entry = WebDetailOwnerTest.entry()
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            WebDetailContent(entry, WebDetailReadState(SectionState.Content(detail)), known, WebSessionState.Ready(null), true, null,
+                {}, {}, {}, { routes += it }, {}, { _, _ -> })
+        }
+        onNodeWithTag("web-detail").performScrollToIndex(2)
+        onNodeWithTag("detail-recommendation-movie-81").performClick()
+        assertEquals(listOf(WebRoute.Detail("movie", 81)), routes)
+    }
+
+    @Test fun footerEmitsActualLibraryDestinationWithoutLoadedDetail() = runComposeUiTest {
+        val routes = mutableListOf<WebRoute>()
+        val entry = WebDetailOwnerTest.entry()
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            WebDetailContent(entry, WebDetailReadState(SectionState.Empty), LibraryState.Unknown, WebSessionState.Checking, false, null,
+                {}, {}, {}, { routes += it }, {}, { _, _ -> })
+        }
+        onNodeWithTag("web-detail").performScrollToIndex(2)
+        onNodeWithText("My Library").performClick()
+        assertEquals(listOf(WebRoute.Library()), routes)
     }
 
     @Test fun tvPhoneLayoutUsesRealSeasonAndCreatorIdsWithoutFakePlayerOrTotals() = runComposeUiTest {
