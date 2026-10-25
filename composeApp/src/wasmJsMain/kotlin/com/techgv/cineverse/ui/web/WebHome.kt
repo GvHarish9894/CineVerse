@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,7 +81,16 @@ internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebS
                             retryStorage: () -> Unit, storage: BrowserStorageFailure?) {
     val scroll = savedScroll(saver, "page")
     var popularTv by remember { mutableStateOf(saver.getBoolean("home.popularTv") ?: false) }
-    LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-home"), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-home").semantics {
+        contentDescription = "Catalog status: " + HomeRow.entries.joinToString("; ") { row ->
+            "${row.key}=" + when (state.rows[row]) {
+                SectionState.Empty -> "empty"
+                SectionState.Loading, null -> "loading"
+                is SectionState.Content -> "content"
+                is SectionState.Error -> "error"
+            }
+        }
+    }, verticalArrangement = Arrangement.spacedBy(24.dp)) {
         if (storage != null) item("storage-error") { WebStorageNotice(storage, retryStorage, Modifier.testTag("home-storage-recovery")) }
         if (state.settingsError != null) item("settings-error") {
             ErrorState("Saved preferences could not be observed. Last loaded values are retained.", retryStorage, Modifier.padding(16.dp).testTag("home-settings-recovery"))

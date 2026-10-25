@@ -215,12 +215,25 @@ function checkOutcomeGuards() {
     console.log('PASS: same-document AX Ready/Checking/Failed guards reject stale/ambiguous outcomes.');
 }
 
+function catalogRow(url) {
+    if (url.searchParams.get('page') !== '1') return null;
+    const rows = {
+        '/api/tmdb/trending/all/day': 'trending', '/api/tmdb/trending/all/week': 'trending',
+        '/api/tmdb/movie/popular': 'popularMovies', '/api/tmdb/tv/popular': 'popularTv',
+        '/api/tmdb/movie/now_playing': 'nowPlaying', '/api/tmdb/movie/upcoming': 'upcoming',
+        '/api/tmdb/person/popular': 'popularPeople', '/api/tmdb/movie/top_rated': 'topRatedMovies',
+    };
+    return rows[url.pathname] || null;
+}
+
 function consumedApiAbort(event, cdp, expected, origin) {
     const request = cdp.requests.get(event.params?.requestId);
     if (event.method !== 'Network.loadingFailed' || !event.params.canceled || event.params.type !== 'Fetch' ||
         request?.method !== 'GET' || request.frameId !== expected?.frameId || request.loaderId !== expected?.loaderId) return null;
     const url = new URL(request.url);
-    if (url.origin !== origin || url.pathname !== '/api/session') return null;
+    const row = catalogRow(url);
+    if (url.origin !== origin || (url.pathname !== '/api/session' && !row) ||
+        (row && [...cdp.requests.values()].filter(candidate => candidate.url === request.url && candidate.loaderId === expected.loaderId).length !== 1)) return null;
     const response = request.lifecycle.find(item => item.method === 'Network.responseReceived')?.response;
     if (!response || response.status < 200 || response.status >= 300 || response.mimeType !== 'application/json') return null;
     const starts = cdp.readTraces.filter(trace => trace.phase === 'fetch' && trace.isDefault && trace.url === request.url && trace.method === 'GET' &&
@@ -239,7 +252,7 @@ function consumedApiAbort(event, cdp, expected, origin) {
         responseTrace.sequence >= end.sequence || end.sequence >= abort.sequence || end.at > abort.at ||
         traces.some(trace => ['alreadyAborted', 'readRejected', 'fetchRejected'].includes(trace.phase))) return null;
     return {requestId: request.requestId, url: request.url, frameId: request.frameId, loaderId: request.loaderId,
-        documentUrl: expected.url, timeOrigin: expected.timeOrigin, end, abort};
+        documentUrl: expected.url, timeOrigin: expected.timeOrigin, end, abort, row};
 }
 
 function checkConsumptionProof() {
@@ -253,7 +266,7 @@ function checkConsumptionProof() {
         consumedApiAbort(failure, {requests: new Map([['read', candidate], ...others.map(other => [other.requestId, other])]), readTraces: events}, identity, 'http://fixture');
     assert.ok(prove());
     assert.equal(prove(request, traces, event, expected, [{...request, requestId: 'other', wallTime: 1.01}]), null);
-    for (const pathname of ['/api/tmdb/movie/popular', '/api/tmdb/genre/movie']) {
+    for (const pathname of ['/api/tmdb/genre/movie', '/api/tmdb/movie/popular?page=2', '/api/tmdb/movie/unknown?page=1']) {
         const url = 'http://fixture' + pathname;
         assert.equal(prove({...request, url}, traces.map(item => ({...item, url}))), null);
     }
@@ -273,15 +286,21 @@ function checkConsumptionProof() {
     assert.equal(prove(request, traces, {method: 'Runtime.exceptionThrown', params: {}}), null);
     const proof = prove();
     const document = {...expected, backendNodeId: 7};
-    const sample = {state: 'Ready', before: document, after: document, axFrameId: 'frame', axUrl: expected.url, axBackendNodeId: 7, homeEmpty: true};
+    const sample = {state: 'Ready', before: document, after: document, axFrameId: 'frame', axUrl: expected.url, axBackendNodeId: 7, homeEmpty: true, catalogEmptyRows: ['popularMovies']};
     assert.ok(validApplicationOutcome(proof, sample));
+    const catalogUrl = 'http://fixture/api/tmdb/movie/popular?page=1';
+    const catalogProof = prove({...request, url: catalogUrl}, traces.map(item => ({...item, url: catalogUrl})));
+    assert.equal(catalogProof?.row, 'popularMovies');
+    assert.ok(validApplicationOutcome(catalogProof, sample));
+    assert.equal(validApplicationOutcome(catalogProof, {...sample, catalogEmptyRows: ['trending']}), false);
+    assert.equal(validApplicationOutcome(catalogProof, {...sample, catalogEmptyRows: []}), false);
     for (const outcome of [...['Checking', 'Failed', 'UnknownOrConflicting', 'RejectedIdentity'].map(state => ({...sample, state})),
         {...sample, before: {...document, loaderId: 'old'}}, {...sample, after: {...document, timeOrigin: 0}},
         {...sample, axFrameId: 'old'}, {...sample, axUrl: 'http://fixture/old'}, {...sample, axBackendNodeId: 8}, {...sample, axBackendNodeId: undefined},
         {...sample, after: {...document, backendNodeId: 8}}]) assert.equal(validApplicationOutcome(proof, outcome), false);
     assert.equal(validApplicationOutcome(null, sample), false);
     assert.equal(validApplicationOutcome(proof, null), false);
-    console.log('PASS: session-only completed-read policy rejects unknown/early/ambiguous/foreign/method/status/MIME/identity/state failures.');
+    console.log('PASS: completed-read policy requires exact catalog row outcome; unknown/early/ambiguous/foreign/method/status/MIME/identity failures remain fatal.');
 }
 
 function parsedHomeEmpty(tree) {
@@ -296,7 +315,7 @@ function validApplicationOutcome(proof, sample) {
     const expected = {frameId: proof.frameId, loaderId: proof.loaderId, url: proof.documentUrl, timeOrigin: proof.timeOrigin};
     return sameDocument(expected, sample.before) && sameDocument(expected, sample.after) && sample.axFrameId === expected.frameId &&
         sample.axUrl === expected.url && sample.axBackendNodeId !== undefined && sample.axBackendNodeId === sample.before.backendNodeId &&
-        sample.axBackendNodeId === sample.after.backendNodeId;
+        sample.axBackendNodeId === sample.after.backendNodeId && (!proof.row || sample.catalogEmptyRows.includes(proof.row));
 }
 
 async function applicationSample(cdp, expected) {
@@ -304,8 +323,11 @@ async function applicationSample(cdp, expected) {
     const tree = await cdp.call('Accessibility.getFullAXTree');
     const after = await cdp.documentIdentity(true);
     const root = tree.nodes.find(node => !node.ignored && node.role?.value === 'RootWebArea');
+    const statuses = tree.nodes.filter(node => !node.ignored && node.role?.value === 'list' && node.name?.value?.startsWith('Catalog status: '));
+    const catalogEmptyRows = statuses.length === 1 ? statuses[0].name.value.slice('Catalog status: '.length).split('; ')
+        .filter(status => status.endsWith('=empty')).map(status => status.slice(0, -'=empty'.length)) : [];
     return {tree, sample: {receivedAt: Date.now(), before, after, state: authoritativeAxState(tree, expected, before, after),
-        homeEmpty: parsedHomeEmpty(tree), axFrameId: root?.frameId, axBackendNodeId: root?.backendDOMNodeId,
+        homeEmpty: parsedHomeEmpty(tree), catalogEmptyRows, axFrameId: root?.frameId, axBackendNodeId: root?.backendDOMNodeId,
         axUrl: root?.properties?.find(property => property.name === 'url')?.value?.value}};
 }
 

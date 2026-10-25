@@ -68,6 +68,7 @@ class WebHomeTest {
             WebHomeContent(initial, history, WebSessionState.Ready(null), {}, {}, {}, {}, {}, {}, null)
         }
         onNodeWithText("No trending titles available.").assertExists()
+        onNodeWithTag("web-home").assert(hasContentDescription("Catalog status: trending=empty; popularMovies=content; popularTv=content; nowPlaying=content; upcoming=content; popularPeople=content; topRatedMovies=content"))
         onNodeWithTag("web-home").performScrollToNode(hasText("No titles yet"))
         onNodeWithText("There are no results for this section.").assertExists()
         onNodeWithText("Offline", substring = true).assertDoesNotExist()
