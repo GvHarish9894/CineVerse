@@ -33,8 +33,10 @@ class WebLibraryTest {
         onNodeWithText("Favourites · count unknown").assertExists()
         onNodeWithText("Your rating · 8.5 / 10").assertExists()
         onNodeWithText("Your rating · 9.5 / 10").assertExists()
+        onNodeWithTag("library-Movie-grid").performScrollToNode(hasTestTag("library-Movie-71"))
         onNodeWithTag("library-Movie-71").performClick()
         assertEquals(WebRoute.Detail("movie", 71), next)
+        onNodeWithTag("library-Tv-grid").performScrollToNode(hasTestTag("library-Tv-82"))
         onNodeWithTag("library-Tv-82").performClick()
         assertEquals(WebRoute.Detail("tv", 82), next)
         onNodeWithText("Add to watchlist").assertDoesNotExist()
@@ -71,7 +73,8 @@ class WebLibraryTest {
         onNodeWithText("No Movies in Watchlist").assertDoesNotExist()
         onNodeWithText("Retry").performClick()
         assertEquals(MediaType.Movie, retryMedia)
-        onNodeWithText("Browse popular movies").performClick()
+        onNodeWithTag("library-Tv-grid").performScrollToNode(hasText("Browse popular movies"))
+        onNodeWithText("Browse popular movies").assertIsDisplayed().performClick()
         assertEquals(WebRoute.Browse("movie"), next)
     }
 
@@ -84,6 +87,7 @@ class WebLibraryTest {
             WebLibraryContent(webLibraryEntry(LibraryTab.Rated), loaded, mapOf(MediaType.Movie to 1, MediaType.Tv to 1), BrowserStorageFailure.Blocked,
                 {}, { more++ }, { retryMedia = it }, {}, { storageRetries++ }, {})
         }
+        onNodeWithTag("library-Movie-grid").performScrollToNode(hasTestTag("library-Movie-71"))
         onNodeWithTag("library-Movie-71").assertExists()
         onNodeWithTag("library-Movie-grid").performScrollToNode(hasText("Offline. Check your connection. Loaded entries are retained."))
         onNodeWithText("Load more Movies").assertDoesNotExist()
