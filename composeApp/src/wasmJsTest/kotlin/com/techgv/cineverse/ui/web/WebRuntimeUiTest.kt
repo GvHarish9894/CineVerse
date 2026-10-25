@@ -34,7 +34,7 @@ class WebRuntimeUiTest {
         var withTitles = false
         var paged = false
         var failNextPage = false
-        var language = "en"
+        var language = "en-US"
         data class Read(val path: String, val page: String?, val language: String?, val sort: String?, val genres: String?)
         val reads = mutableListOf<Read>()
         val storageRevision = MutableStateFlow(0)
@@ -191,8 +191,9 @@ class WebRuntimeUiTest {
             onNodeWithTag("browse-tv:7").assertExists()
             onNodeWithTag("browse-movie:7").assertDoesNotExist()
             val generation = f.generation.current
-            runOnIdle { f.language = "fr"; f.storageRevision.value++ }
-            waitUntil { f.reads.any { it.path == "/api/tmdb/discover/tv" && it.language == "fr" && it.sort == "name.asc" } }
+            assertTrue(f.reads.any { it.path == "/api/tmdb/discover/tv" && it.language == "en-US" })
+            runOnIdle { f.language = "es-ES"; f.storageRevision.value++ }
+            waitUntil { f.reads.any { it.path == "/api/tmdb/discover/tv" && it.language == "es-ES" && it.sort == "name.asc" } }
             assertTrue(f.generation.current > generation)
             onNodeWithText("TV Shows · Discover").assertExists()
             onNodeWithTag("browse-tv:7").assertExists()
