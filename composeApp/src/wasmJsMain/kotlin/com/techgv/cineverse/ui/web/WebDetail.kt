@@ -202,8 +202,9 @@ private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boo
 @Composable
 private fun WebDetailReviewsAndFacts(detail: Detail) {
     BoxWithConstraints(Modifier.fillMaxWidth().padding(16.dp)) {
+        val reviewsWidth = if (maxWidth > 860.dp) maxWidth - 328.dp else maxWidth
         FlowRow(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            if (detail.reviews.isNotEmpty()) Column(Modifier.width(if (maxWidth > 860.dp) maxWidth - 328.dp else maxWidth), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (detail.reviews.isNotEmpty()) Column(Modifier.width(reviewsWidth), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 SectionTitle("Reviews")
                 detail.reviews.forEach { review ->
                     Panel(title = review.author) {
