@@ -7,6 +7,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import com.techgv.cineverse.data.storage.BrowserStorageFailure
 import com.techgv.cineverse.data.tmdb.SearchFacet
@@ -16,6 +17,8 @@ import kotlinx.coroutines.test.*
 import kotlin.test.*
 
 class WebSearchTest {
+    private fun SemanticsNodeInteraction.assertInput(value: String) = assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString(value)))
+
     private fun ready(writes: Boolean = false) = WebRuntimeUiTest.Fixture(writes).apply {
         failSession = false; failSettings = false; withTitles = true
     }
@@ -32,16 +35,16 @@ class WebSearchTest {
             val field = onNodeWithTag("search-input")
             field.performClick().performTextInputSelection(TextRange(2))
             field.performTextInput("X")
-            field.assertIsFocused().assertTextEquals("fiXlm")
+            field.assertIsFocused().assertInput("fiXlm")
             field.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(3)))
             assertEquals("/search?q=fiXlm&facet=movie", history.url)
             field.performTextInput("Y")
-            field.assertIsFocused().assertTextEquals("fiXYlm")
+            field.assertIsFocused().assertInput("fiXYlm")
             field.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(4)))
             field.performKeyInput { pressKey(Key.Slash) }
             field.assertIsFocused()
             field.performTextInput("/")
-            field.assertTextEquals("fiXY/lm")
+            field.assertInput("fiXY/lm")
             assertEquals(0, f.edits)
             field.performImeAction()
             waitUntil { f.edits == 1 }
@@ -60,13 +63,13 @@ class WebSearchTest {
             field.performClick().performTextInputSelection(TextRange(1))
             field.performTextInput("Z")
             assertEquals("/search?q=fZilm&facet=tv", history.url)
-            field.assertIsFocused().assertTextEquals("fZilm")
+            field.assertIsFocused().assertInput("fZilm")
             field.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(2)))
             field.performKeyInput { pressKey(Key.Slash) }
             field.assertIsFocused()
             field.performTextInput("/")
             assertEquals("/search?q=fZ%2Film&facet=tv", history.url)
-            onNodeWithTag("search-input").assertTextEquals("fZ/ilm")
+            onNodeWithTag("search-input").assertInput("fZ/ilm")
             assertEquals(0, f.edits)
             field.performImeAction()
             waitUntil { f.edits == 1 }
@@ -81,7 +84,7 @@ class WebSearchTest {
             setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             onNodeWithTag("header-search-input").performClick().performTextInput("arrival")
             waitUntil { history.url == "/search?q=arrival" }
-            onNodeWithTag("search-input").assertTextEquals("arrival")
+            onNodeWithTag("search-input").assertInput("arrival")
             assertEquals(0, f.edits)
             runOnIdle { history.back() }
             onNodeWithTag("header-search-input").performTextReplacement("explicit")
@@ -110,7 +113,7 @@ class WebSearchTest {
             assertTrue(f.reads.any { it.path == "/api/tmdb/search/person" })
             assertEquals(0, f.edits)
             runOnIdle { history.back() }
-            onNodeWithTag("search-input").assertTextEquals("film")
+            onNodeWithTag("search-input").assertInput("film")
             onNodeWithTag("search-facet-movie").performClick()
             onNodeWithTag("search-movie:7").performClick()
             assertEquals("/movie/7", history.url)
@@ -145,7 +148,7 @@ class WebSearchTest {
         try {
             f.runtime.start()
             setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
-            onNodeWithTag("search-input").assertTextEquals(query)
+            onNodeWithTag("search-input").assertInput(query)
             onNodeWithText("Search is limited to 200 characters", substring = true).assertExists()
             onNodeWithTag("search-input").performImeAction()
             assertEquals(0, f.catalogReads); assertEquals(0, f.edits)
@@ -167,7 +170,7 @@ class WebSearchTest {
             val reads = f.catalogReads
             val saved = history.saved
             onNodeWithTag("search-input").performTextReplacement("界".repeat(1000))
-            onNodeWithTag("search-input").assertTextEquals("界".repeat(1000))
+            onNodeWithTag("search-input").assertInput("界".repeat(1000))
             onNodeWithTag("search-results").assertDoesNotExist()
             onNodeWithTag("search-facet-person").assertDoesNotExist()
             onNodeWithTag("search-input").performImeAction()
@@ -175,7 +178,7 @@ class WebSearchTest {
             assertEquals(saved, history.saved)
             assertEquals(reads, f.catalogReads); assertEquals(0, f.edits)
             onNodeWithTag("header-search-input").performTextReplacement("x\u0000y")
-            onNodeWithTag("search-input").assertTextEquals("x\u0000y")
+            onNodeWithTag("search-input").assertInput("x\u0000y")
             onNodeWithTag("header-search-input").performImeAction()
             assertEquals("/search?q=valid", history.url)
             onNodeWithText("Clear", substring = false).performClick()
@@ -184,7 +187,7 @@ class WebSearchTest {
             onNodeWithTag("search-input").performTextReplacement("bad\u0000draft")
             onNodeWithText("My Library").performClick()
             runOnIdle { history.back() }
-            onNodeWithTag("search-input").assertTextEquals("")
+            onNodeWithTag("search-input").assertInput("")
             onNodeWithTag("search-results").assertExists()
             assertEquals(0, f.edits)
         } finally { f.close() }
@@ -327,7 +330,7 @@ class WebSearchTest {
             assertEquals(reads, f.catalogReads)
             assertEquals("/library?tab=watchlist", history.url)
             runOnIdle { history.back() }
-            onNodeWithTag("search-input").assertTextEquals("pending")
+            onNodeWithTag("search-input").assertInput("pending")
             onNodeWithTag("search-person:42").assertExists()
             runOnIdle { history.forward() }
             assertEquals("/library?tab=watchlist", history.url)
