@@ -95,6 +95,17 @@ class CatalogRepository(
         }
     }
 
+    /** See [TmdbApi.search]. Multi shares the legacy searchMulti cache identity and implementation. */
+    suspend fun search(facet: SearchFacet, query: String, page: Int = 1): PageDto<MediaItemDto> {
+        val s = settings()
+        searchQuery(query, s.language, s.includeAdult, page)
+        val key = CacheKey("search/${facet.path}", ids = query, language = s.language, includeAdult = s.includeAdult, page = page)
+        return catalog(key, TmdbCache.LIST_TTL) {
+            if (facet == SearchFacet.Multi) api.searchMulti(query, s.language, s.includeAdult, page)
+            else api.search(facet, query, s.language, s.includeAdult, page)
+        }
+    }
+
     suspend fun searchMulti(query: String, page: Int = 1): PageDto<MediaItemDto> {
         val s = settings()
         val key = CacheKey("search/multi", ids = query, language = s.language, includeAdult = s.includeAdult, page = page)

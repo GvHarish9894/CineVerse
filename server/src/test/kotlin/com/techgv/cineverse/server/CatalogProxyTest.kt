@@ -117,6 +117,102 @@ class CatalogProxyTest {
     }
 
     @Test
+    fun everySearchFacetForwardsCanonicalParametersAndIgnoresBrowserCredentials() {
+        val fake = FakeTmdb()
+        val clock = TestClock()
+        serverTest(fake, clock = clock) {
+            for (facet in listOf("multi", "movie", "tv", "person")) {
+                val path = "/api/tmdb/search/$facet"
+                val response = client.get("$path?query=Caf%C3%A9%20%26%20%E6%9D%B1%E4%BA%AC&language=ta-IN&include_adult=true&page=500") {
+                    header(HttpHeaders.Authorization, "Bearer browser-token")
+                    header(HttpHeaders.Cookie, "cv_session=browser-cookie")
+                    header("X-CV-CSRF", "browser-csrf")
+                    header("X-CV-Expected-Account", "browser-account")
+                }
+                assertEquals(HttpStatusCode.OK, response.status)
+                assertEquals("public, max-age=600", response.headers[HttpHeaders.CacheControl])
+                val recorded = fake.requests.last()
+                assertEquals(HttpMethod.Get, recorded.method)
+                assertEquals("/3/search/$facet", recorded.path)
+                assertEquals(listOf("include_adult", "language", "page", "query"), recorded.url.parameters.names().toList())
+                assertEquals("Café & 東京", recorded.url.parameters["query"])
+                assertEquals("ta-IN", recorded.url.parameters["language"])
+                assertEquals("true", recorded.url.parameters["include_adult"])
+                assertEquals("500", recorded.url.parameters["page"])
+                assertEquals("Bearer $READ_TOKEN", recorded.authorization)
+                assertEquals(null, recorded.cookie)
+                assertEquals(null, recorded.body)
+                val cached = client.get("$path?page=500&include_adult=true&query=Caf%C3%A9%20%26%20%E6%9D%B1%E4%BA%AC&language=ta-IN")
+                assertEquals(response.bodyAsText(), cached.bodyAsText())
+                assertEquals(1, fake.calls(HttpMethod.Get, "/3/search/$facet"))
+            }
+            clock.advanceMinutes(10)
+            for (facet in listOf("multi", "movie", "tv", "person")) {
+                client.get("/api/tmdb/search/$facet?query=Caf%C3%A9%20%26%20%E6%9D%B1%E4%BA%AC&language=ta-IN&include_adult=true&page=500")
+                assertEquals(2, fake.calls(HttpMethod.Get, "/3/search/$facet"))
+            }
+        }
+    }
+
+    @Test
+    fun searchCacheSeparatesAllAllowedDimensionsAndAcceptsTheFullQueryBudget() {
+        val fake = FakeTmdb()
+        serverTest(fake) {
+            for (facet in listOf("multi", "movie", "tv", "person")) {
+                val path = "/api/tmdb/search/$facet"
+                for (query in listOf(
+                    "query=x&language=en-US&include_adult=false&page=1",
+                    "query=y&language=en-US&include_adult=false&page=1",
+                    "query=x&language=hi-IN&include_adult=false&page=1",
+                    "query=x&language=en-US&include_adult=true&page=1",
+                    "query=x&language=en-US&include_adult=false&page=2",
+                    "query=" + "x".repeat(200) + "&language=en&include_adult=false&page=1",
+                )) {
+                    assertEquals(HttpStatusCode.OK, client.get("$path?$query").status)
+                    client.get("$path?$query")
+                }
+                assertEquals(6, fake.calls(HttpMethod.Get, "/3/search/$facet"))
+            }
+            assertEquals(24, fake.requests.size)
+        }
+    }
+
+    @Test
+    fun searchRejectsInvalidPathsMethodsAndQueryBoundariesWithoutUpstreamCalls() {
+        val fake = FakeTmdb()
+        serverTest(fake) {
+            for (facet in listOf("multi", "movie", "tv", "person")) {
+                val path = "/api/tmdb/search/$facet"
+                for (query in listOf(
+                    "", "language=en-US", "query=", "query=%20%09%0A", "query=" + "x".repeat(201),
+                    "query=x&query=y", "query=x&language=en-US&language=hi-IN", "query=x&page=1&page=2",
+                    "query=x&include_adult=true&include_adult=false", "query=x&page=0", "query=x&page=-1",
+                    "query=x&page=501", "query=x&page=1.0", "query=x&page=999999999999999",
+                    "query=x&language=english", "query=x&language=en-us", "query=x&include_adult=1",
+                    "query=x&include_adult=True", "query=x&region=IN", "query=x&timezone=UTC",
+                    "query=x&session_id=bad", "query=x&api_key=bad", "query=x&access_token=bad",
+                    "query=x&sort_by=popularity.desc", "query=x&year=2025",
+                )) {
+                    val response = client.get("$path?$query")
+                    assertEquals(HttpStatusCode.NotFound, response.status, "$facet/$query")
+                    assertEquals("""{"error":"not_allowed"}""", response.bodyAsText())
+                }
+                for (method in listOf(HttpMethod.Post, HttpMethod.Put, HttpMethod.Delete, HttpMethod.Patch, HttpMethod.Head, HttpMethod.Options)) {
+                    val response = client.request("$path?query=x") {
+                        this.method = method
+                        header(HttpHeaders.Origin, ORIGIN)
+                    }
+                    assertEquals(HttpStatusCode.NotFound, response.status, "$facet/$method")
+                }
+            }
+            for (path in listOf("movies", "people", "Multi", "movie/extra", "movie.json", "", "person%2Fextra")) {
+                assertEquals(HttpStatusCode.NotFound, client.get("/api/tmdb/search/$path?query=x").status, path)
+            }
+            assertTrue(fake.requests.isEmpty())
+        }
+    }
+
+    @Test
     fun upstreamErrorsAreSanitizedAndClassified() {
         val fake = FakeTmdb()
         serverTest(fake) {

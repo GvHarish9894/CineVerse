@@ -91,6 +91,24 @@ interface TmdbApi {
         append: String = "combined_credits",
     ): PersonDetailDto
 
+    /**
+     * Typed public read: query is non-blank, at most [SEARCH_QUERY_MAX_LENGTH] characters (no trimming),
+     * language matches the BFF, page is 1..500. Category adapters supply missing media_type so toHero() works.
+     * PageDto defaults absent total metadata to zero; zero is not proof of an upstream count.
+     * Custom implementations retain multi compatibility and must explicitly support other facets.
+     */
+    suspend fun search(
+        facet: SearchFacet,
+        query: String,
+        language: String,
+        includeAdult: Boolean,
+        page: Int,
+    ): PageDto<MediaItemDto> {
+        searchQuery(query, language, includeAdult, page)
+        if (facet != SearchFacet.Multi) throw UnsupportedOperationException("Search facet $facet is not supported")
+        return searchMulti(query, language, includeAdult, page)
+    }
+
     suspend fun searchMulti(
         query: String,
         language: String,
