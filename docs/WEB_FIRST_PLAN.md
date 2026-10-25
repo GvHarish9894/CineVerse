@@ -31,6 +31,18 @@ C1 old f3-product-search, C2 old f4-native-search/F2/E2, and C5 old f-search-con
 - Own entry child scopes; close/cancel on real entry disposal. No global cache, storage-retry owner recreation, broad catches, or stale identity publication. Unknown session/storage is not guest/empty/default success. Settings read recovery must reach failed upstream/holder readers even when recovered values are equal; never replay failed mutations.
 - Reuse house components, adaptive sizing, focus semantics and token/theme rules. Real counts are loaded/known only; API/kit mock values are not facts. No fake player/progress, fake profile totals or fabricated metadata.
 
+## First-wave decisions and integration blockers
+
+G0 review2f69731f inspected exact461cb7e and BLOCKED Search: P1 header edits/submission can be lost or use wrong query/facet before settings create an owner; P2 unrated rows show numeric zero. Parent commissions only those corrections in C3 with retained F5 owner, tests first and independent re-check; original production evidence remains461cb7e until a new integrated production build. Report managed outputs/e459db4d-349f-4e2e-90b5-f5b386b0ac8e/g0-web-search-review.md.
+
+G1 source checkpointfeb8c06a, five new files/12 prepared tests, not yet compiled/executed. Runtime.LibraryStateHolder does not publish captured AuthSession or exact loaded page. Required typed result-identity/page extractors may test explicitly correlated fixture logic, but root binding is BLOCKED until a separate reviewed producer contract supplies immutable identity+per-group page/known metadata. Owner-captured Ready tags, accountName/signedIn and inferred transition counters are not proof. Verification/identity changes may replace read holders; storage retry may not. G1 is queued behind G2 for gates, not cleared.
+
+G2 source checkpoint89b97ddb, five new files/13 prepared tests. Existing SettingsRepository normalizes present wrong-type/unsupported preference values and its all-key update can rewrite normalized fields. G2 may consume the existing contract but cannot claim raw-corruption preservation; a separately reviewed browser preference-validation contract is an INTEGRATION BLOCKER before enabling the new root edit path. No raw-store probing/shared edits in this UI lane. First Wasm compile passed after two expected seam fixes; initial apparent13/13 is UNVERIFIED pending explicitly approved temporary sync+deferred-async failing canaries, exact restoration, then13-case rerun. G2 owns the first exclusive compile/Karma lease; no permanent canary/runner/resource weakening.
+
+G3 may bridge raw settings and preserve last-real detail content, but must keep it explicitly stale/unverified after failure/recovery: shared DetailStateHolder exposes neither request-context completion nor in-flight cancellation on settings-reader failure. Equal Content/DTO or successful settings read is not fresh detail proof. A separately owned shared read-context contract blocks final integration. Strict route/canonical string validation is allowed; raw JSON primitive coercion (if reproduced on this base) needs a separately owned navigation guard, not G3 root edits.
+
+Queue these small producer/validation contracts in the first free isolated slots before root integration; they are distinct seams, not permission for a UI writer to redesign shared code. Native/iOS remains held. No component source or web product clearance is implied by these checkpoints.
+
 ## Following waves — all required before web completion
 
 1. Focused gates and independent reviews of G1/G2/G3, source fixes/re-review as needed. G0 findings are fixed by the retained Search owner only; no native review restart. Parent owns exact patches/gate evidence.
