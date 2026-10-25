@@ -1,9 +1,12 @@
 package com.techgv.cineverse.ui.web
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
@@ -97,6 +100,50 @@ class WebLibraryTest {
         onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("library-storage-recovery"))).performClick()
         assertEquals(1, storageRetries)
         assertEquals(0, more)
+    }
+
+    @Test fun contentFooterFirstVisibleIndexAndOffsetSurviveEntryRecreation() = runComposeUiTest {
+        val loaded = state().copy(movies = LibraryGroup(SectionState.Content((1..4).map {
+            LibraryEntry(webLibraryTitle(MediaType.Movie, it), null)
+        })))
+        assertFooterPositionRoundTrip(loaded, footerIndex = 6)
+    }
+
+    @Test fun emptyFooterFirstVisibleIndexAndOffsetSurviveEntryRecreation() = runComposeUiTest {
+        val empty = state().copy(movies = LibraryGroup(SectionState.Empty), tv = LibraryGroup(SectionState.Empty))
+        assertFooterPositionRoundTrip(empty, footerIndex = 3)
+    }
+
+    private fun ComposeUiTest.assertFooterPositionRoundTrip(loaded: LibraryUiState, footerIndex: Int) {
+        var current by mutableStateOf(webLibraryEntry(LibraryTab.Rated))
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            // Each narrow grid is shorter than its real Footer, so the Footer can be first visible.
+            Box(Modifier.width(390.dp).height(480.dp)) {
+                key(current) {
+                    WebLibraryContent(current, loaded, pages, null, {}, {}, {}, {}, {}, {})
+                }
+            }
+        }
+        val grid = onNodeWithTag("library-Movie-grid")
+        grid.performScrollToIndex(footerIndex)
+        grid.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 9f) }
+        waitForIdle()
+        val savedIndex = assertNotNull(current.getInt("library.movie.index"))
+        val savedOffset = assertNotNull(current.getInt("library.movie.offset"))
+        assertEquals(footerIndex, savedIndex)
+        assertTrue(savedOffset > 0, "The real Footer must support a nonzero first-visible offset")
+        val originalScroll = grid.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        runOnIdle {
+            current = webLibraryEntry(LibraryTab.Rated, mutableMapOf(
+                "library.movie.index" to savedIndex.toString(),
+                "library.movie.offset" to savedOffset.toString(),
+            ))
+        }
+        waitForIdle()
+        // Inspect actual grid scroll too: saved input alone would pass before restoration ran.
+        assertEquals(originalScroll, grid.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        assertEquals(footerIndex, current.getInt("library.movie.index"))
+        assertEquals(savedOffset, current.getInt("library.movie.offset"))
     }
 
     @Test fun restorationLoadsOnlyKnownSavedPagesThenRetainsIndependentScroll() = runComposeUiTest {
