@@ -31,7 +31,7 @@ class BrowserHistory : WebHistory {
     }
 }
 
-@JsFun("() => !Object.prototype.hasOwnProperty.call(history.state ?? {}, 'cineverse') ? '' : typeof history.state.cineverse === 'string' ? history.state.cineverse : 'INVALID_HISTORY_STATE'")
+@JsFun("() => !Object.prototype.hasOwnProperty.call(history.state ?? {}, 'cineverse') ? '' : typeof history.state.cineverse === 'string' && history.state.cineverse.length > 0 ? history.state.cineverse : 'INVALID_HISTORY_STATE'")
 private external fun historySaved(): String
 @JsFun("(url, saved, replace) => { const state = {...history.state, cineverse:saved}; history[replace ? 'replaceState' : 'pushState'](state, '', url); }")
 private external fun historyWrite(url: String, saved: String, replace: Boolean)
