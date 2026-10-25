@@ -101,6 +101,8 @@ internal class MobileCatalogApi : MobileUnusedTmdbApi() {
         if (page == pageFailure) throw TmdbException(TmdbError.Network)
         return PageDto(page, (1..12).map { MediaItemDto(id = page * 100 + it, title = "$label $it", name = "$label $it", mediaType = type) }, 2)
     }
+    override suspend fun searchMulti(query: String, language: String, includeAdult: Boolean, page: Int) =
+        search(SearchFacet.Multi, query, language, includeAdult, page)
     override suspend fun search(facet: SearchFacet, query: String, language: String, includeAdult: Boolean, page: Int) =
         page("search-$facet-$query-$language-$includeAdult", page, when (facet) {
             SearchFacet.Tv -> "tv"
