@@ -391,7 +391,10 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
         const {tree, sample} = await applicationSample(cdp, identity);
         const names = tree.nodes.filter(node => !node.ignored).map(node => node.name?.value);
         step.axObservations.push(sample);
-        if (!names.includes(expected) || sample.state !== 'Ready' || (identity.url === origin + '/' && !sample.homeEmpty)) return false;
+        const searchUrl = new URL(identity.url);
+        const searchIdentity = searchUrl.pathname !== '/search' || tree.nodes.some(node => !node.ignored &&
+            ['textbox', 'textField'].includes(node.role?.value) && node.value?.value === searchUrl.searchParams.get('q'));
+        if (!searchIdentity || !names.includes(expected) || sample.state !== 'Ready' || (identity.url === origin + '/' && !sample.homeEmpty)) return false;
         step.applicationOutcome = sample;
         const responses = cdp.events.filter(event => event.method === 'Network.responseReceived' && event.params.loaderId === identity.loaderId);
         const fonts = responses.filter(event => event.params.response.url.includes('/composeResources/') && event.params.response.url.endsWith('.ttf'));
@@ -449,7 +452,7 @@ async function checkDocument(cdp, origin, label, expected, navigate, bootstrapRe
         await until(() => { if (chrome.exitCode !== null) throw Error('Isolated Chrome exited'); return fs.existsSync(activePort); }, 'isolated Chrome startup');
         const port = fs.readFileSync(activePort, 'utf8').split('\n')[0];
         const debugging = 'http://127.0.0.1:' + port;
-        const cases = [['root', '/', 'Discover your next favourite'], ['media', '/movie/155', 'movie · 155'], ['person', '/person/287', 'Person · 287'], ['search', '/search?q=long%20web%20%26%20query', 'Search · long web & query']];
+        const cases = [['root', '/', 'Discover your next favourite'], ['media', '/movie/155', 'movie · 155'], ['person', '/person/287', 'Person · 287'], ['search', '/search?q=long%20web%20%26%20query', 'Search']];
         for (const [label, route, expected] of cases) {
             const target = await (await fetch(debugging + '/json/new?about:blank', {method: 'PUT'})).json();
             const cdp = await Cdp.connect(target.webSocketDebuggerUrl); pages.push(cdp);

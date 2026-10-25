@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+@file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class, androidx.compose.ui.test.ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 
 package com.techgv.cineverse.ui.web
 
@@ -21,6 +21,36 @@ class WebSearchTest {
 
     private fun ready(writes: Boolean = false) = WebRuntimeUiTest.Fixture(writes).apply {
         failSession = false; failSettings = false; withTitles = true
+    }
+
+    @Test fun browserUrlTypingCaretReloadAndBackForwardUseSameEntryReplacementContract() = runComposeUiTest {
+        val snapshot = captureSearchHistory()
+        val f = ready(true)
+        try {
+            installSearchHistory()
+            val history = BrowserHistory()
+            f.runtime.start()
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
+            val field = onNodeWithTag("search-input")
+            field.performClick().performTextInputSelection(TextRange(2))
+            field.performTextInput("X")
+            field.assertIsFocused().assertInput("fiXlm")
+            field.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(3)))
+            assertEquals("/search?q=fiXlm&facet=movie", history.url)
+            val restored = WebNavigation(history)
+            assertEquals(WebRoute.Search("fiXlm", "movie"), restored.entry.value.route)
+            assertEquals("fiXlm", restored.entry.value.getString("productSearch.query"))
+            restored.close()
+            onNodeWithText("My Library").performClick()
+            assertEquals("/library?tab=watchlist", history.url)
+            runOnIdle { traverseSearchHistory(-1) }
+            waitUntil { history.url == "/search?q=fiXlm&facet=movie" }
+            onNodeWithTag("search-input").assertInput("fiXlm")
+            runOnIdle { traverseSearchHistory(1) }
+            waitUntil { history.url == "/library?tab=watchlist" }
+            onNodeWithTag("search-input").assertDoesNotExist()
+            assertEquals(0, f.edits)
+        } finally { f.close(); restoreSearchHistory(snapshot) }
     }
 
     @Test fun mainTypingKeepsFocusCaretAndRouteWhileOnlyExplicitSubmitRecords() = runComposeUiTest {
@@ -338,3 +368,12 @@ class WebSearchTest {
         } finally { f.close() }
     }
 }
+
+@JsFun("() => ({state:history.state, url:location.href})")
+private external fun captureSearchHistory(): kotlin.js.JsAny
+@JsFun("snapshot => history.replaceState(snapshot.state, '', snapshot.url)")
+private external fun restoreSearchHistory(snapshot: kotlin.js.JsAny)
+@JsFun("() => history.replaceState({}, '', '/search?q=film&facet=movie')")
+private external fun installSearchHistory()
+@JsFun("delta => history.go(delta)")
+private external fun traverseSearchHistory(delta: Int)
