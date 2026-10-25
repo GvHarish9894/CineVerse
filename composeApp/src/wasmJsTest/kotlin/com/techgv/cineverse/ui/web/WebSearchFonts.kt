@@ -20,7 +20,7 @@ internal class WebSearchFonts {
     private val probe = "files/search-font-mapping-probe"
     private val served = Json.decodeFromString<List<String>>(searchFontAssets())
     private val trace: kotlin.js.JsAny
-    private var loaded = false
+    private var loaded = 0
 
     init {
         verifyDefault()
@@ -43,16 +43,21 @@ internal class WebSearchFonts {
             preloadFont(Res.font.inter_semibold).value,
             preloadFont(Res.font.inter_bold).value,
         )
-        loaded = values.all { it != null }
+        loaded = values.count { it != null }
     }
 
-    suspend fun verifyLoaded() = withContext(Dispatchers.Default) {
-        withTimeout(5000) { while (!searchFontReadsComplete(trace, searchFontAssets())) delay(10) }
+    suspend fun verifyLoaded(settle: () -> Unit) = withContext(Dispatchers.Default) {
+        withTimeout(5000) {
+            while (loaded != 7 || !searchFontReadsComplete(trace, searchFontAssets())) {
+                delay(10)
+                settle()
+            }
+        }
         assertTrue(searchFontReadsValid(trace, searchFontAssets()), searchFontReadSummary(trace))
         println("Search font fixture: " + searchFontReadSummary(trace))
     }
 
-    fun assertLoaded() { assertTrue(loaded, "Compose font loading did not complete") }
+    fun assertLoaded() { assertEquals(7, loaded, "Compose font loading did not complete: " + searchFontReadSummary(trace)) }
 
     fun close() {
         try {
@@ -85,7 +90,10 @@ private external fun searchFontsSameOrigin(assets: String): Boolean
 @JsFun("path => location.origin + location.pathname + './composeResources/com.techgv.cineverse.ui.resources/' + path")
 private external fun searchDefaultFontUri(path: String): String
 @JsFun("""() => {
- const trace = {original:window.fetch, reads:[]};
+ const trace = {original:window.fetch, reads:[], errors:[]};
+ trace.error = event => trace.errors.push(event.type);
+ window.addEventListener('error',trace.error);
+ window.addEventListener('unhandledrejection',trace.error);
  trace.wrapper = async function(...args) {
   const url = new URL(typeof args[0] === 'string' ? args[0] : args[0].url, location.href).href;
   if (!url.endsWith('.ttf')) return trace.original.apply(this,args);
@@ -104,9 +112,9 @@ private external fun searchDefaultFontUri(path: String): String
 private external fun traceSearchFonts(): kotlin.js.JsAny
 @JsFun("(trace, assets) => JSON.parse(assets).every(url => trace.reads.some(read => read.url===url && read.done)) && trace.reads.every(read => read.done)")
 private external fun searchFontReadsComplete(trace: kotlin.js.JsAny, assets: String): Boolean
-@JsFun("(trace, assets) => trace.reads.length >= 7 && trace.reads.every(read => JSON.parse(assets).includes(read.url) && read.done && !read.failed && read.status===200 && read.size>4 && read.font)")
+@JsFun("(trace, assets) => trace.errors.length === 0 && trace.reads.length >= 7 && trace.reads.every(read => JSON.parse(assets).includes(read.url) && read.done && !read.failed && read.status===200 && read.size>4 && read.font)")
 private external fun searchFontReadsValid(trace: kotlin.js.JsAny, assets: String): Boolean
-@JsFun("trace => JSON.stringify({requests:trace.reads.length, successfulFonts:trace.reads.filter(r=>r.done && !r.failed && r.status===200 && r.font).length, failed:trace.reads.filter(r=>r.failed || r.status!==200 || !r.font).length, bytes:trace.reads.map(r=>r.size)})")
+@JsFun("trace => JSON.stringify({requests:trace.reads.length, loaderErrors:trace.errors.length, successfulFonts:trace.reads.filter(r=>r.done && !r.failed && r.status===200 && r.font).length, failed:trace.reads.filter(r=>r.failed || r.status!==200 || !r.font).length, bytes:trace.reads.map(r=>r.size)})")
 private external fun searchFontReadSummary(trace: kotlin.js.JsAny): String
-@JsFun("trace => { if(window.fetch!==trace.wrapper) throw Error('Unexpected fetch replacement'); window.fetch=trace.original; }")
+@JsFun("trace => { if(window.fetch!==trace.wrapper) throw Error('Unexpected fetch replacement'); window.fetch=trace.original; window.removeEventListener('error',trace.error); window.removeEventListener('unhandledrejection',trace.error); }")
 private external fun stopSearchFontTrace(trace: kotlin.js.JsAny)

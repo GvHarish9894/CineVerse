@@ -57,7 +57,7 @@ class WebSearchTest {
             waitUntil { history.url == "/library?tab=watchlist" }
             onNodeWithTag("search-input").assertDoesNotExist()
             assertEquals(0, f.edits)
-            fonts.verifyLoaded()
+            fonts.verifyLoaded { mainClock.advanceTimeByFrame(); waitForIdle() }
             waitForIdle()
             fonts.assertLoaded()
         } finally {
