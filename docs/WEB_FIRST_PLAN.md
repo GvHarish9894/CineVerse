@@ -1,0 +1,50 @@
+# Web-first product completion
+
+## Operator priority and held work
+
+Operator: hold existing native/iOS work; complete the web application first using multiple subagents. Native Search remains preserved at `f4-native-search@efd50ec`; its failed reviewer is NOT resumed. The five known iOS failures remain parked, not ignored or green. No native source changes, native builds, device boots or native runtime work in this program.
+
+Web-first does not waive independent review, P7/Safari/human acceptance, server/session safety, or owner participation in real account actions. Main stays shared core plus planning docs; no UI promotion/push. Existing `l3-design@b5e69a6`, owner preview8765, managed/personal browser profiles and port53870 remain untouched. Six worktrees including main is still the cap. Main has unrelated staged/modified IDE and untracked app/.kotlin files: never stage/delete/commit them; documentation commits use explicit `--only` paths.
+
+## Starting evidence
+
+- Reviewed E4 Home/Browse/People candidate4661983 and reviewed F1/F2/F3 shared Search throughbd2a2a2 are usable foundations.
+- Browser Search clean461cb7e exists but is NOT independently cleared. G0 must review it before integration consumes its changes. Report: managed outputs/2a4ef6e1-902b-4d52-961a-3ac213707c86/f5-web-search-finish.md; exact patch /tmp/cineverse-f5-web-search/f5-web-search.patch.64 distinct tests have passing evidence across separate scoped runs, NOT one final-head64-test run. Final affected browser history/focus/font case1/0, seven genuine font loads; forced18-file production secret scan and optimized shipped provenance passed. Prior failures/incomplete404 runs remain separate evidence.
+- Existing shared DetailStateHolder, PersonStateHolder, SeasonStateHolder, LibraryStateHolder, SettingsStateHolder, LibraryActionsStateHolder and WebRuntime factories must be reused. No parallel business stack, new dependencies or mocked product success.
+
+## Exclusive first-wave lane board
+
+| Lane / cwd / branch | Exclusive ownership | Frozen seams / handoff |
+|---|---|---|
+| G0 reviewer / C3 browser-storage / f5-web-search461cb7e | Read/search-only independent review of exact Search root/navigation/input/recent/focus/lifetime and test-resource changes | No edits, shell/build/browser/runtime or report-based clearance. Concrete findings or no issues; production document/Safari remains unaccepted. |
+| G1 writer / C1 native-auth / g1-web-library frombd2a2a2 | NEW Wasm WebLibrary screen/entry owner/route validation and matching uniquely named tests/fakes | Existing LibraryStateHolder via typed WebRuntime factory, verified-session gating, real movie/TV groups, durable guest/account sources, loaded-only counts, tab/scroll/paging/error/recovery, real-ID navigation. No root/shared/store/server changes. |
+| G2 writer / C2 web-http / g2-web-settings frombd2a2a2 | NEW Wasm WebSettings screen/local owner and matching uniquely named tests/fakes | Existing real settings state/repository and actual supported preferences; explicit typed callbacks for sign-in/out/account/import. No invented autoplay or unimplemented no-op controls. Account/default/import orchestration belongs to a later separate lane, not this writer. |
+| G3 writer / C5 catalog / g3-web-title-detail frombd2a2a2 | NEW Wasm WebDetail screen/entry owner and matching uniquely named tests/fakes | Existing DetailStateHolder/real catalog/domain data, typed LibraryActions injection, actual title/person/season/trailer navigation callbacks, independent content/account/error states, reader recovery/cancellation. No root/shared/Person/Season/player/dialog ownership. |
+
+C1 old f3-product-search, C2 old f4-native-search/F2/E2, and C5 old f-search-contracts/E4 branches remain retained. C3 Search is stable for review. All new writers start from the reviewedbd2a2a2 base, NOT unreviewed F5. Components are tested directly; the later single integration owner binds them into WebApp. Do not have three writers edit the router/composition root.
+
+### Public component contracts
+
+- New components may depend explicitly on existing WebEntry/StateSaver, WebRuntime/authoritative WebSessionState, raw Settings Flow/typed SettingsRepository, CatalogRepository, GenerationCounter, LibraryActions and typed navigation callbacks as needed. Document the exact callable signature. No Koin lookups in business logic; no default no-op production actions.
+- Root/main/WebApp/header/WebRoute/WebNavigation/Home/Browse/Search, DI-WebRuntime, common UI primitives, shared holders/protocol/storage/schema, server and native sources are FROZEN for these writers. Only uniquely named NEW Wasm source/test files. Ask for a concrete missing shared contract instead of silently widening scope.
+- Validate present malformed/wrong-type/contradictory saved scalars before holder construction. Absence alone may default. Preserve invalid raw state and reject explicitly; no default fetch/reset.
+- Own entry child scopes; close/cancel on real entry disposal. No global cache, storage-retry owner recreation, broad catches, or stale identity publication. Unknown session/storage is not guest/empty/default success. Settings read recovery must reach failed upstream/holder readers even when recovered values are equal; never replay failed mutations.
+- Reuse house components, adaptive sizing, focus semantics and token/theme rules. Real counts are loaded/known only; API/kit mock values are not facts. No fake player/progress, fake profile totals or fabricated metadata.
+
+## Following waves — all required before web completion
+
+1. Focused gates and independent reviews of G1/G2/G3, source fixes/re-review as needed. G0 findings are fixed by the retained Search owner only; no native review restart. Parent owns exact patches/gate evidence.
+2. Reuse clean completed slots for separate Person and Season components using their existing shared holders, with typed real IDs, biography/credits/season/episode data, direct/reload/history/scroll validation and reader recovery. Never claim full-movie/episode streaming: the available lawful playback contract is trailers; episode selection uses actual available metadata.
+3. Separate browser account-dialog/import/defaults owner: real approval start/return/cancel/sign-out flows via WebRuntime, authoritative unknown/guest/signed-in UI, captured account+opaque generation, explicit optional account defaults and guest-library import. No real sign-in/account/import execution without owner participation; test with isolated fake services only. Preserve ambiguous-write reconciliation, stale409 and401 revalidation; never replay account mutations.
+4. Separate browser trailer/rating-dialog/action owners: genuine validated YouTube iframe interop above canvas, real lifecycle/cleanup and honest loading/failure; no fake controls/state/progress or unsupported auto-play promises. Reuse LibraryActionsStateHolder for watchlist/favourite/rating with pending/unknown gates, exact captured identity and outcome semantics. Modal focus trap/Escape/return and player-vs-rate ordering must remain correct. Home quick actions/latest trailers and detail/library actions bind these reviewed contracts.
+5. One integration-only owner on a non-main web candidate after component clearance: merge reviewed Search/components, inject real dependencies in main, bind all routes/header/footer/account/menu/Home actions, handle404/unknown/offline/storage states and responsive keyboard/accessibility behavior. It may reconcile composition seams, not take over unfinished components. No shared/native/business redesign under integration.
+6. Fresh combined web checks on the actual integrated head, forced production pipeline and secret scan/shipped-code provenance, then independent integration review. Actual root/deep-route reload/back/forward/focus/iframe behavior needs an explicit isolated browser lease. Retain all failed and passing runs separately; don't sum old runs into a fictitious green suite.
+7. Owner Safari/P7/design/human acceptance, real account/approval/multitab/import/write checks with owner participation, deployed BFF/token/cookie/CSP and release gates remain explicit. No claim of fully complete/release-ready while these or required screens/actions are missing.
+
+## Execution and leases
+
+All workers/reviewers `cliproxyapi/gpt-6.1-sol` only; no provider/model/CLI/auth fallback, nested agents, new worktrees, merges/pushes by workers, credentials output/overwrite, profile access, resets/permission changes or live user data operations. Author `GvHarish9894 <hariharangv9894@gmail.com>`. Gradle `--max-workers=2`, no configure-on-demand; filters scoped per task. ANDROID_HOME=$HOME/Library/Android/sdk and DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer are normal build environment only, not device/runtime grants.
+
+First-wave writers code, add focused checks and checkpoint commits in parallel; request a parent build/browser lease BEFORE long gates. Parent queues Wasm compile and dedicated Karma resources rather than three simultaneous browser/compiler jobs. No initial runtime lease. Source/tests merely compiled are reported as such until execution is granted and completed. Reuse proven font-fixture evidence only after source review; don't copy a growing resource workaround into every component.
+
+Each handoff states exact head/diff/signature, actual commands/counts, failed evidence and unfinished connections/checks. Independent reviewers are read/search-only; parent supplies patches and runs/queues gates. On provider or unexpected tool/runtime failure checkpoint/preserve/report/stop, no blind retry or implicit execution fallback. Continue authorized independent lanes; failed lane retry requires explicit operator instruction. The parent advances safe pending seams on notifications, with no sleeping/polling.
