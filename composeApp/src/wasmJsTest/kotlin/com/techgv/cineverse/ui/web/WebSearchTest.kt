@@ -2,13 +2,20 @@
 
 package com.techgv.cineverse.ui.web
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.techgv.cineverse.data.storage.BrowserStorageFailure
 import com.techgv.cineverse.data.tmdb.SearchFacet
 import com.techgv.cineverse.presentation.*
@@ -21,6 +28,64 @@ class WebSearchTest {
 
     private fun ready(writes: Boolean = false) = WebRuntimeUiTest.Fixture(writes).apply {
         failSession = false; failSettings = false; withTitles = true
+    }
+
+    @Test fun unavailableDesktopSearchHeaderPreservesTvInputUntilExplicitRecoveredSubmission() = unavailableSearchHeader(1100.dp)
+
+    @Test fun unavailablePhoneSearchHeaderPreservesTvInputUntilExplicitRecoveredSubmission() = unavailableSearchHeader(390.dp)
+
+    private fun unavailableSearchHeader(width: Dp) = runComposeUiTest {
+        val f = ready(true).apply { failSettings = true }
+        val history = FakeHistory("/search?q=film&facet=tv")
+        try {
+            setContent { Box(Modifier.width(width)) { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) } }
+            val field = onNodeWithTag("header-search-input")
+            val saved = history.saved
+            field.assertIsNotEnabled().assertInput("film")
+            onNodeWithText("Search is unavailable until saved settings are loaded. Your URL query and facet are unchanged.").assertExists()
+            onNodeWithTag("search-input").assertDoesNotExist()
+            field.performTouchInput { click() }
+            field.assertIsNotFocused()
+            // Disabled platform semantics must not accept a visible draft or a stale IME submission.
+            field.fetchSemanticsNode().config.getOrNull(SemanticsActions.SetText)?.action?.invoke(AnnotatedString("arrival"))
+            field.fetchSemanticsNode().config.getOrNull(SemanticsActions.PerformImeAction)?.action?.invoke()
+            field.assertInput("film")
+            assertEquals("/search?q=film&facet=tv", history.url)
+            assertEquals(saved, history.saved)
+            assertEquals(0, f.edits)
+
+            runOnIdle { f.runtime.start() }
+            waitUntil { f.runtime.storageFailure.value == BrowserStorageFailure.Blocked }
+            field.assertIsNotEnabled().assertInput("film")
+            field.fetchSemanticsNode().config.getOrNull(SemanticsActions.SetText)?.action?.invoke(AnnotatedString("arrival"))
+            field.fetchSemanticsNode().config.getOrNull(SemanticsActions.PerformImeAction)?.action?.invoke()
+            field.performKeyInput { pressKey(Key.Enter) }
+            mainClock.advanceTimeBy(600)
+            field.assertInput("film")
+            assertEquals("/search?q=film&facet=tv", history.url)
+            assertEquals(saved, history.saved)
+            assertEquals(0, f.catalogReads)
+            assertEquals(0, f.edits)
+            assertNull(f.recentValue)
+
+            runOnIdle { f.failSettings = false }
+            onNodeWithText("Retry").performClick()
+            waitUntil { f.runtime.settingsHolder.state.value != null }
+            field.assertIsEnabled().assertInput("film")
+            onNodeWithTag("search-input").assertInput("film")
+            waitUntil { f.reads.any { it.path == "/api/tmdb/search/tv" && it.query == "film" } }
+            assertEquals("/search?q=film&facet=tv", history.url)
+            assertEquals(0, f.edits)
+
+            field.performTextReplacement("arrival")
+            field.assertInput("arrival")
+            field.performImeAction()
+            waitUntil { f.edits == 1 && f.reads.any { it.path == "/api/tmdb/search/tv" && it.query == "arrival" } }
+            assertEquals("/search?q=arrival&facet=tv", history.url)
+            assertEquals("[\"arrival\"]", f.recentValue)
+            assertTrue(f.reads.none { it.path == "/api/tmdb/search/multi" })
+            assertEquals(1, f.edits)
+        } finally { f.close() }
     }
 
     @Test fun browserUrlTypingCaretReloadAndBackForwardUseSameEntryReplacementContract() = runComposeUiTest {

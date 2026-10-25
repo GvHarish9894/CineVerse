@@ -25,6 +25,18 @@ class WebSearchContentTest {
         WebSearchContent(entry, state, state.query, false, {}, {}, {}, {}, {}, more, retry, {}, null, navigate)
     }
 
+    @Test fun titleRowsShowNrWithoutVotesAndPreserveActualRatedScore() = runComposeUiTest {
+        val nav = WebNavigation(FakeHistory("/search?q=film&facet=movie"))
+        val unrated = title.copy(ref = MediaRef(MediaType.Movie, 8), voteAverage = 0.0, voteCount = 0)
+        val state = ProductSearchUiState("film", SearchFacet.Movie,
+            SectionState.Content(PagedItems(listOf(Hero.OfTitle(title), Hero.OfTitle(unrated)), 1, false)))
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) { Content(nav.entry.value, state) }
+        onNodeWithText("movie · 2026-01-01 · ★ 8.1").assertExists()
+        onNodeWithText("movie · 2026-01-01 · NR").assertExists()
+        onNodeWithText("★ 0.0", substring = true).assertDoesNotExist()
+        nav.close()
+    }
+
     @Test fun narrowRowsHaveLoadedOnlyActiveCountsAndUnknownIsNotEmptySuccess() = runComposeUiTest {
         val nav = WebNavigation(FakeHistory("/search?q=film&facet=movie"))
         var state by mutableStateOf(ProductSearchUiState("film", SearchFacet.Movie))
