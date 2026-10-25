@@ -80,8 +80,9 @@ internal fun WebLibraryContent(
     val restored = remember(entry) { validateWebLibraryEntry(entry) }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         val wide = maxWidth > 860.dp
-        Column(Modifier.widthIn(max = 1320.dp).fillMaxSize().padding(horizontal = if (maxWidth <= 640.dp) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("My Library", style = displayStyle(if (maxWidth <= 640.dp) 36.sp else 48.sp), modifier = Modifier.semantics { heading() })
+        val phone = maxWidth <= 640.dp
+        Column(Modifier.widthIn(max = 1320.dp).fillMaxSize().padding(horizontal = if (phone) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("My Library", style = displayStyle(if (phone) 36.sp else 48.sp), modifier = Modifier.semantics { heading() })
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 LibraryTab.entries.forEach { tab ->
                     val count = if (state?.tab == tab) libraryLoadedCount(state) else null
@@ -144,7 +145,7 @@ private fun WebLibraryGrid(
     LaunchedEffect(group, page, restored) {
         if ((paged && page == null) || restored || group.loadingMore || group.moreError != null || group.refreshError != null) return@LaunchedEffect
         if (group.section !is SectionState.Content && group.section != SectionState.Empty) return@LaunchedEffect
-        if (page != null && page < target.page && group.hasMore && page != null && page < 500) loadMore()
+        if (page != null && page < target.page && group.hasMore && page < 500) loadMore()
         else {
             scroll.scrollToItem(target.index.coerceAtMost((items?.size ?: 0) + 1), target.offset)
             restored = true
@@ -180,10 +181,11 @@ private fun WebLibraryGrid(
             is SectionState.Content -> {
                 items(section.value, key = { "${it.title.ref.mediaType}:${it.title.ref.id}" }) { item ->
                     BoxWithConstraints {
+                        val cardWidth = maxWidth
                         Column {
                             PosterCard(item.title.title, item.title.releaseDate, ArtPalette(Tokens.Colors.Accent, Tokens.Colors.Secondary),
                                 { navigate(item.title.ref.libraryDetailRoute()) }, Modifier.testTag("library-${item.title.ref.mediaType}-${item.title.ref.id}"),
-                                imageUrl = webImage(item.title.posterPath, "w342"), voteAverage = item.title.voteAverage, voteCount = item.title.voteCount, width = maxWidth)
+                                imageUrl = webImage(item.title.posterPath, "w342"), voteAverage = item.title.voteAverage, voteCount = item.title.voteCount, width = cardWidth)
                             if (tab == LibraryTab.Rated) item.rating?.let { GoldBadge("Your rating · ${oneDecimal(it)} / 10") }
                         }
                     }
