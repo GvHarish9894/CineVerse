@@ -233,7 +233,8 @@ function consumedApiAbort(event, cdp, expected, origin) {
     const url = new URL(request.url);
     const row = catalogRow(url);
     if (url.origin !== origin || (url.pathname !== '/api/session' && !row) ||
-        (row && [...cdp.requests.values()].filter(candidate => candidate.url === request.url && candidate.loaderId === expected.loaderId).length !== 1)) return null;
+        (row && [...cdp.requests.values()].filter(candidate => candidate.method === 'GET' && candidate.frameId === expected.frameId &&
+            candidate.loaderId === expected.loaderId && new URL(candidate.url).origin === origin && catalogRow(new URL(candidate.url)) === row).length !== 1)) return null;
     const response = request.lifecycle.find(item => item.method === 'Network.responseReceived')?.response;
     if (!response || response.status < 200 || response.status >= 300 || response.mimeType !== 'application/json') return null;
     const starts = cdp.readTraces.filter(trace => trace.phase === 'fetch' && trace.isDefault && trace.url === request.url && trace.method === 'GET' &&
@@ -292,6 +293,8 @@ function checkConsumptionProof() {
     const catalogProof = prove({...request, url: catalogUrl}, traces.map(item => ({...item, url: catalogUrl})));
     assert.equal(catalogProof?.row, 'popularMovies');
     assert.ok(validApplicationOutcome(catalogProof, sample));
+    assert.equal(prove({...request, url: catalogUrl}, traces.map(item => ({...item, url: catalogUrl})), event, expected,
+        [{...request, requestId: 'other', url: catalogUrl + '&language=fr-FR'}]), null);
     assert.equal(validApplicationOutcome(catalogProof, {...sample, catalogEmptyRows: ['trending']}), false);
     assert.equal(validApplicationOutcome(catalogProof, {...sample, catalogEmptyRows: []}), false);
     for (const outcome of [...['Checking', 'Failed', 'UnknownOrConflicting', 'RejectedIdentity'].map(state => ({...sample, state})),
