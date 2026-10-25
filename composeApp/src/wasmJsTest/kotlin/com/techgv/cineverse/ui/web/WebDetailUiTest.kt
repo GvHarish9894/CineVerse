@@ -84,7 +84,7 @@ class WebDetailUiTest {
         onNodeWithTag("detail-person-42").performClick()
         onNodeWithTag("detail-person-43").performClick()
         assertEquals(1, back)
-        assertEquals(listOf(WebRoute.Person(42), WebRoute.Person(43)), routes)
+        assertEquals(listOf<WebRoute>(WebRoute.Person(42), WebRoute.Person(43)), routes)
     }
 
     @Test fun recommendationEmitsActualMediaAndTitleId() = runComposeUiTest {
@@ -97,7 +97,7 @@ class WebDetailUiTest {
         }
         onNodeWithTag("web-detail").performScrollToIndex(2)
         onNodeWithTag("detail-recommendation-movie-81").performClick()
-        assertEquals(listOf(WebRoute.Detail("movie", 81)), routes)
+        assertEquals(listOf<WebRoute>(WebRoute.Detail("movie", 81)), routes)
     }
 
     @Test fun footerEmitsActualLibraryDestinationWithoutLoadedDetail() = runComposeUiTest {
@@ -109,7 +109,7 @@ class WebDetailUiTest {
         }
         onNodeWithTag("web-detail").performScrollToIndex(2)
         onNodeWithText("My Library").performClick()
-        assertEquals(listOf(WebRoute.Library()), routes)
+        assertEquals(listOf<WebRoute>(WebRoute.Library()), routes)
     }
 
     @Test fun tvPhoneLayoutUsesRealSeasonAndCreatorIdsWithoutFakePlayerOrTotals() = runComposeUiTest {
