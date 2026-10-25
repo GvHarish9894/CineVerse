@@ -109,6 +109,7 @@ class MobileExploreViewModelTest {
         runCurrent()
         val page = model.currentPage.value
         val before = (page.browse.uiState.value.grid as SectionState.Content).value
+        val settingsBeforeFailure = f.graph.settings.value
         f.store.fail = true
         f.store.values.value = mapOf("unrelated" to "failed")
         page.browse.loadMore()
@@ -116,14 +117,23 @@ class MobileExploreViewModelTest {
         assertTrue(f.graph.settingsFailed.value)
         assertTrue(page.storageFailed.value)
         assertEquals(before.items, (page.browse.uiState.value.grid as SectionState.Content).value.items)
+        val subscriptionsBeforeRetry = f.store.subscriptions
         f.store.fail = false
         model.retryStorage()
         runCurrent()
         assertSame(page, model.currentPage.value)
-        assertEquals(2, f.store.subscriptions)
+        // Catalog settings.current() also takes one-shot subscriptions; prove the graph reader is live below.
+        assertTrue(f.store.subscriptions > subscriptionsBeforeRetry)
         assertFalse(f.graph.settingsFailed.value)
         assertFalse(page.storageFailed.value)
-        assertEquals(2, (page.browse.uiState.value.grid as SectionState.Content).value.page)
+        assertEquals(settingsBeforeFailure, f.graph.settings.value)
+        val recovered = (page.browse.uiState.value.grid as SectionState.Content).value
+        assertEquals(2, recovered.page)
+        assertEquals(before.items, recovered.items.take(before.items.size))
+        assertNull(recovered.moreError)
+        f.settings.update { it.copy(haptics = false) }
+        runCurrent()
+        assertEquals(false, f.graph.settings.value?.haptics)
         assertTrue(f.guest.rows.value.isEmpty())
         f.graph.close()
     }
