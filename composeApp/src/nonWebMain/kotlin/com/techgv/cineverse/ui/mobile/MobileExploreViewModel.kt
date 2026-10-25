@@ -36,7 +36,7 @@ internal class MobileExploreViewModel(
         return try {
             val rawType = savedState.get<Any?>("mobileExplore.type")
             require(rawType == null || rawType is String)
-            val type = (rawType as String?)?.let(MobileExploreType::valueOf) ?: initial.type()
+            val type = rawType?.let(MobileExploreType::valueOf) ?: initial.type()
             // Validate every retained type before any holder can fetch or overwrite saved scalars.
             MobileExploreType.entries.forEach { ExploreSaver(savedState, it).validate() }
             type
@@ -115,7 +115,7 @@ private class ExploreSaver(private val handle: SavedStateHandle, private val typ
     override fun getString(key: String): String? {
         val value = handle.get<Any?>(prefix + key)
         require(value == null || value is String)
-        return value as String?
+        return value
     }
     override fun getInt(key: String): Int? = handle[prefix + key]
     override fun getBoolean(key: String): Boolean? = handle[prefix + key]
