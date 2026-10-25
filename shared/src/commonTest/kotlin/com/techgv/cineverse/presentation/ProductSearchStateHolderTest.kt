@@ -405,6 +405,89 @@ class ProductSearchStateHolderTest {
         }
     }
 
+    @Test fun appGenerationChangeDuringFailedWriteReconcilesPendingWithoutStaleFeedback() = runTest {
+        val f = Fixture("q"); advanceUntilIdle()
+        val gate = CompletableDeferred<Unit>()
+        f.writeHook = { gate.await(); throw f.failure }
+        val reads = f.reads
+        val subscriptions = f.subscriptions
+        f.holder.commitQuery(); runCurrent()
+        assertEquals(RecentMutationStatus.Pending, f.state().recentMutation)
+        f.app.bump()
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals(RecentMutationStatus.Idle, f.state().recentMutation)
+        assertTrue(f.reports.isEmpty())
+        assertNull(f.state().recentReadError)
+        assertEquals(emptyList(), f.state().recentQueries)
+        assertEquals(reads + 1, f.reads)
+        assertEquals(subscriptions + 1, f.subscriptions)
+        assertEquals(1, f.activeSettings)
+        assertEquals(1, f.activeRecent)
+        assertEquals(1, f.edits)
+        f.holder.retryRecentRead(); advanceUntilIdle()
+        assertEquals(1, f.edits)
+    }
+
+    @Test fun obsoleteSuccessfulClearRecoversCurrentCorruptReaderWithoutPublishingWriteFeedback() = runTest {
+        val f = Fixture("old")
+        f.disk.edit { it.setString(RECENT_QUERIES_KEY, "corrupt-private"); it.setBoolean("unrelated", true) }
+        advanceUntilIdle()
+        assertNull(f.state().recentQueries)
+        assertEquals(SectionErrorKind.Generic, f.state().recentReadError)
+        assertEquals(0, f.activeRecent)
+        val writeGate = CompletableDeferred<Unit>()
+        f.writeHook = { writeGate.await() }
+        f.holder.clearRecentQueries(); runCurrent()
+        f.holder.setInput("new", SearchFacet.Movie); advanceUntilIdle()
+        assertEquals("movie/new/en-US/false/1", f.title())
+        assertEquals(RecentMutationStatus.Idle, f.state().recentMutation)
+        assertEquals(SectionErrorKind.Generic, f.state().recentReadError)
+        assertEquals(0, f.activeRecent)
+        val reads = f.reads
+        val reports = f.reports.toList()
+        val readGate = CompletableDeferred<Unit>()
+        f.recentReadHook = { readGate.await() }
+        writeGate.complete(Unit); runCurrent()
+        assertNull(f.disk.data.first().string(RECENT_QUERIES_KEY))
+        assertEquals(true, f.disk.data.first().boolean("unrelated"))
+        assertEquals(reads + 1, f.reads)
+        assertEquals(1, f.activeRecent)
+        assertNull(f.state().recentQueries) // A successful clear is not an observed empty history.
+        assertEquals(SectionErrorKind.Generic, f.state().recentReadError)
+        assertEquals(RecentMutationStatus.Idle, f.state().recentMutation)
+        readGate.complete(Unit); advanceUntilIdle()
+        assertEquals(emptyList(), f.state().recentQueries)
+        assertNull(f.state().recentReadError)
+        assertEquals(RecentMutationStatus.Idle, f.state().recentMutation)
+        assertEquals(reports, f.reports)
+        assertEquals(1, f.activeSettings)
+        assertEquals(1, f.activeRecent)
+        assertEquals(reads + 1, f.reads)
+        assertEquals(1, f.edits)
+    }
+
+    @Test fun recentReadRetryAfterAppGenerationChangeInvalidatesOldSourceAndCounts() = runTest {
+        val f = Fixture("q"); advanceUntilIdle()
+        f.holder.loadMore(); advanceUntilIdle()
+        assertEquals(2, f.page().page)
+        assertEquals(3, f.state().loadedCount(SearchFacet.Multi))
+        val reads = f.reads
+        val subscriptions = f.subscriptions
+        f.app.bump()
+        f.holder.retryRecentRead()
+        assertEquals(SectionState.Loading, f.state().results)
+        assertNull(f.state().loadedCount(SearchFacet.Multi))
+        advanceUntilIdle()
+        assertEquals(1, f.page().page)
+        assertEquals(2, f.state().loadedCount(SearchFacet.Multi))
+        assertEquals(reads + 1, f.reads)
+        assertEquals(subscriptions + 1, f.subscriptions)
+        assertEquals(1, f.activeSettings)
+        assertEquals(1, f.activeRecent)
+        assertEquals(0, f.edits)
+        assertTrue(f.reports.isEmpty())
+    }
+
     @Test fun corruptRecentIsNotResetByReadRecoveryOrRecordAndOnlyExplicitClearRecovers() = runTest {
         val f = Fixture("q")
         f.disk.edit { it.setString(RECENT_QUERIES_KEY, "corrupt-private"); it.setBoolean("unrelated", true) }; advanceUntilIdle()
