@@ -25,21 +25,30 @@ internal class MobileFixture(scope: CoroutineScope) {
         override suspend fun states(session: AuthSession, ref: MediaRef) = LibraryState(true, false, false, null, emptySet())
         override suspend fun write(session: AuthSession, ref: MediaRef, kind: LibraryKind, target: LibraryState) = error("No account writes in mobile fixtures")
     })
-    val graph = MobileApplication(catalog, generation, settings, auth, library, scope)
+    val recent = com.techgv.cineverse.data.search.RecentQueryStore(store)
+    val graph = MobileApplication(catalog, generation, settings, auth, library, recent, scope)
 }
 
 internal class MobileSettingsStore : SettingsStore {
     val values = MutableStateFlow<Map<String, Any>>(emptyMap())
     var fail = false
+    var activeSubscriptions = 0
     var subscriptions = 0
+    var edits = 0
+    var failWrites = false
     override val data: Flow<SettingsValues> = flow {
         subscriptions++
-        values.collect {
-            if (fail) throw StorageException("fake settings read")
-            emit(Values(it.toMutableMap()))
-        }
+        activeSubscriptions++
+        try {
+            values.collect {
+                if (fail) throw StorageException("fake settings read")
+                emit(Values(it.toMutableMap()))
+            }
+        } finally { activeSubscriptions-- }
     }
     override suspend fun edit(transform: (MutableSettingsValues) -> Unit) {
+        edits++
+        if (failWrites) throw StorageException("fake settings write")
         val next = Values(values.value.toMutableMap())
         transform(next)
         values.value = next.map.toMap()
@@ -92,6 +101,12 @@ internal class MobileCatalogApi : MobileUnusedTmdbApi() {
         if (page == pageFailure) throw TmdbException(TmdbError.Network)
         return PageDto(page, (1..12).map { MediaItemDto(id = page * 100 + it, title = "$label $it", name = "$label $it", mediaType = type) }, 2)
     }
+    override suspend fun search(facet: SearchFacet, query: String, language: String, includeAdult: Boolean, page: Int) =
+        page("search-$facet-$query-$language-$includeAdult", page, when (facet) {
+            SearchFacet.Tv -> "tv"
+            SearchFacet.Person -> "person"
+            else -> "movie"
+        })
     override suspend fun configuration() = ConfigurationDto()
     override suspend fun genres(media: MediaType, language: String): GenreListDto {
         genreCalls++

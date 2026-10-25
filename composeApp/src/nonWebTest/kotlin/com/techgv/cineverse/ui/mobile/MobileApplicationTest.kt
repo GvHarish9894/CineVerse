@@ -80,6 +80,7 @@ class MobileApplicationTest {
                 single { f.catalog }
                 single { f.generation }
                 single { f.settings }
+                single<com.techgv.cineverse.data.settings.SettingsStore> { f.store }
                 single<com.techgv.cineverse.data.auth.AuthRepository> { f.auth }
                 single { f.library }
                 single(com.techgv.cineverse.di.AppScope) { backgroundScope }
