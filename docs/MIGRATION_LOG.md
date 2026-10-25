@@ -37,8 +37,19 @@ R8 release installed over data and booted with a live foreground app process; no
 acceptance is implied. Logs: `/tmp/cineverse-supervisor-review-gates/c4-all-merged-*` and
 `/tmp/cineverse-integrated-tv-8c186d6/`.
 
-P7 design source may be integrated into an isolated **non-main UI staging branch** for continued development;
-this does not approve/promote P7, alter the owner's b5e69a6 preview, or waive its manual Safari gate.
+P7 design source is integrated only into **non-main `p7-ui-stage`**, source checkpoint `db16271` (parents
+`0cf7222` + reviewed L3 `b5e69a6`). Minimal reconciliation preserves C1 host defaults/coroutines/native-only
+fixture isolation and opt-in Swift fixture, Android approval callbacks, and C4 browser startup/bfcache teardown.
+L3 UI sources/tests/fonts/licenses are unchanged. Staging shared JVM **265** / Android **259** / iOS **262** /
+Wasm **229**, compose Android-host **18** (= L3 16 + C1 2) / iOS **44** (= L3 41 + C1 3) / stock Wasm **41**,
+TV unit **63**, server **52** all pass with zero failures/errors/skips. Nine external reviewer Wasm probes also
+pass (**50** total), with probe XML saved separately and stock outputs restored. Phone/TV debug+release/lint,
+Android UI-test compilation, iOS framework/Swift host and production Wasm **18-file** positive-control secret
+scan pass; Wasm dependency graphs contain no Room/native storage. The opt-in AuthFixture framework links,
+while default production headers exclude its test exports. Logs: `/tmp/cineverse-p7-stage-gates/`.
+Independent reconciliation review is still required. This does not approve/promote P7, alter the owner's
+b5e69a6 worktree/8765 preview, or waive the missing actual owner Safari result. No product screens, live
+approval/import/account, device-retention or physical/release acceptance was performed for staging.
 
 Reviewed Wave D shared-only integration at `a50c20d`: Home paging/storage recovery (D0 final
 `adb67d4`, including independently re-reviewed marker correction) and identity-bound defaults read

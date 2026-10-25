@@ -59,6 +59,20 @@ class BrowseStateHolderTest {
         assertEquals(2, holder().uiState.value.tab) // restored from the same saved state
     }
 
+    @Test fun legacyTvDefaultAndSavedTabStillUseCuratedSourcesAndLabels() = runTest {
+        val holder = holder(BrowseKind.Tv)
+        advanceUntilIdle()
+        assertEquals(listOf("Popular", "Airing today", "On TV", "Top rated"), holder.tabs.map { it.label })
+        assertEquals(0, holder.uiState.value.tab)
+        holder.selectTab(2)
+        advanceUntilIdle()
+        assertEquals("on_the_air@en-US-1-0", holder.titles().first())
+        val restored = holder(BrowseKind.Tv)
+        advanceUntilIdle()
+        assertEquals(2, restored.uiState.value.tab)
+        assertEquals("on_the_air@en-US-1-0", restored.titles().first())
+    }
+
     @Test fun settingsChangeReloadsTheGridAndUnknownTabsAreIgnored() = runTest {
         val holder = holder(BrowseKind.People)
         advanceUntilIdle()

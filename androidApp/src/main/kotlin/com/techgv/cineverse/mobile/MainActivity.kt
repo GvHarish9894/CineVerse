@@ -5,15 +5,20 @@ import android.content.Intent
 import com.techgv.cineverse.auth.NativeApprovalHost
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import com.techgv.cineverse.smoke.App
+import androidx.activity.enableEdgeToEdge
+import com.techgv.cineverse.di.nativeMobileApplication
+import com.techgv.cineverse.ui.mobile.NativeMobileApp
 
 class MainActivity : ComponentActivity() {
     private val approval by lazy { NativeApprovalHost() }
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Edge-to-edge: the glass top bar and floating tab bar draw under the system bars and pad by their insets.
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         approval.attach(this)
         intent?.dataString?.let(approval::onCallback)
-        setContent { App(nativeReadToken = BuildConfig.TMDB_READ_ACCESS_TOKEN.ifBlank { null }) }
+        val graph = nativeMobileApplication()
+        setContent { NativeMobileApp(graph) }
     }
 
     override fun onStart() {
