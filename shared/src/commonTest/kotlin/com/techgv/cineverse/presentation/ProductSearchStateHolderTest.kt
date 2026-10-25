@@ -41,14 +41,18 @@ class ProductSearchStateHolderTest {
         var failedPage = 2
         var empty = false
         var subscriptions = 0
+        var activeSettings = 0
         val ticks = MutableStateFlow(0)
         val settings = flow {
             subscriptions++
-            ticks.collect {
-                settingsHook?.invoke()
-                settingsError?.let { throw it }
-                emit(preferences)
-            }
+            activeSettings++
+            try {
+                ticks.collect {
+                    settingsHook?.invoke()
+                    settingsError?.let { throw it }
+                    emit(preferences)
+                }
+            } finally { activeSettings-- }
         }
         val calls = mutableListOf<String>()
         val api = object : UnusedTmdbApi() {
@@ -76,14 +80,18 @@ class ProductSearchStateHolderTest {
         var writeError: Exception? = null
         var edits = 0
         var reads = 0
+        var activeRecent = 0
         val storage = object : SettingsStore {
             override val data = flow {
                 reads++
-                disk.data.collect { value ->
-                    recentReadHook?.invoke()
-                    recentReadError?.let { throw it }
-                    emit(value)
-                }
+                activeRecent++
+                try {
+                    disk.data.collect { value ->
+                        recentReadHook?.invoke()
+                        recentReadError?.let { throw it }
+                        emit(value)
+                    }
+                } finally { activeRecent-- }
             }
             override suspend fun edit(transform: (MutableSettingsValues) -> Unit) {
                 edits++
@@ -142,16 +150,16 @@ class ProductSearchStateHolderTest {
             SearchFacet.entries.filterNot { it == facet }.forEach { assertNull(f.state().loadedCount(it)) }
             if (facet == SearchFacet.Person) assertIs<Hero.OfPerson>(f.page().items.first())
         }
+        val before = f.calls.size
         f.holder.setInput("new", SearchFacet.Movie); advanceUntilIdle()
-        assertEquals("movie/new/en-US/false/1", f.calls.last())
-        assertFalse(f.calls.any { it.startsWith("person/new") || it.startsWith("movie/alien/") && it.endsWith("/2") })
+        assertEquals(listOf("movie/new/en-US/false/1"), f.calls.drop(before))
         assertEquals(0, f.edits)
     }
 
     @Test fun blankIsRealTrendingTitlesAndLongValidInputIsNeverTVTruncated() = runTest {
         val f = Fixture(); runCurrent()
         assertTrue(f.state().showingSuggestions)
-        assertEquals(listOf("trending/Week/en-US/1"), f.calls)
+        assertEquals(listOf("trending/week/en-US/1"), f.calls)
         assertIs<Hero.OfTitle>(f.page().items.first())
         assertNull(f.state().loadedCount(SearchFacet.Multi))
         val long = "x".repeat(200)
@@ -333,13 +341,15 @@ class ProductSearchStateHolderTest {
     }
 
     @Test fun queryReplacementDoesNotWaitForNonCancellableOldSettingsReader() = runTest {
-        val f = Fixture("old"); val gate = CompletableDeferred<Unit>()
-        f.settingsHook = { withContext(NonCancellable) { gate.await(); throw f.failure } }; runCurrent()
-        f.settingsHook = null; f.holder.setQuery("new"); advanceUntilIdle()
-        assertEquals("multi/new/en-US/false/1", f.title())
-        gate.complete(Unit); advanceUntilIdle()
-        assertNull(f.state().settingsError)
-        assertTrue(f.reports.isEmpty())
+        for (fail in listOf(false, true)) {
+            val f = Fixture("old"); val gate = CompletableDeferred<Unit>()
+            f.settingsHook = { withContext(NonCancellable) { gate.await(); if (fail) throw f.failure } }; runCurrent()
+            f.settingsHook = null; f.holder.setQuery("new"); advanceUntilIdle()
+            assertEquals("multi/new/en-US/false/1", f.title())
+            gate.complete(Unit); advanceUntilIdle()
+            assertNull(f.state().settingsError)
+            assertTrue(f.reports.isEmpty())
+        }
     }
 
     @Test fun recentReadFailureRetainsLastRealValuesAndExplicitRetryNeverWrites() = runTest {
@@ -476,6 +486,32 @@ class ProductSearchStateHolderTest {
         assertEquals(before, f.state())
         assertTrue(f.reports.isEmpty())
         assertEquals(1, f.edits)
+    }
+
+    @Test fun sourceReplacementAndRecoveryKeepObserversBoundedAndParentCancellationDisposesThem() = runTest {
+        val f = Fixture("q"); advanceUntilIdle()
+        repeat(12) {
+            f.holder.setInput("q$it", SearchFacet.entries[it % 4]); advanceUntilIdle()
+            f.holder.retrySettings(); f.holder.retryRecentRead(); advanceUntilIdle()
+            assertEquals(1, f.activeSettings)
+            assertEquals(1, f.activeRecent)
+        }
+        f.owner.cancel(); advanceUntilIdle()
+        assertEquals(0, f.activeSettings)
+        assertEquals(0, f.activeRecent)
+        assertEquals(0, f.edits)
+    }
+
+    @Test fun disposedOwnerCannotPublishLateSuccessfulReadsOrWriteFeedback() = runTest {
+        val f = Fixture("q"); val gate = CompletableDeferred<Unit>()
+        f.pageHook = { withContext(NonCancellable) { gate.await() } }
+        f.recentReadHook = { withContext(NonCancellable) { gate.await() } }
+        f.writeHook = { withContext(NonCancellable) { gate.await() } }
+        runCurrent(); f.holder.commitQuery(); f.holder.dispose()
+        val before = f.state()
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals(before, f.state())
+        assertTrue(f.reports.isEmpty())
     }
 
     @Test fun cancellationAndProgrammerErrorsAreNotConvertedToStorageRecovery() = runTest {

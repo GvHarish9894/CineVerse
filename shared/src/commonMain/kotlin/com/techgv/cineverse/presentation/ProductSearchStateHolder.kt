@@ -112,14 +112,14 @@ class ProductSearchStateHolder(
     fun setInput(query: String, facet: SearchFacet) {
         if (!ownerJob.isActive) return
         val old = state.value
-        if (query == old.query && facet == old.facet) return
+        if (query == old.query && facet == old.facet) { liveContext(); return }
         saver.putString(QUERY, query)
         saver.putString(FACET, facet.name)
         val changedQuery = query.trim() != old.normalizedQuery
         val changedSource = changedQuery || facet != old.facet
         if (changedSource) invalidateSource()
         state.update { it.copy(query = query, facet = facet) }
-        if (!changedSource) return
+        if (!changedSource) { liveContext(); return }
         pendingDebounce = if (changedQuery && query.isNotBlank()) SEARCH_DEBOUNCE_MILLIS else 0
         replaceSource(pendingDebounce)
         readSettings(recoverPage = false)
@@ -143,7 +143,7 @@ class ProductSearchStateHolder(
     }
 
     /** Re-subscribe even if values recover equal; keep the same section and failed-page marker. */
-    fun retrySettings() { if (ownerJob.isActive) readSettings(recoverPage = true) }
+    fun retrySettings() { if (liveContext()) readSettings(recoverPage = true) }
 
     private fun readSettings(recoverPage: Boolean) {
         settingsJob?.cancel()
@@ -258,7 +258,9 @@ class ProductSearchStateHolder(
         }
     }
 
-    /** ONLY an explicit user submit/commit records a valid nonblank query; repeated submits are deliberate writes. */
+    /** ONLY explicit submit/commit records input. Accepted writes keep order across input changes, not disposal.
+     * Repeated submits are deliberate writes; failed mutations are never replayed by read recovery.
+     */
     fun commitQuery() {
         val value = state.value
         if (value.inputError != null || value.showingSuggestions) return
