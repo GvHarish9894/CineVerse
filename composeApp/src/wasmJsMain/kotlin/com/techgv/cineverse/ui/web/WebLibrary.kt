@@ -147,7 +147,7 @@ private fun WebLibraryGrid(
         if (group.section !is SectionState.Content && group.section != SectionState.Empty) return@LaunchedEffect
         if (page != null && page < target.page && group.hasMore && page < 500) loadMore()
         else {
-            scroll.scrollToItem(target.index.coerceAtMost((items?.size ?: 0) + 1), target.offset)
+            scroll.scrollToItem(target.index.coerceAtMost((items?.size ?: 1) + 2), target.offset)
             restored = true
         }
     }
