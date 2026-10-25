@@ -29,27 +29,27 @@ enum class BrowseKind { Movies, Tv, People }
 /** One Browse tab (prototype `defs`): chip label, page subtitle, and its list. */
 class BrowseTab(val label: String, val subtitle: String, val source: (CatalogRepository) -> PageSource)
 
-private fun movies(list: MovieList) = { catalog: CatalogRepository ->
+internal fun movieBrowseSource(list: MovieList) = { catalog: CatalogRepository ->
     PageSource({ catalog.movieList(list, it) }) { it.toHero(MediaType.Movie) }
 }
 
-private fun tv(list: TvList) = { catalog: CatalogRepository ->
+internal fun tvBrowseSource(list: TvList) = { catalog: CatalogRepository ->
     PageSource({ catalog.tvList(list, it) }) { it.toHero(MediaType.Tv) }
 }
 
 /** §7.3 tabs per prototype `defs`. */
 fun browseTabs(kind: BrowseKind): List<BrowseTab> = when (kind) {
     BrowseKind.Movies -> listOf(
-        BrowseTab("Popular", "What people are watching on TMDB this week", movies(MovieList.Popular)),
-        BrowseTab("Now playing", "In theatres near you", movies(MovieList.NowPlaying)),
-        BrowseTab("Upcoming", "Coming soon to theatres", movies(MovieList.Upcoming)),
-        BrowseTab("Top rated", "Highest rated by the TMDB community", movies(MovieList.TopRated)),
+        BrowseTab("Popular", "What people are watching on TMDB this week", movieBrowseSource(MovieList.Popular)),
+        BrowseTab("Now playing", "In theatres near you", movieBrowseSource(MovieList.NowPlaying)),
+        BrowseTab("Upcoming", "Coming soon to theatres", movieBrowseSource(MovieList.Upcoming)),
+        BrowseTab("Top rated", "Highest rated by the TMDB community", movieBrowseSource(MovieList.TopRated)),
     )
     BrowseKind.Tv -> listOf(
-        BrowseTab("Popular", "The most-watched shows on TMDB right now", tv(TvList.Popular)),
-        BrowseTab("Airing today", "New episodes out today", tv(TvList.AiringToday)),
-        BrowseTab("On TV", "Airing in the next 7 days", tv(TvList.OnTheAir)),
-        BrowseTab("Top rated", "Highest rated by the TMDB community", tv(TvList.TopRated)),
+        BrowseTab("Popular", "The most-watched shows on TMDB right now", tvBrowseSource(TvList.Popular)),
+        BrowseTab("Airing today", "New episodes out today", tvBrowseSource(TvList.AiringToday)),
+        BrowseTab("On TV", "Airing in the next 7 days", tvBrowseSource(TvList.OnTheAir)),
+        BrowseTab("Top rated", "Highest rated by the TMDB community", tvBrowseSource(TvList.TopRated)),
     )
     BrowseKind.People -> listOf(
         BrowseTab("Popular people", "Trending actors and filmmakers") { catalog ->
