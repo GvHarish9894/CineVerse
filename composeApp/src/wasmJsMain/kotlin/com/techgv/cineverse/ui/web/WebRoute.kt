@@ -17,8 +17,8 @@ sealed interface WebRoute {
     data object NotFound : WebRoute
 }
 
-private val movieLists = setOf("popular", "now_playing", "upcoming", "top_rated")
-private val tvLists = setOf("popular", "airing_today", "on_the_air", "top_rated")
+private val movieLists = setOf("popular", "now_playing", "upcoming", "top_rated", "discover")
+private val tvLists = setOf("popular", "airing_today", "on_the_air", "top_rated", "discover")
 private val sorts = setOf("popularity.desc", "vote_average.desc", "primary_release_date.desc", "title.asc")
 
 fun parseWebRoute(url: String): WebRoute = try {
@@ -41,9 +41,10 @@ fun parseWebRoute(url: String): WebRoute = try {
             val list = params["list"] ?: "popular"
             val sort = params["sort"] ?: "popularity.desc"
             require(list in if (media == "movie") movieLists else tvLists)
-            require(sort in sorts)
+            require(sort in sorts || (media == "tv" && sort in setOf("first_air_date.desc", "name.asc")))
             val genres = params["genres"]?.split(',')?.map(::positive)?.distinct()?.sorted().orEmpty()
-            WebRoute.Browse(media, list, sort, genres)
+            require(genres.size <= 20 && genres.all { it <= 999999 })
+            WebRoute.Browse(media, if (params["sort"] == "popularity.desc") "discover" else list, sort, genres)
         }
         path == "/people" -> { only(); WebRoute.People }
         path == "/settings" -> { only(); WebRoute.Settings }
@@ -75,7 +76,7 @@ fun parseWebRoute(url: String): WebRoute = try {
 
 fun WebRoute.url(): String = when (this) {
     WebRoute.Home -> "/"
-    is WebRoute.Browse -> "/${if (media == "movie") "movies" else "tv"}?list=${encodeUrl(list)}" +
+    is WebRoute.Browse -> "/${when (media) { "movie" -> "movies"; "tv" -> "tv"; else -> "invalid-media" }}?list=${encodeUrl(list)}" +
         (if (sort != "popularity.desc") "&sort=${encodeUrl(sort)}" else "") +
         (if (genres.isNotEmpty()) "&genres=${encodeUrl(genres.distinct().sorted().joinToString(","))}" else "")
     WebRoute.People -> "/people"

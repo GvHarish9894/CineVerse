@@ -29,9 +29,11 @@ import com.techgv.cineverse.ui.theme.*
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.Flow
+import com.techgv.cineverse.data.settings.Settings
 
 @Composable
-fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: GenerationCounter, history: WebHistory = remember { BrowserHistory() }) {
+fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: GenerationCounter, browseSettings: Flow<Settings>, history: WebHistory = remember { BrowserHistory() }) {
     val navigation = remember(history) { WebNavigation(history) }
     DisposableEffect(navigation) { onDispose { navigation.close() } }
     val entry by navigation.entry.collectAsState()
@@ -54,7 +56,7 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                     } else false
                 }) {
                     WebHeader(entry.route, session, searchFocus, navigation::navigate) { searchFocused = it }
-                    WebStatus(session, storage.takeUnless { settings != null && entry.route == WebRoute.Home }, runtime::revalidateSession, runtime::retryStorage)
+                    WebStatus(session, storage.takeUnless { settings != null && (entry.route == WebRoute.Home || entry.route is WebRoute.Browse || entry.route == WebRoute.People) }, runtime::revalidateSession, runtime::retryStorage)
                     if (settings == null) {
                         Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                             Text(if (storage == null) "Reading saved settings…" else "Saved settings are unavailable. Retry storage to continue.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -62,6 +64,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                     } else key(entry) {
                         if (entry.route == WebRoute.Home) {
                             WebHome(entry, catalog, generation, settingsFlow, session, runtime, navigation::navigate)
+                        } else if (entry.route is WebRoute.Browse || entry.route == WebRoute.People) {
+                            WebBrowse(entry, catalog, generation, browseSettings, runtime, navigation::navigate)
                         } else WebPlaceholder(entry.route, navigation::navigate)
                     }
                 }

@@ -3,6 +3,7 @@
 package com.techgv.cineverse.ui.web
 
 import com.techgv.cineverse.presentation.StateSaver
+import com.techgv.cineverse.presentation.BrowseSelection
 import kotlinx.browser.window
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,9 +55,32 @@ class WebEntry internal constructor(val route: WebRoute, private val values: Mut
 /** History owns per-entry scroll/scalars, including across reload; no session or credentials are stored here. */
 class WebNavigation(private val history: WebHistory) {
     private fun restored(): WebEntry {
-        val values = try { Json.decodeFromString<Map<String, String>>(history.saved).toMutableMap() }
-            catch (_: Exception) { mutableMapOf() }
-        return WebEntry(parseWebRoute(history.url), values)
+        val route = parseWebRoute(history.url)
+        return try {
+            val values = if (history.saved.isEmpty()) mutableMapOf() else Json.decodeFromString<Map<String, String>>(history.saved).toMutableMap()
+            require(values.all { (key, value) -> when {
+                key.endsWith(".index") || key.endsWith(".offset") -> value.toIntOrNull()?.let { it >= 0 } == true
+                key == "browse.page" -> value.toIntOrNull()?.let { it in 1..500 } == true
+                key == "home.trend" -> value in setOf("Day", "Week")
+                key == "home.popularTv" -> value.toBooleanStrictOrNull() != null
+                else -> true
+            } })
+            val entry = WebEntry(route, values)
+            if (route is WebRoute.Browse || route == WebRoute.People) {
+                val saved = BrowseSelection.restoreFrom(entry)
+                require(saved == null || saved == route.browseSelection())
+                require(saved != null || values.keys.none { it.startsWith("productBrowse.") })
+                if (saved != null) {
+                    val canonical = mutableMapOf<String, String>()
+                    saved.saveTo(WebEntry(route, canonical))
+                    require(values.filterKeys { it.startsWith("productBrowse.") } == canonical)
+                }
+            }
+            entry
+        } catch (_: IllegalArgumentException) {
+            // Invalid external state is preserved in history for diagnosis, never reset or defaulted.
+            WebEntry(WebRoute.NotFound, mutableMapOf())
+        }
     }
     private val current = MutableStateFlow(restored())
     val entry = current.asStateFlow()
