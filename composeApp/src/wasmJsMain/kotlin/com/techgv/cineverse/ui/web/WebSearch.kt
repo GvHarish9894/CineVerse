@@ -119,11 +119,12 @@ internal fun WebSearchContent(entry: WebEntry, state: ProductSearchUiState, quer
                     if (!wide) SearchFacets(state, facet)
                     if (state.showingSuggestions) {
                         Text("Recent searches", style = MaterialTheme.typography.titleMedium)
+                        val recentQueries = state.recentQueries
                         when {
-                            state.recentQueries == null -> Text("Recent searches are unknown until saved data is read.")
-                            state.recentQueries.isEmpty() -> Text("No saved recent searches.")
+                            recentQueries == null -> Text("Recent searches are unknown until saved data is read.")
+                            recentQueries.isEmpty() -> Text("No saved recent searches.")
                             else -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                state.recentQueries.forEach { Chip(it, false, { choose(it) }) }
+                                recentQueries.forEach { Chip(it, false, { choose(it) }) }
                             }
                         }
                         PillButton("Clear recent searches", clearRecent, small = true, variant = ButtonVariant.Ghost)
