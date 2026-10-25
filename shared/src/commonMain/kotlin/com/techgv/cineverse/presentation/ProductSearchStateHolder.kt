@@ -226,8 +226,10 @@ class ProductSearchStateHolder(
         contextApp = appGeneration.current
         invalidateSource()
         replaceSource(0)
+        // Synchronous settings reconciliation may itself replace the recent reader.
+        val recentRead = recentGeneration.current
         readSettings(recoverPage = true)
-        readRecent()
+        if (recentRead == recentGeneration.current) readRecent()
         return false
     }
 
