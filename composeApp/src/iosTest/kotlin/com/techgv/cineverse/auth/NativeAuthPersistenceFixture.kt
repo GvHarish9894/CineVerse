@@ -22,6 +22,7 @@ import org.koin.mp.KoinPlatform
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
+import platform.UIKit.UIWindow
 import platform.posix.getpid
 
 /** Only exported by opt-in AuthFixture, not by the production ComposeApp framework. No network or credentials. */
@@ -60,3 +61,15 @@ fun runNativeAuthPersistenceFixture(phase: String): Int = runBlocking {
 }
 
 fun nativeAuthFixtureHostMarker(): String = "Native auth persistence fixture"
+
+/** Hosted XCTest supplies scene-owned windows; this check never opens approval or accesses persistence. */
+@Throws(Exception::class)
+fun verifyNativeApprovalWindowReplacement(old: UIWindow, current: UIWindow) {
+    check(old != current) { "The replacement must be a different window" }
+    val opener = IosWebAuthenticationSessionOpener()
+    opener.attach(old)
+    opener.attach(current)
+    check(!opener.detach(old)) { "The old host must not detach the replacement" }
+    check(opener.detach(current)) { "The current host must detach its window" }
+    check(!opener.detach(current)) { "A detached host must not detach again" }
+}

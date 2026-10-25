@@ -1,5 +1,16 @@
 import AuthFixture
+import UIKit
 import XCTest
+
+@MainActor
+final class NativeApprovalWindowTests: XCTestCase {
+    func testReplacingWindowCannotBeDetachedByTheOldHost() throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let old = UIWindow(windowScene: scene)
+        let current = UIWindow(windowScene: scene)
+        try NativeAuthPersistenceFixtureKt.verifyNativeApprovalWindowReplacement(old: old, current: current)
+    }
+}
 
 final class NativeAuthPersistenceTests: XCTestCase {
     func testSeed() throws {
