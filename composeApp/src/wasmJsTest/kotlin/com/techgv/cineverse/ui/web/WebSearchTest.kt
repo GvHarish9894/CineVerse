@@ -26,11 +26,15 @@ class WebSearchTest {
     @Test fun browserUrlTypingCaretReloadAndBackForwardUseSameEntryReplacementContract() = runComposeUiTest {
         val snapshot = captureSearchHistory()
         val f = ready(true)
+        var fonts: WebSearchFonts? = null
+        var showing by mutableStateOf(false)
+        val history = BrowserHistory()
+        setContent { if (showing) { fonts?.Load(); WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) } }
         try {
+            fonts = WebSearchFonts()
             installSearchHistory()
-            val history = BrowserHistory()
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
+            runOnIdle { showing = true }
             val field = onNodeWithTag("search-input")
             field.performClick().performTextInputSelection(TextRange(2))
             field.performTextInput("X")
@@ -53,7 +57,15 @@ class WebSearchTest {
             waitUntil { history.url == "/library?tab=watchlist" }
             onNodeWithTag("search-input").assertDoesNotExist()
             assertEquals(0, f.edits)
-        } finally { f.close(); restoreSearchHistory(snapshot) }
+            fonts.verifyLoaded()
+            waitForIdle()
+            fonts.assertLoaded()
+        } finally {
+            runOnIdle { showing = false }
+            waitForIdle()
+            f.close()
+            try { fonts?.close() } finally { restoreSearchHistory(snapshot) }
+        }
     }
 
     @Test fun mainTypingKeepsFocusCaretAndRouteWhileOnlyExplicitSubmitRecords() = runComposeUiTest {
