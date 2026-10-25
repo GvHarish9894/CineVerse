@@ -290,6 +290,7 @@ class ProductSearchStateHolder(
                 val contextWasCurrent = liveContext()
                 // Recover the current reader even when this accepted write's feedback is obsolete.
                 if (contextWasCurrent && failure == null && state.value.recentReadError != null) retryRecentRead()
+                currentCoroutineContext().ensureActive()
                 if (mutation != mutationGeneration.current || source != sourceGeneration.current || app != appGeneration.current) return@withLock
                 state.update { it.copy(recentMutation = if (failure == null) RecentMutationStatus.Succeeded else RecentMutationStatus.Failed) }
                 if (failure != null) onStorageFailure(failure)
