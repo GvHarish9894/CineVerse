@@ -32,6 +32,7 @@ class ProductSearchStateHolderTest {
         val app = GenerationCounter()
         val failure = StorageException("fixture")
         val reports = mutableListOf<StorageException>()
+        var storageFailureHook: (StorageException) -> Unit = {}
         var preferences = Settings()
         var settingsError: Exception? = null
         var settingsHook: (suspend () -> Unit)? = null
@@ -100,7 +101,10 @@ class ProductSearchStateHolderTest {
                 disk.edit(transform)
             }
         }
-        val holder = ProductSearchStateHolder(catalog, app, settings, RecentQueryStore(storage), saver, owner, reports::add)
+        val holder = ProductSearchStateHolder(catalog, app, settings, RecentQueryStore(storage), saver, owner) {
+            reports += it
+            storageFailureHook(it)
+        }
         fun signal() { ticks.value++ }
         fun state() = holder.uiState.value
         fun page() = (state().results as SectionState.Content).value
@@ -586,6 +590,32 @@ class ProductSearchStateHolderTest {
         assertEquals(before, f.state())
         assertTrue(f.reports.isEmpty())
         assertEquals(1, f.edits)
+    }
+
+    @Test fun disposalInsideSynchronousRecentRecoveryPreventsMutationFeedbackAfterSnapshot() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val f = Fixture("q")
+        f.recentReadError = f.failure
+        f.holder.retryRecentRead()
+        assertEquals(SectionErrorKind.Generic, f.state().recentReadError)
+        assertEquals(0, f.activeRecent)
+        assertEquals(listOf(f.failure), f.reports)
+        var disposedState: ProductSearchUiState? = null
+        f.storageFailureHook = {
+            f.holder.dispose()
+            disposedState = f.state()
+        }
+        f.holder.clearRecentQueries()
+        val snapshot = assertNotNull(disposedState)
+        assertEquals(RecentMutationStatus.Pending, snapshot.recentMutation)
+        assertEquals(snapshot, f.state())
+        advanceUntilIdle()
+        assertEquals(snapshot, f.state())
+        assertEquals(1, f.edits)
+        assertEquals(listOf(f.failure, f.failure), f.reports)
+        assertEquals(0, f.activeSettings)
+        assertEquals(0, f.activeRecent)
+        assertTrue(f.errors.isEmpty())
     }
 
     @Test fun sourceReplacementAndRecoveryKeepObserversBoundedAndParentCancellationDisposesThem() = runTest {
