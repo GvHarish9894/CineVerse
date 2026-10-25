@@ -36,7 +36,7 @@ class MobileNavigationTest {
         val retainedHome = home
         onNodeWithText("Internal placeholder · movie 101").assertIsDisplayed()
         onNodeWithText("Explore", useUnmergedTree = true).performClick()
-        onNodeWithText("Internal placeholder · This tab is not implemented in M1.").assertIsDisplayed()
+        onNodeWithText("Movies · Popular").assertIsDisplayed()
         onNodeWithText("Home", useUnmergedTree = true).onParent().performSemanticsAction(SemanticsActions.OnClick) { selectHome ->
             selectHome()
             // A queued trailer press must be rejected even before navigation's next lifecycle frame.
@@ -93,9 +93,9 @@ class MobileNavigationTest {
         setContent { MobileTestRoot() }
         onNodeWithTag("mobile-home").performScrollToNode(hasText("Trending"))
         onAllNodesWithText("See all")[0].performClick()
-        onNodeWithText("Internal placeholder · Trending").assertIsDisplayed()
+        onNodeWithText("Trending · This week · Movies and TV").assertIsDisplayed()
         onNodeWithText("Back").performClick()
-        onNodeWithText("Internal placeholder · This tab is not implemented in M1.").assertIsDisplayed()
+        onNodeWithText("Movies · Popular").assertIsDisplayed()
         onNodeWithText("Home", useUnmergedTree = true).performClick()
         onNodeWithText("Trending").assertIsDisplayed()
     }

@@ -48,6 +48,18 @@ class MobileHomeSectionTest {
         onNodeWithText("Retry").assertDoesNotExist()
     }
 
+    @Test fun seeAllCarriesCurrentTrendingWindow() = runComposeUiTest {
+        val trend = androidx.compose.runtime.mutableStateOf(com.techgv.cineverse.data.tmdb.TrendingWindow.Day)
+        var destination: MobileDestination? = null
+        setThemedContent { HomeSection(HomeRow.Trending, SectionState.Content(PagedItems(listOf(Hero.OfTitle(title)), 1, false)), "",
+            MobileNavigator { destination = it }, {}, {}, trend.value) }
+        onNodeWithText("See all").performClick()
+        assertEquals(MobileDestination.Browse(HomeRow.Trending, com.techgv.cineverse.data.tmdb.TrendingWindow.Day), destination)
+        runOnIdle { trend.value = com.techgv.cineverse.data.tmdb.TrendingWindow.Week }
+        onNodeWithText("See all").performClick()
+        assertEquals(MobileDestination.Browse(HomeRow.Trending, com.techgv.cineverse.data.tmdb.TrendingWindow.Week), destination)
+    }
+
     @Test fun personCardHandsOffAnIdNotSampleNavigation() = runComposeUiTest {
         var destination: MobileDestination? = null
         val person = Hero.OfPerson(Person(9, "Fixture person", null, "Actor", emptyList()))

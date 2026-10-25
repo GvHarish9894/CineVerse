@@ -107,7 +107,7 @@ internal fun MobileHomeScreen(
                                 }
                             }
                             HomeSection(row, state.rows.getValue(row), graph.catalog.imageBaseUrl(), navigator,
-                                onRetry = { home.retry(row) }, onMore = { home.loadMore(row) })
+                                onRetry = { home.retry(row) }, onMore = { home.loadMore(row) }, trend = state.trend)
                         }
                     }
                     if (row == HomeRow.PopularMovies) item("popular-ten") {
@@ -192,7 +192,7 @@ private fun HomeHero(graph: MobileApplication, home: HomeStateHolder, state: Hom
 
 @Composable
 internal fun HomeSection(row: HomeRow, state: SectionState<PagedItems>, baseUrl: String, navigator: MobileNavigator,
-                         onRetry: () -> Unit, onMore: () -> Unit) {
+                         onRetry: () -> Unit, onMore: () -> Unit, trend: TrendingWindow = TrendingWindow.Week) {
     val list = rememberLazyListState()
     when (state) {
         SectionState.Loading -> ScrollRow(row.title, state = list) { items(4) { PosterCardSkeleton() } }
@@ -202,7 +202,7 @@ internal fun HomeSection(row: HomeRow, state: SectionState<PagedItems>, baseUrl:
             SectionFailure(state.kind, onRetry)
         }
         is SectionState.Content -> ScrollRow(row.title, state = list,
-            headerTrailing = { PillButton("See all", { navigator.open(MobileDestination.Browse(row)) }, variant = ButtonVariant.Ghost, small = true) }) {
+            headerTrailing = { PillButton("See all", { navigator.open(MobileDestination.Browse(row, trend)) }, variant = ButtonVariant.Ghost, small = true) }) {
             items(state.value.items, key = { it.key }) { hero ->
                 val palette = mobilePalette(hero.key)
                 when (hero) {
@@ -232,7 +232,7 @@ internal fun HomeSection(row: HomeRow, state: SectionState<PagedItems>, baseUrl:
 }
 
 @Composable
-private fun SectionFailure(kind: SectionErrorKind, retry: () -> Unit) {
+internal fun SectionFailure(kind: SectionErrorKind, retry: () -> Unit) {
     val message = when (kind) {
         SectionErrorKind.Offline -> "You're offline. Check your connection."
         SectionErrorKind.NotAvailable -> "Not available."

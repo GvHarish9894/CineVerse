@@ -65,6 +65,8 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
     )) { mutableStateOf(MobileTab.Home) }
     var scrollHome by rememberSaveable { mutableIntStateOf(0) }
     var pendingBrowse by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingTrend by rememberSaveable { mutableStateOf(com.techgv.cineverse.data.tmdb.TrendingWindow.Week.name) }
+    var scrollExplore by rememberSaveable { mutableIntStateOf(0) }
     val controllers = MobileTab.entries.map { tab -> key(tab) { rememberNavController() } }
     val controller = controllers[selected.ordinal]
     val entry by controller.currentBackStackEntryAsState()
@@ -89,6 +91,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
         if (tab == selected) {
             if (!atRoot) controller.popBackStack<MobileTabRoot>(inclusive = false)
             else if (tab == MobileTab.Home) scrollHome++
+            else if (tab == MobileTab.Explore) scrollExplore++
         }
         selected = tab
         // Re-select at the root does not change the active effect's key.
@@ -99,13 +102,14 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
         if (destination is MobileDestination.Browse) {
             selected = MobileTab.Explore
             pendingBrowse = destination.row.name
+            pendingTrend = destination.trend.name
         } else controller.open(destination)
     }
-    LaunchedEffect(selected, entry, pendingBrowse) {
+    LaunchedEffect(selected, entry, pendingBrowse, pendingTrend) {
         val row = pendingBrowse
         if (selected == MobileTab.Explore && entry != null && row != null) {
             pendingBrowse = null
-            controller.navigate(MobileBrowseRoute(row))
+            controller.navigate(MobileBrowseRoute(row, pendingTrend))
         }
     }
     MobileRootBackHandler(atRoot && selected != MobileTab.Home) { select(MobileTab.Home) }
@@ -134,7 +138,10 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
                 composable<MobileTabRoot> {
                     if (selected == MobileTab.Home) MobileHomeScreen(graph, model, scrollHome, navigator,
                         onSearch = { select(MobileTab.Search) }, onProfile = { select(MobileTab.Profile) })
-                    else MobilePlaceholder(selected.name, "Internal placeholder · This tab is not implemented in M1.")
+                    else if (selected == MobileTab.Explore) {
+                        val explore = viewModel { MobileExploreViewModel(graph, createSavedStateHandle()) }
+                        MobileExploreScreen(graph, explore, scrollExplore, navigator)
+                    } else MobilePlaceholder(selected.name, "Internal placeholder · This tab is not implemented in M1.")
                 }
                 composable<MobileDetailRoute> { route ->
                     val detail = route.toRoute<MobileDetailRoute>()
@@ -152,7 +159,9 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
                     MobilePlaceholder(trailer.title, "Internal placeholder · ${trailer.kicker}. Trailer playback is not implemented.", { controller.popBackStack() })
                 }
                 composable<MobileBrowseRoute> { route ->
-                    MobilePlaceholder("Explore", "Internal placeholder · ${route.toRoute<MobileBrowseRoute>().row}", { controller.popBackStack() })
+                    val selection = route.toRoute<MobileBrowseRoute>().selection()
+                    val explore = viewModel { MobileExploreViewModel(graph, createSavedStateHandle(), selection) }
+                    MobileExploreScreen(graph, explore, 0, navigator, { controller.popBackStack() })
                 }
             }
         }
