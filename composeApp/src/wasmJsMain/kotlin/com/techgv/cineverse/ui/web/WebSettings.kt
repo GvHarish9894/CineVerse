@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -123,13 +121,16 @@ fun WebSettings(
                                 Text("Account verification failed. Account actions are unavailable.")
                                 PillButton("Retry account check", retrySession)
                             }
-                            is WebSessionState.Ready -> if (session.session == null) {
-                                Text("Guest · preferences are saved on this browser")
-                                PillButton("Sign in", owner::signIn)
-                            } else {
-                                Text(session.session.displayName)
-                                PillButton("Sign out", owner::signOut)
-                                PillButton("Import guest library", owner::importLibrary, variant = ButtonVariant.Ghost)
+                            is WebSessionState.Ready -> {
+                                val account = session.session
+                                if (account == null) {
+                                    Text("Guest · preferences are saved on this browser")
+                                    PillButton("Sign in", owner::signIn)
+                                } else {
+                                    Text(account.displayName)
+                                    PillButton("Sign out", owner::signOut)
+                                    PillButton("Import guest library", owner::importLibrary, variant = ButtonVariant.Ghost)
+                                }
                             }
                         }
                     }
@@ -141,7 +142,12 @@ fun WebSettings(
 
 @Composable
 private fun PreferenceToggle(title: String, description: String, toggle: Toggle, checked: Boolean, editable: Boolean, owner: WebSettingsOwner) {
-    if (editable) SettingRow(title, description, Icons.Default.Settings, Tokens.Colors.Accent,
+    if (editable) SettingRow(title, description, when (toggle) {
+        Toggle.Glow -> CvIcons.Glow
+        Toggle.Motion -> CvIcons.Motion
+        Toggle.Haptics -> CvIcons.Vibrate
+        Toggle.Adult, Toggle.Sounds -> CvIcons.Globe
+    }, Tokens.Colors.Accent,
         SettingTrailing.Toggle(checked) { owner.setToggle(toggle, it) }, Modifier.testTag("settings-toggle-${toggle.name}"))
     else Text("$title · ${if (checked) "On" else "Off"} · editing unavailable")
 }
