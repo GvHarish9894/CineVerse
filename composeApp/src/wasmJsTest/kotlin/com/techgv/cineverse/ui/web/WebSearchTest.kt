@@ -48,7 +48,7 @@ class WebSearchTest {
             field.assertIsNotFocused()
             // Disabled platform semantics must not accept a visible draft or a stale IME submission.
             field.fetchSemanticsNode().config.getOrNull(SemanticsActions.SetText)?.action?.invoke(AnnotatedString("arrival"))
-            field.fetchSemanticsNode().config.getOrNull(SemanticsActions.PerformImeAction)?.action?.invoke()
+            field.fetchSemanticsNode().config.getOrNull(SemanticsActions.OnImeAction)?.action?.invoke()
             field.assertInput("film")
             assertEquals("/search?q=film&facet=tv", history.url)
             assertEquals(saved, history.saved)
@@ -58,7 +58,7 @@ class WebSearchTest {
             waitUntil { f.runtime.storageFailure.value == BrowserStorageFailure.Blocked }
             field.assertIsNotEnabled().assertInput("film")
             field.fetchSemanticsNode().config.getOrNull(SemanticsActions.SetText)?.action?.invoke(AnnotatedString("arrival"))
-            field.fetchSemanticsNode().config.getOrNull(SemanticsActions.PerformImeAction)?.action?.invoke()
+            field.fetchSemanticsNode().config.getOrNull(SemanticsActions.OnImeAction)?.action?.invoke()
             field.performKeyInput { pressKey(Key.Enter) }
             mainClock.advanceTimeBy(600)
             field.assertInput("film")

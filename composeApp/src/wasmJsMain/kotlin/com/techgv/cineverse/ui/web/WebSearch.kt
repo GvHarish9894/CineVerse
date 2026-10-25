@@ -68,13 +68,13 @@ internal class WebSearchOwner(
 }
 
 @Composable
-internal fun WebSearchEditor(query: String, change: (String) -> Unit, submit: () -> Unit, modifier: Modifier = Modifier, invalid: Boolean = false) {
+internal fun WebSearchEditor(query: String, change: (String) -> Unit, submit: () -> Unit, modifier: Modifier = Modifier, invalid: Boolean = false, enabled: Boolean = true) {
     var editor by remember { mutableStateOf(TextFieldValue(query, TextRange(query.length))) }
     // External URL/other-editor updates replace text, not same-text selection or IME composition.
     LaunchedEffect(query) { if (editor.text != query) editor = TextFieldValue(query, TextRange(query.length)) }
-    OutlinedTextField(editor, { editor = it; change(it.text) }, modifier, singleLine = true,
+    OutlinedTextField(editor, { if (enabled) { editor = it; change(it.text) } }, modifier, enabled = enabled, singleLine = true,
         label = { Text("Search movies, TV and people") }, isError = invalid,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }))
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { if (enabled) submit() }))
 }
 
 @Composable
@@ -199,7 +199,7 @@ private fun SearchResultRow(hero: Hero, open: () -> Unit) {
             RoundedCornerShape(if (person != null) 50.dp else 8.dp), Modifier.width(86.dp).height(112.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(person?.name ?: title!!.title, style = MaterialTheme.typography.titleLarge)
-            Text(if (person != null) "Person · ${person.knownForDepartment.orEmpty()}" else "${title!!.mediaType} · ${title.releaseDate.orEmpty()} · ★ ${oneDecimal(title.voteAverage)}")
+            Text(if (person != null) "Person · ${person.knownForDepartment.orEmpty()}" else "${title!!.mediaType} · ${title.releaseDate.orEmpty()} · ${if (title.voteCount > 0) "★ ${oneDecimal(title.voteAverage)}" else "NR"}")
             Text(person?.knownFor?.joinToString { it.title } ?: title!!.overview, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
