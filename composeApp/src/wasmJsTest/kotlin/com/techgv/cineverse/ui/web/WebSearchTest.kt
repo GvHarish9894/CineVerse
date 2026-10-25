@@ -45,7 +45,7 @@ class WebSearchTest {
             onNodeWithText("Search is unavailable until saved settings are loaded. Your URL query and facet are unchanged.").assertExists()
             onNodeWithTag("search-input").assertDoesNotExist()
             field.performTouchInput { click() }
-            field.assertIsNotFocused()
+            field.assert(!isFocused())
             // Disabled platform semantics must not accept a visible draft or a stale IME submission.
             field.fetchSemanticsNode().config.getOrNull(SemanticsActions.SetText)?.action?.invoke(AnnotatedString("arrival"))
             field.fetchSemanticsNode().config.getOrNull(SemanticsActions.OnImeAction)?.action?.invoke()
