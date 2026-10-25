@@ -161,11 +161,14 @@ class ProductBrowseStateHolderTest {
 
     @Test fun appGenerationDropsLateGenreFailureAndReloadsCurrentNames() = runTest {
         val f = Fixture()
+        advanceUntilIdle()
+        f.catalog.onContentSettingsChanged()
         val gate = CompletableDeferred<Unit>()
         var first = true
         f.genreHook = {
             if (first) { first = false; gate.await(); throw f.failure }
         }
+        f.holder.retryGenres()
         runCurrent()
         f.preferences = Settings(language = "es-ES")
         f.catalog.onContentSettingsChanged()
@@ -177,11 +180,14 @@ class ProductBrowseStateHolderTest {
 
     @Test fun appGenerationDropsStalePageAndGenresWithoutReportingOldFailure() = runTest {
         val f = Fixture()
+        advanceUntilIdle()
+        f.catalog.onContentSettingsChanged()
         val gate = CompletableDeferred<Unit>()
         var first = true
         f.readHook = {
             if (first) { first = false; gate.await(); throw f.failure }
         }
+        f.holder.retry()
         runCurrent()
         f.preferences = Settings(language = "es-ES")
         f.catalog.onContentSettingsChanged()
@@ -239,6 +245,109 @@ class ProductBrowseStateHolderTest {
         assertNull(f.holder.uiState.value.settingsError)
         assertNull(f.holder.uiState.value.genresError)
         assertEquals(1, f.page().page)
+    }
+
+    @Test fun delayedFirstSettingsObservationReconcilesPagesAndGenresBeforePagination() = runTest {
+        val f = Fixture()
+        val observation = CompletableDeferred<Unit>()
+        f.observeHook = { observation.await() }
+        advanceUntilIdle()
+        assertFalse(f.holder.uiState.value.settingsKnown)
+        assertNull(f.holder.uiState.value.settingsError)
+        assertEquals(1, f.page().page)
+        assertTrue(f.firstTitle().contains("en-US"))
+        assertEquals(mapOf(28 to "movie@en-US"), f.holder.uiState.value.genres)
+        f.preferences = Settings(language = "es-ES")
+        val page = f.api.gate("movie/popular/es-ES/1")
+        val genres = f.api.gate("genres/movie/es-ES")
+        observation.complete(Unit); runCurrent()
+        assertTrue(f.holder.uiState.value.settingsKnown)
+        assertIs<SectionState.Loading>(f.holder.uiState.value.grid)
+        assertTrue(f.holder.uiState.value.genres.isEmpty())
+        assertTrue(f.holder.uiState.value.genresLoading)
+        assertNull(f.holder.uiState.value.genresError)
+        page.complete(Unit); genres.complete(Unit); advanceUntilIdle()
+        assertEquals(1, f.page().page)
+        assertTrue(f.firstTitle().contains("es-ES"))
+        assertEquals(mapOf(28 to "movie@es-ES"), f.holder.uiState.value.genres)
+        assertFalse(f.holder.uiState.value.genresLoading)
+        f.holder.loadMore(); advanceUntilIdle()
+        assertEquals(2, f.page().page)
+        assertEquals(6, f.page().items.size)
+        assertTrue(f.page().items.all { (it as Hero.OfTitle).title.title.contains("es-ES") })
+        assertEquals(0L, f.app.current)
+    }
+
+    @Test fun delayedFirstEqualSettingsObservationReusesCachedInitialPageAndGenres() = runTest {
+        val f = Fixture()
+        val observation = CompletableDeferred<Unit>()
+        f.observeHook = { observation.await() }
+        advanceUntilIdle()
+        val before = f.page()
+        val calls = f.api.calls.toList()
+        assertFalse(f.holder.uiState.value.settingsKnown)
+        observation.complete(Unit); advanceUntilIdle()
+        assertTrue(f.holder.uiState.value.settingsKnown)
+        assertNull(f.holder.uiState.value.settingsError)
+        assertEquals(before, f.page())
+        assertEquals(calls, f.api.calls)
+        assertEquals(mapOf(28 to "movie@en-US"), f.holder.uiState.value.genres)
+        assertFalse(f.holder.uiState.value.genresLoading)
+        assertNull(f.holder.uiState.value.genresError)
+    }
+
+    @Test fun staleAppSettingsFailureResubscribesAndReplacementObserverRemainsLive() = runTest {
+        val f = Fixture()
+        val observation = CompletableDeferred<Unit>()
+        var first = true
+        f.observeHook = {
+            if (first) { first = false; observation.await(); throw f.failure }
+        }
+        advanceUntilIdle()
+        assertFalse(f.holder.uiState.value.settingsKnown)
+        f.preferences = Settings(language = "es-ES")
+        f.app.bump()
+        observation.complete(Unit); advanceUntilIdle()
+        assertEquals(2, f.subscriptions)
+        assertTrue(f.holder.uiState.value.settingsKnown)
+        assertNull(f.holder.uiState.value.settingsError)
+        assertTrue(f.reports.isEmpty())
+        assertTrue(f.firstTitle().contains("es-ES"))
+        assertEquals(mapOf(28 to "movie@es-ES"), f.holder.uiState.value.genres)
+        f.preferences = Settings(language = "hi-IN"); f.signal(); advanceUntilIdle()
+        assertEquals(2, f.subscriptions)
+        assertTrue(f.firstTitle().contains("hi-IN"))
+        assertEquals(mapOf(28 to "movie@hi-IN"), f.holder.uiState.value.genres)
+    }
+
+    @Test fun staleAppSettingsFailureRetriesOnceThenStopsVisiblyOnCurrentFailure() = runTest {
+        val f = Fixture()
+        val observation = CompletableDeferred<Unit>()
+        var first = true
+        f.observeHook = {
+            if (first) { first = false; observation.await() }
+        }
+        f.observeError = f.failure
+        advanceUntilIdle()
+        assertFalse(f.holder.uiState.value.settingsKnown)
+        val before = f.page()
+        val genres = f.holder.uiState.value.genres
+        f.app.bump()
+        observation.complete(Unit); advanceUntilIdle()
+        assertEquals(2, f.subscriptions)
+        assertFalse(f.holder.uiState.value.settingsKnown)
+        assertEquals(SectionErrorKind.Generic, f.holder.uiState.value.settingsError)
+        assertEquals(listOf(f.failure), f.reports)
+        assertEquals(before, f.page())
+        assertEquals(genres, f.holder.uiState.value.genres)
+        f.signal(); advanceUntilIdle()
+        assertEquals(2, f.subscriptions)
+        assertEquals(listOf(f.failure), f.reports)
+        f.observeError = null
+        f.holder.retryStorage(); advanceUntilIdle()
+        assertEquals(3, f.subscriptions)
+        assertTrue(f.holder.uiState.value.settingsKnown)
+        assertNull(f.holder.uiState.value.settingsError)
     }
 
     @Test fun equalSettingsRecoveryRetainsPagesAndRetriesStorageFailedNextPage() = runTest {

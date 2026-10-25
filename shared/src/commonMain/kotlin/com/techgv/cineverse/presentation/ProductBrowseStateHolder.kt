@@ -74,8 +74,8 @@ class ProductBrowseStateHolder(
                         currentCoroutineContext().ensureActive()
                         if (source != sourceGeneration.current) return@collect
                         val next = Triple(value.language, value.region, value.includeAdult)
-                        val changed = (contentSettings != null && contentSettings != next) ||
-                            settingsApp != appGeneration.current || (first && read > 0 && contentSettings == null)
+                        // Initial reads may predate the first observed tuple; reconcile even subscription zero.
+                        val changed = contentSettings != next || settingsApp != appGeneration.current
                         contentSettings = next
                         settingsApp = appGeneration.current
                         app = settingsApp
@@ -90,9 +90,12 @@ class ProductBrowseStateHolder(
                     }
                 } catch (failure: StorageException) {
                     currentCoroutineContext().ensureActive()
-                    if (source == sourceGeneration.current && app == appGeneration.current) {
-                        state.update { it.copy(settingsError = SectionErrorKind.Generic) }
-                        onStorageFailure(failure)
+                    if (source == sourceGeneration.current) {
+                        if (app != appGeneration.current) retryStorage()
+                        else {
+                            state.update { it.copy(settingsError = SectionErrorKind.Generic) }
+                            onStorageFailure(failure)
+                        }
                     }
                 }
             }
