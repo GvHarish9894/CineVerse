@@ -17,6 +17,7 @@ import com.techgv.cineverse.data.tmdb.TrendingWindow
 import com.techgv.cineverse.data.tmdb.TvList
 import com.techgv.cineverse.domain.Hero
 import com.techgv.cineverse.domain.MediaType
+import com.techgv.cineverse.domain.key
 import com.techgv.cineverse.presentation.*
 import com.techgv.cineverse.ui.components.*
 
@@ -93,14 +94,15 @@ internal fun MobileExploreContent(
                             is BrowseSelection.Discover -> "Discover"
                         }, Modifier.testTag("explore-source"))
                         val types = listOf(MobileExploreType.Movies, MobileExploreType.Tv, MobileExploreType.People)
-                        if (state.selection is BrowseSelection.Trending) {
+                        val trending = state.selection as? BrowseSelection.Trending
+                        if (trending != null) {
                             // Mixed Trending has no selected media type; don't mislabel it as Movies or TV.
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 types.forEachIndexed { index, type -> Chip(listOf("Movies", "TV shows", "People")[index], false, { onType(type) }) }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 TrendingWindow.entries.forEach { window ->
-                                    Chip(if (window == TrendingWindow.Day) "Today" else "This week", state.selection.window == window,
+                                    Chip(if (window == TrendingWindow.Day) "Today" else "This week", trending.window == window,
                                         { onSelection(BrowseSelection.Trending(window)) })
                                 }
                             }
