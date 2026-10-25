@@ -22,6 +22,7 @@ class MobileSearchScreenTest {
         waitForIdle()
         runOnIdle { assertEquals(0, f.store.edits) }
         onNodeWithTag("search-input").performImeAction()
+        onNodeWithTag("search-input").assertIsNotFocused()
         waitForIdle()
         runOnIdle { assertEquals(1, f.store.edits) }
         onNodeWithContentDescription("Clear search").performClick()
@@ -72,6 +73,18 @@ class MobileSearchScreenTest {
         onNodeWithText("search-Movie-fixture-en-US-false 10").assertIsDisplayed()
         onNode(hasText("Search") and hasClickAction()).performClick()
         onNodeWithText("search-Movie-fixture-en-US-false 1").assertIsDisplayed()
+    }
+
+    @Test fun editorSelectionIsRetainedAcrossBottomTabNavigation() = runComposeUiTest {
+        setContent { MobileTestRoot() }
+        onNode(hasText("Search") and hasClickAction()).performClick()
+        onNodeWithTag("search-input").performTextInput("editable fixture")
+        onNodeWithTag("search-input").performTextInputSelection(androidx.compose.ui.text.TextRange(3, 7))
+        onNode(hasText("Home") and hasClickAction()).performClick()
+        onNode(hasText("Search") and hasClickAction()).performClick()
+        onNodeWithTag("search-input").assertTextContains("editable fixture")
+        onNodeWithTag("search-input").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.TextSelectionRange, androidx.compose.ui.text.TextRange(3, 7)))
     }
 
     @Test fun overBudgetRawTextIsEditableAndMalformedStateRejectsWithoutDefaultFetch() = runComposeUiTest {

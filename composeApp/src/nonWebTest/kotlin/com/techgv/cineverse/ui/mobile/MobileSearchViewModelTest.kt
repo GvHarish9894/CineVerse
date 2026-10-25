@@ -208,6 +208,54 @@ class MobileSearchViewModelTest {
         f.graph.close()
     }
 
+    @Test fun rawSettingsCanRecoverWhileGraphReaderIsDeadAndExplicitRetryRecoversBoth() = runTest {
+        val f = MobileFixture(backgroundScope)
+        f.store.fail = true
+        runCurrent()
+        assertTrue(f.graph.settingsFailed.value)
+        assertNull(f.graph.settings.value)
+        f.store.fail = false
+        val model = MobileSearchViewModel(f.graph, SavedStateHandle(mapOf("productSearch.query" to "fixture")), backgroundScope)
+        val search = assertNotNull(model.search)
+        runCurrent()
+        assertTrue(search.uiState.value.settingsKnown) // Raw flow, not a fabricated graph default/last-value stream.
+        search.loadMore(); runCurrent()
+        val pages = search.uiState.value.results
+        assertNull(f.graph.settings.value)
+        model.retrySettings(); runCurrent()
+        assertSame(search, model.search)
+        assertNotNull(f.graph.settings.value)
+        assertFalse(f.graph.settingsFailed.value)
+        assertEquals(pages, search.uiState.value.results)
+        assertEquals(0, f.store.edits)
+        f.graph.close()
+    }
+
+    @Test fun equalRawSettingsRecoveryRetriesTheActualStorageFailedNextPage() = runTest {
+        val f = MobileFixture(backgroundScope)
+        val model = MobileSearchViewModel(f.graph, SavedStateHandle(mapOf("productSearch.query" to "fixture")), backgroundScope)
+        val search = assertNotNull(model.search)
+        runCurrent()
+        val first = (search.uiState.value.results as SectionState.Content).value.items
+        // Fail only the new one-shot catalog settings read; existing graph/holder observations stay alive.
+        f.store.fail = true
+        search.loadMore(); runCurrent()
+        val failed = (search.uiState.value.results as SectionState.Content).value
+        assertEquals(first, failed.items)
+        assertEquals(SectionErrorKind.Generic, failed.moreError)
+        repeat(3) { search.loadMore(); runCurrent() }
+        assertEquals(failed, (search.uiState.value.results as SectionState.Content).value)
+        f.store.fail = false
+        model.retrySettings(); runCurrent()
+        assertSame(search, model.search)
+        val recovered = (search.uiState.value.results as SectionState.Content).value
+        assertEquals(2, recovered.page)
+        assertEquals(first, recovered.items.take(first.size))
+        assertNull(recovered.moreError)
+        assertEquals(0, f.store.edits)
+        f.graph.close()
+    }
+
     @Test fun initialNetworkErrorRecoversAndEntryDisposalStopsSearchButNotGraph() = runTest {
         val f = MobileFixture(backgroundScope)
         f.api.failure = TmdbError.Network
