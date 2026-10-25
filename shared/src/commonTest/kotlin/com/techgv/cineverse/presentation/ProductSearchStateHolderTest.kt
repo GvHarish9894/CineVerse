@@ -486,6 +486,23 @@ class ProductSearchStateHolderTest {
         assertEquals(1, f.activeRecent)
         assertEquals(0, f.edits)
         assertTrue(f.reports.isEmpty())
+
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val immediate = Fixture("q"); immediate.holder.loadMore()
+        assertEquals(2, immediate.page().page)
+        val immediateReads = immediate.reads
+        val immediateSubscriptions = immediate.subscriptions
+        immediate.preferences = Settings(language = "es-ES")
+        immediate.app.bump()
+        immediate.holder.retryRecentRead()
+        assertEquals("multi/q/es-ES/false/1", immediate.title())
+        assertEquals(1, immediate.page().page)
+        assertEquals(immediateReads + 1, immediate.reads)
+        assertEquals(immediateSubscriptions + 1, immediate.subscriptions)
+        assertEquals(1, immediate.activeSettings)
+        assertEquals(1, immediate.activeRecent)
+        assertEquals(0, immediate.edits)
+        assertTrue(immediate.reports.isEmpty())
     }
 
     @Test fun corruptRecentIsNotResetByReadRecoveryOrRecordAndOnlyExplicitClearRecovers() = runTest {
