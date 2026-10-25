@@ -44,9 +44,12 @@ class WebSearchTest {
             onNodeWithText("My Library").performClick()
             assertEquals("/library?tab=watchlist", history.url)
             runOnIdle { traverseSearchHistory(-1) }
+            // Native history traversal completes on the browser event loop, not the Compose test clock.
+            withContext(Dispatchers.Default) { delay(100) }
             waitUntil { history.url == "/search?q=fiXlm&facet=movie" }
             onNodeWithTag("search-input").assertInput("fiXlm")
             runOnIdle { traverseSearchHistory(1) }
+            withContext(Dispatchers.Default) { delay(100) }
             waitUntil { history.url == "/library?tab=watchlist" }
             onNodeWithTag("search-input").assertDoesNotExist()
             assertEquals(0, f.edits)
