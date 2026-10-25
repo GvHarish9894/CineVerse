@@ -6,6 +6,7 @@ import com.techgv.cineverse.data.library.ImportOperationGuard
 import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.settings.SettingsRepository
+import com.techgv.cineverse.data.settings.SettingsStore
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,11 +24,11 @@ import org.koin.dsl.module
 val AppScope = named("appScope")
 
 /** Transport-agnostic singletons; [SettingsRepository] reads the platform's `SettingsStore`. */
-fun coreModule(): Module = module {
+fun coreModule(settingsStore: Scope.() -> SettingsStore = { get() }): Module = module {
     /** App-wide generation (§1.1): bumped on auth and content-settings changes. */
     single { GenerationCounter() }
     single(AppScope) { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
-    single { SettingsRepository(get()) }
+    single { SettingsRepository(settingsStore()) }
 }
 
 /** Guest / account library over the platform's storage contracts and `AccountLibrarySource`. */

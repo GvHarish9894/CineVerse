@@ -59,6 +59,7 @@ class WebRuntimeUiTest {
                 }
                 override suspend fun edit(transform: (MutableSettingsValues) -> Unit) { error("No writes allowed in root fixture") }
             } }
+            single { SettingsRepository(get<SettingsStore>()) }
             single<HttpClient> { HttpClient(object : HttpClientEngineBase("web-root-fixture") {
                 override val config = HttpClientEngineConfig().apply { dispatcher = Dispatchers.Unconfined }
                 override suspend fun execute(data: HttpRequestData): HttpResponseData {
