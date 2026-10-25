@@ -27,8 +27,11 @@ enum class MobileTab { Home, Explore, Search, Library, Profile }
 @Serializable internal data class MobileTrailerRoute(val key: String, val title: String, val kicker: String)
 @Serializable internal data class MobileBrowseRoute(val row: String, val trend: String = TrendingWindow.Week.name)
 
-internal fun MobileBrowseRoute.selection(): BrowseSelection =
+internal fun MobileBrowseRoute.selection(): BrowseSelection? = try {
     BrowseSelection.fromHomeRow(HomeRow.valueOf(row), TrendingWindow.valueOf(trend))
+} catch (_: IllegalArgumentException) {
+    null // Reject malformed route scalars without replacing them with a different catalog source.
+}
 
 internal fun NavHostController.open(destination: MobileDestination) {
     when (destination) {

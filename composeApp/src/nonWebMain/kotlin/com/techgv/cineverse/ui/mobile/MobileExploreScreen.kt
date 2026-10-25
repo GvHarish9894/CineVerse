@@ -27,21 +27,28 @@ internal fun MobileExploreScreen(
     model: MobileExploreViewModel,
     scrollToTop: Int,
     navigator: MobileNavigator,
+    onInvalidBack: () -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
-    val page by model.currentPage.collectAsState()
+    val currentPage by model.currentPage.collectAsState()
+    val page = currentPage
+    if (page == null) {
+        MobilePlaceholder("Explore unavailable", "Invalid Explore state. Go back to leave it unchanged.", onInvalidBack)
+        return
+    }
     val state by page.browse.uiState.collectAsState()
     val storageFailed by page.storageFailed.collectAsState()
     val settingsFailed by graph.settingsFailed.collectAsState()
     val scrollStates = rememberSaveableStateHolder()
+    var handledScroll by rememberSaveable { mutableIntStateOf(0) }
     scrollStates.SaveableStateProvider(state.selection.type().name) {
         val scroll = rememberLazyGridState()
-        var handledScroll by rememberSaveable { mutableIntStateOf(0) }
         var lastSelection by rememberSaveable { mutableStateOf(state.selection.toString()) }
         LaunchedEffect(scrollToTop, state.selection) {
-            if (handledScroll != scrollToTop || lastSelection != state.selection.toString()) scroll.scrollToItem(0)
+            val reset = handledScroll != scrollToTop || lastSelection != state.selection.toString()
             handledScroll = scrollToTop
             lastSelection = state.selection.toString()
+            if (reset) scroll.scrollToItem(0)
         }
         MobileExploreContent(state, graph.catalog.imageBaseUrl(), navigator, model::selectType, model::select,
             model::retry, model::retryStorage, model::retryGenres, page.browse::loadMore,
@@ -90,7 +97,7 @@ internal fun MobileExploreContent(
                             is BrowseSelection.Movies -> "Movies · ${selection.list.label()}"
                             is BrowseSelection.Tv -> "TV shows · ${selection.list.label()}"
                             BrowseSelection.People -> "Popular people"
-                            is BrowseSelection.Trending -> "Trending · ${if (selection.window == TrendingWindow.Day) "Today" else "This week"} · Movies and TV"
+                            is BrowseSelection.Trending -> "Trending · ${if (selection.window == TrendingWindow.Day) "Today" else "This week"} · Movies, TV and People"
                             is BrowseSelection.Discover -> "Discover"
                         }, Modifier.testTag("explore-source"))
                         val types = listOf(MobileExploreType.Movies, MobileExploreType.Tv, MobileExploreType.People)

@@ -22,7 +22,68 @@ class MobileExploreViewModelTest {
                 assertEquals(BrowseSelection.fromHomeRow(row, window), Json.decodeFromString<MobileBrowseRoute>(Json.encodeToString(route)).selection())
             }
         }
-        assertFailsWith<IllegalArgumentException> { MobileBrowseRoute("Trending", "invalid").selection() }
+        assertNull(MobileBrowseRoute("Trending", "invalid").selection())
+        assertNull(MobileBrowseRoute("invalid").selection())
+    }
+
+    @Test fun malformedRoutesRejectWithoutFetchingEvenWhenSavedSelectionIsValid() = runTest {
+        listOf(MobileBrowseRoute("Trending", "invalid"), MobileBrowseRoute("invalid"),
+            MobileBrowseRoute("PopularMovies", "invalid")).forEach { route ->
+            val f = MobileFixture(backgroundScope)
+            val raw = Json.encodeToString(route)
+            val saved = SavedStateHandle(mapOf("mobileExplore.type" to "Movies",
+                "mobileExplore.Movies.productBrowse.source" to "Movies",
+                "mobileExplore.Movies.productBrowse.value" to "Upcoming"))
+            val before = saved.keys().associateWith { saved.get<Any?>(it) }
+            assertNull(route.selection())
+            val model = MobileExploreViewModel(f.graph, saved, route.selection(), backgroundScope)
+            runCurrent()
+            assertNull(model.currentPage.value)
+            assertTrue(f.api.calls.isEmpty())
+            assertEquals(0, f.api.genreCalls)
+            assertEquals(raw, Json.encodeToString(route))
+            assertEquals(before, saved.keys().associateWith { saved.get<Any?>(it) })
+            f.graph.close()
+        }
+    }
+
+    @Test fun malformedSavedScalarsRejectAllTypesWithoutOverwritingOrDefaultFetches() = runTest {
+        val prefix = "mobileExplore.Movies.productBrowse."
+        val cases: List<Map<String, Any>> = listOf(
+            mapOf("mobileExplore.type" to "invalid"),
+            mapOf("mobileExplore.type" to 1),
+            mapOf(prefix + "source" to "invalid"),
+            mapOf(prefix + "source" to 1),
+            mapOf(prefix + "source" to "Movies"),
+            mapOf(prefix + "source" to "Movies", prefix + "value" to "invalid"),
+            mapOf(prefix + "source" to "Movies", prefix + "value" to 1),
+            mapOf(prefix + "value" to "Popular"),
+            mapOf(prefix + "source" to "Tv", prefix + "value" to "Popular"),
+            mapOf(prefix + "source" to "Movies", prefix + "value" to "Popular", prefix + "genres" to "bad"),
+            mapOf(prefix + "sort" to "invalid"),
+            mapOf(prefix + "source" to "Discover", prefix + "value" to "Movie"),
+            mapOf("mobileExplore.Tv.productBrowse.source" to "Tv", "mobileExplore.Tv.productBrowse.value" to "invalid"),
+            mapOf("mobileExplore.People.productBrowse.source" to "People", "mobileExplore.People.productBrowse.value" to "invalid"),
+            mapOf("mobileExplore.Trending.productBrowse.source" to "Trending", "mobileExplore.Trending.productBrowse.value" to "invalid")
+        )
+        cases.forEach { raw ->
+            val f = MobileFixture(backgroundScope)
+            val saved = SavedStateHandle(raw)
+            val model = MobileExploreViewModel(f.graph, saved, scope = backgroundScope)
+            runCurrent()
+            assertNull(model.currentPage.value, raw.toString())
+            model.selectType(MobileExploreType.Movies)
+            model.select(BrowseSelection.Movies(MovieList.Popular))
+            model.retry()
+            model.retryStorage()
+            model.retryGenres()
+            runCurrent()
+            assertNull(model.currentPage.value)
+            assertTrue(f.api.calls.isEmpty())
+            assertEquals(0, f.api.genreCalls)
+            assertEquals(raw, saved.keys().associateWith { saved.get<Any?>(it) })
+            f.graph.close()
+        }
     }
 
     @Test fun typesRetainIndependentSelectionsAndLoadedPagesAndRestorePrimitiveScalars() = runTest {
@@ -32,32 +93,32 @@ class MobileExploreViewModelTest {
         runCurrent()
         model.select(BrowseSelection.Movies(MovieList.Upcoming))
         runCurrent()
-        val movies = model.currentPage.value
+        val movies = assertNotNull(model.currentPage.value)
         movies.browse.loadMore()
         runCurrent()
         val loaded = movies.browse.uiState.value
         assertEquals(2, (loaded.grid as SectionState.Content).value.page)
         model.select(BrowseSelection.Tv(TvList.OnTheAir))
         runCurrent()
-        val tv = model.currentPage.value
+        val tv = assertNotNull(model.currentPage.value)
         model.selectType(MobileExploreType.People)
         runCurrent()
-        assertEquals(BrowseSelection.People, model.currentPage.value.browse.uiState.value.selection)
-        assertTrue(model.currentPage.value.browse.uiState.value.genres.isEmpty())
+        assertEquals(BrowseSelection.People, assertNotNull(model.currentPage.value).browse.uiState.value.selection)
+        assertTrue(assertNotNull(model.currentPage.value).browse.uiState.value.genres.isEmpty())
         model.selectType(MobileExploreType.Movies)
         runCurrent()
-        assertSame(movies, model.currentPage.value)
-        assertEquals(loaded, model.currentPage.value.browse.uiState.value)
+        assertSame(movies, assertNotNull(model.currentPage.value))
+        assertEquals(loaded, assertNotNull(model.currentPage.value).browse.uiState.value)
         model.selectType(MobileExploreType.Tv)
         runCurrent()
-        assertSame(tv, model.currentPage.value)
+        assertSame(tv, assertNotNull(model.currentPage.value))
         val restored = MobileExploreViewModel(f.graph, saved, scope = backgroundScope)
         runCurrent()
-        assertEquals(BrowseSelection.Tv(TvList.OnTheAir), restored.currentPage.value.browse.uiState.value.selection)
+        assertEquals(BrowseSelection.Tv(TvList.OnTheAir), assertNotNull(restored.currentPage.value).browse.uiState.value.selection)
         restored.selectType(MobileExploreType.Movies)
         runCurrent()
-        assertEquals(BrowseSelection.Movies(MovieList.Upcoming), restored.currentPage.value.browse.uiState.value.selection)
-        assertEquals(1, (restored.currentPage.value.browse.uiState.value.grid as SectionState.Content).value.page)
+        assertEquals(BrowseSelection.Movies(MovieList.Upcoming), assertNotNull(restored.currentPage.value).browse.uiState.value.selection)
+        assertEquals(1, (assertNotNull(restored.currentPage.value).browse.uiState.value.grid as SectionState.Content).value.page)
         f.graph.close()
     }
 
@@ -66,17 +127,17 @@ class MobileExploreViewModelTest {
         val root = MobileExploreViewModel(f.graph, SavedStateHandle(), scope = backgroundScope)
         val handoff = MobileExploreViewModel(f.graph, SavedStateHandle(), MobileBrowseRoute("Trending", "Day").selection(), backgroundScope)
         runCurrent()
-        val trend = handoff.currentPage.value
+        val trend = assertNotNull(handoff.currentPage.value)
         assertEquals(BrowseSelection.Trending(TrendingWindow.Day), trend.browse.uiState.value.selection)
         assertTrue(f.api.calls.contains("day-en-US/1"))
         handoff.selectType(MobileExploreType.Movies)
         runCurrent()
         handoff.select(BrowseSelection.Movies(MovieList.NowPlaying))
         runCurrent()
-        assertEquals(BrowseSelection.Movies(MovieList.Popular), root.currentPage.value.browse.uiState.value.selection)
+        assertEquals(BrowseSelection.Movies(MovieList.Popular), assertNotNull(root.currentPage.value).browse.uiState.value.selection)
         handoff.selectType(MobileExploreType.Trending)
         runCurrent()
-        assertSame(trend, handoff.currentPage.value)
+        assertSame(trend, assertNotNull(handoff.currentPage.value))
         f.graph.close()
     }
 
@@ -84,7 +145,7 @@ class MobileExploreViewModelTest {
         val f = MobileFixture(backgroundScope)
         val model = MobileExploreViewModel(f.graph, SavedStateHandle(), scope = backgroundScope)
         runCurrent()
-        val browse = model.currentPage.value.browse
+        val browse = assertNotNull(model.currentPage.value).browse
         val first = (browse.uiState.value.grid as SectionState.Content).value
         f.api.pageFailure = 2
         browse.loadMore()
@@ -107,7 +168,7 @@ class MobileExploreViewModelTest {
         val f = MobileFixture(backgroundScope)
         val model = MobileExploreViewModel(f.graph, SavedStateHandle(), scope = backgroundScope)
         runCurrent()
-        val page = model.currentPage.value
+        val page = assertNotNull(model.currentPage.value)
         val before = (page.browse.uiState.value.grid as SectionState.Content).value
         val settingsBeforeFailure = f.graph.settings.value
         f.store.fail = true
@@ -121,7 +182,7 @@ class MobileExploreViewModelTest {
         f.store.fail = false
         model.retryStorage()
         runCurrent()
-        assertSame(page, model.currentPage.value)
+        assertSame(page, assertNotNull(model.currentPage.value))
         // Catalog settings.current() also takes one-shot subscriptions; prove the graph reader is live below.
         assertTrue(f.store.subscriptions > subscriptionsBeforeRetry)
         assertFalse(f.graph.settingsFailed.value)
@@ -142,12 +203,12 @@ class MobileExploreViewModelTest {
         val f = MobileFixture(backgroundScope)
         val model = MobileExploreViewModel(f.graph, SavedStateHandle(), scope = backgroundScope)
         runCurrent()
-        val movies = model.currentPage.value
+        val movies = assertNotNull(model.currentPage.value)
         movies.browse.loadMore()
         runCurrent()
         model.selectType(MobileExploreType.Tv)
         runCurrent()
-        val tv = model.currentPage.value
+        val tv = assertNotNull(model.currentPage.value)
         val generation = f.generation.current
         f.settings.update { it.copy(language = "hi-IN") }
         runCurrent()
@@ -163,14 +224,14 @@ class MobileExploreViewModelTest {
         f.store.fail = true
         val model = MobileExploreViewModel(f.graph, SavedStateHandle(), scope = backgroundScope)
         runCurrent()
-        val page = model.currentPage.value
+        val page = assertNotNull(model.currentPage.value)
         assertFalse(page.browse.uiState.value.settingsKnown)
         assertTrue(f.graph.settingsFailed.value)
         assertNotNull(page.browse.uiState.value.genresError)
         f.store.fail = false
         model.retryStorage()
         runCurrent()
-        assertSame(page, model.currentPage.value)
+        assertSame(page, assertNotNull(model.currentPage.value))
         assertTrue(page.browse.uiState.value.settingsKnown)
         assertNull(page.browse.uiState.value.genresError)
         f.api.failGenresStorage = true
@@ -195,7 +256,7 @@ class MobileExploreViewModelTest {
         val scope = CoroutineScope(backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext[Job]))
         val model = MobileExploreViewModel(f.graph, SavedStateHandle(), scope = scope)
         runCurrent()
-        val page = model.currentPage.value
+        val page = assertNotNull(model.currentPage.value)
         scope.cancel()
         gate.complete(Unit)
         runCurrent()

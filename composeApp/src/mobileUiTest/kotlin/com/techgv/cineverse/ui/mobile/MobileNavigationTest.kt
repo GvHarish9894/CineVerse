@@ -93,7 +93,7 @@ class MobileNavigationTest {
         setContent { MobileTestRoot() }
         onNodeWithTag("mobile-home").performScrollToNode(hasText("Trending"))
         onAllNodesWithText("See all")[0].performClick()
-        onNodeWithText("Trending · This week · Movies and TV").assertIsDisplayed()
+        onNodeWithText("Trending · This week · Movies, TV and People").assertIsDisplayed()
         onNodeWithText("Back").performClick()
         onNodeWithText("Movies · Popular").assertIsDisplayed()
         onNodeWithText("Home", useUnmergedTree = true).performClick()

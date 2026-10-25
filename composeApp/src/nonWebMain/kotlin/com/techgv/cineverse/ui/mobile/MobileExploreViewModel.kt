@@ -22,26 +22,42 @@ internal class MobileExplorePage(val browse: ProductBrowseStateHolder, val stora
 internal class MobileExploreViewModel(
     private val graph: MobileApplication,
     private val savedState: SavedStateHandle,
-    private val initial: BrowseSelection = BrowseSelection.Movies(MovieList.Popular),
+    private val initial: BrowseSelection? = BrowseSelection.Movies(MovieList.Popular),
     private val scope: CoroutineScope? = null,
 ) : ViewModel() {
     private val pages = mutableMapOf<MobileExploreType, MobileExplorePage>()
-    private val initialType = savedState.get<String>("mobileExplore.type")?.let(MobileExploreType::valueOf) ?: initial.type()
-    private val mutablePage = MutableStateFlow(page(initialType))
+    private val initialType = validatedInitialType()
+    private val mutablePage = MutableStateFlow(initialType?.let(::page))
+    /** Null rejects invalid native input before a holder can fetch or overwrite it. */
     val currentPage = mutablePage.asStateFlow()
 
+    private fun validatedInitialType(): MobileExploreType? {
+        if (initial == null) return null
+        return try {
+            val rawType = savedState.get<Any?>("mobileExplore.type")
+            require(rawType == null || rawType is String)
+            val type = (rawType as String?)?.let(MobileExploreType::valueOf) ?: initial.type()
+            // Validate every retained type before any holder can fetch or overwrite saved scalars.
+            MobileExploreType.entries.forEach { ExploreSaver(savedState, it).validate() }
+            type
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+    }
+
     fun selectType(type: MobileExploreType) {
+        if (mutablePage.value == null) return
         savedState["mobileExplore.type"] = type.name
         mutablePage.value = page(type)
     }
 
     fun select(selection: BrowseSelection) {
         selectType(selection.type())
-        mutablePage.value.browse.select(selection)
+        mutablePage.value?.browse?.select(selection)
     }
 
     fun retryStorage() {
-        val page = mutablePage.value
+        val page = mutablePage.value ?: return
         page.storageFailed.value = false
         graph.retrySettings()
         // The graph may recover to equal settings: explicitly restart this holder's reads too.
@@ -49,18 +65,19 @@ internal class MobileExploreViewModel(
     }
 
     fun retry() {
+        val page = mutablePage.value ?: return
         graph.retrySettings()
-        mutablePage.value.browse.retry()
+        page.browse.retry()
     }
 
     fun retryGenres() {
         retryStorage()
-        mutablePage.value.browse.retryGenres()
+        mutablePage.value?.browse?.retryGenres()
     }
 
     private fun page(type: MobileExploreType): MobileExplorePage = pages.getOrPut(type) {
         val failed = MutableStateFlow(false)
-        val selection = if (initial.type() == type) initial else when (type) {
+        val selection = if (initial != null && initial.type() == type) initial else when (type) {
             MobileExploreType.Movies -> BrowseSelection.Movies(MovieList.Popular)
             MobileExploreType.Tv -> BrowseSelection.Tv(TvList.Popular)
             MobileExploreType.People -> BrowseSelection.People
@@ -80,9 +97,26 @@ internal fun BrowseSelection.type(): MobileExploreType = when (this) {
     is BrowseSelection.Discover -> error("Native Explore has no Discover controls")
 }
 
-private class ExploreSaver(private val handle: SavedStateHandle, type: MobileExploreType) : StateSaver {
+private class ExploreSaver(private val handle: SavedStateHandle, private val type: MobileExploreType) : StateSaver {
     private val prefix = "mobileExplore.${type.name}."
-    override fun getString(key: String): String? = handle[prefix + key]
+
+    fun validate() {
+        val source = getString("productBrowse.source")
+        val value = getString("productBrowse.value")
+        require(getString("productBrowse.genres") == null && getString("productBrowse.sort") == null)
+        val selection = BrowseSelection.restoreFrom(this)
+        if (source == null) require(value == null)
+        else {
+            require(selection != null && selection !is BrowseSelection.Discover && selection.type() == type)
+            if (selection == BrowseSelection.People) require(value == null)
+        }
+    }
+
+    override fun getString(key: String): String? {
+        val value = handle.get<Any?>(prefix + key)
+        require(value == null || value is String)
+        return value as String?
+    }
     override fun getInt(key: String): Int? = handle[prefix + key]
     override fun getBoolean(key: String): Boolean? = handle[prefix + key]
     override fun putString(key: String, value: String?) { handle[prefix + key] = value }

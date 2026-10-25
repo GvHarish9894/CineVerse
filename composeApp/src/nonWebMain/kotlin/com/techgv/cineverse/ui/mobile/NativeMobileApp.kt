@@ -140,7 +140,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
                         onSearch = { select(MobileTab.Search) }, onProfile = { select(MobileTab.Profile) })
                     else if (selected == MobileTab.Explore) {
                         val explore = viewModel { MobileExploreViewModel(graph, createSavedStateHandle()) }
-                        MobileExploreScreen(graph, explore, scrollExplore, navigator)
+                        MobileExploreScreen(graph, explore, scrollExplore, navigator, onInvalidBack = { select(MobileTab.Home) })
                     } else MobilePlaceholder(selected.name, "Internal placeholder · This tab is not implemented in M1.")
                 }
                 composable<MobileDetailRoute> { route ->
@@ -161,7 +161,8 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
                 composable<MobileBrowseRoute> { route ->
                     val selection = route.toRoute<MobileBrowseRoute>().selection()
                     val explore = viewModel { MobileExploreViewModel(graph, createSavedStateHandle(), selection) }
-                    MobileExploreScreen(graph, explore, 0, navigator, { controller.popBackStack() })
+                    MobileExploreScreen(graph, explore, 0, navigator,
+                        onInvalidBack = { controller.popBackStack() }, onBack = { controller.popBackStack() })
                 }
             }
         }

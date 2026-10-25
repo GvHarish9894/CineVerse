@@ -51,22 +51,64 @@ class MobileExploreScreenTest {
         onNodeWithText("Movies · Popular").assertIsDisplayed()
     }
 
-    @Test fun typeSwitchRestoresDeepScrollAndKeepsTheSameLoadedHolder() = runComposeUiTest {
+    @Test fun reselectResetsOnlyActiveTvWhileMoviesKeepsDeepScrollAndLoadedHolder() = runComposeUiTest {
         lateinit var model: MobileExploreViewModel
+        val reselectExplore = mutableIntStateOf(0)
         setThemedContent {
             val scope = rememberCoroutineScope()
             val fixture = remember { MobileFixture(scope) }
             model = remember { MobileExploreViewModel(fixture.graph, androidx.lifecycle.SavedStateHandle(), scope = scope) }
             DisposableEffect(Unit) { onDispose { fixture.graph.close() } }
-            MobileExploreScreen(fixture.graph, model, 0, MobileNavigator {})
+            MobileExploreScreen(fixture.graph, model, reselectExplore.intValue, MobileNavigator {}, onInvalidBack = {})
         }
         onNodeWithTag("mobile-explore").performScrollToNode(hasText("popular-en-US-IN 10"))
         val movies = model.currentPage.value
-        runOnIdle { model.selectType(MobileExploreType.People) }
-        onNodeWithText("Popular people").assertIsDisplayed()
+        runOnIdle { model.selectType(MobileExploreType.Tv) }
+        onNodeWithTag("mobile-explore").performScrollToNode(hasText("tv-en-US 10"))
+        onAllNodesWithText("tv-en-US 10")[0].assertIsDisplayed()
+        runOnIdle { reselectExplore.intValue++ }
+        onNodeWithText("TV shows · Popular").assertIsDisplayed()
         runOnIdle { model.selectType(MobileExploreType.Movies) }
         onAllNodesWithText("popular-en-US-IN 10")[0].assertIsDisplayed()
         runOnIdle { assertSame(movies, model.currentPage.value) }
+    }
+
+    @Test fun malformedRouteAndSavedStateShowRejectionAndBackWithoutDefaultContent() = runComposeUiTest {
+        val case = mutableIntStateOf(0)
+        var back = 0
+        lateinit var model: MobileExploreViewModel
+        lateinit var fixture: MobileFixture
+        lateinit var saved: androidx.lifecycle.SavedStateHandle
+        val cases = listOf(
+            MobileBrowseRoute("invalid") to emptyMap<String, Any>(),
+            MobileBrowseRoute("Trending", "invalid") to emptyMap(),
+            MobileBrowseRoute("PopularMovies") to mapOf("mobileExplore.type" to "invalid"),
+            MobileBrowseRoute("PopularMovies") to mapOf("mobileExplore.Movies.productBrowse.source" to "Movies",
+                "mobileExplore.Movies.productBrowse.value" to "invalid")
+        )
+        setThemedContent {
+            key(case.intValue) {
+                val scope = rememberCoroutineScope()
+                val currentFixture = remember { MobileFixture(scope) }
+                val currentSaved = remember { androidx.lifecycle.SavedStateHandle(cases[case.intValue].second) }
+                val currentModel = remember { MobileExploreViewModel(currentFixture.graph, currentSaved, cases[case.intValue].first.selection(), scope) }
+                SideEffect { fixture = currentFixture; saved = currentSaved; model = currentModel }
+                DisposableEffect(Unit) { onDispose { currentFixture.graph.close() } }
+                MobileExploreScreen(currentFixture.graph, currentModel, 0, MobileNavigator {}, onInvalidBack = { back++ })
+            }
+        }
+        cases.indices.forEach { index ->
+            runOnIdle { case.intValue = index }
+            onNodeWithText("Invalid Explore state. Go back to leave it unchanged.").assertIsDisplayed()
+            onNodeWithTag("mobile-explore").assertDoesNotExist()
+            onNodeWithText("Back").performClick()
+            runOnIdle {
+                assertNull(model.currentPage.value)
+                assertTrue(fixture.api.calls.isEmpty())
+                assertEquals(cases[index].second, saved.keys().associateWith { saved.get<Any?>(it) })
+                assertEquals(index + 1, back)
+            }
+        }
     }
 
     @Test fun mixedTrendingKeepsExactWindowAndDoesNotClaimAMediaType() = runComposeUiTest {
@@ -75,7 +117,7 @@ class MobileExploreScreenTest {
             MobileExploreContent(ProductBrowseUiState(BrowseSelection.Trending(TrendingWindow.Day), SectionState.Empty, settingsKnown = true), "",
                 MobileNavigator {}, {}, { selected = it }, {}, {}, {}, {})
         }
-        onNodeWithText("Trending · Today · Movies and TV").assertIsDisplayed()
+        onNodeWithText("Trending · Today · Movies, TV and People").assertIsDisplayed()
         onNodeWithText("Movies").assertIsNotSelected()
         onNodeWithText("TV shows").assertIsNotSelected()
         onNodeWithText("This week").performClick()
