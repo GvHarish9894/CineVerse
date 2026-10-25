@@ -75,7 +75,7 @@ class WebRuntimeUiTest {
                         data.url.encodedPath.contains("/genre/") -> """{"genres":[{"id":28,"name":"Action"}]}"""
                         failNextPage && data.url.parameters["page"] == "2" -> """{"error":"upstream_error"}"""
                         withTitles && data.url.encodedPath.contains("/person/") -> """{"page":1,"results":[{"id":42,"name":"Loaded person","known_for_department":"Acting","known_for":[]}],"total_pages":1,"total_results":1}"""
-                        withTitles -> """{"page":${data.url.parameters["page"] ?: "1"},"results":[{"id":${if (data.url.parameters["page"] == "2") 8 else 7},"media_type":"movie","title":"Loaded film","name":"Loaded series","overview":"Retained public overview","vote_average":8.1,"vote_count":20}],"total_pages":${if (paged) 2 else 1},"total_results":2}"""
+                        withTitles -> """{"page":${data.url.parameters["page"] ?: "1"},"results":[{"id":${if (data.url.parameters["page"] == "2") 8 else 7},"media_type":"${if (data.url.encodedPath.contains("/tv/") || data.url.encodedPath.endsWith("/tv")) "tv" else "movie"}","title":"Loaded film","name":"Loaded series","overview":"Retained public overview","vote_average":8.1,"vote_count":20}],"total_pages":${if (paged) 2 else 1},"total_results":2}"""
                         else -> """{"page":1,"results":[],"total_pages":1,"total_results":0}"""
                     }
                     return HttpResponseData(if ((session && failSession) || (failNextPage && data.url.parameters["page"] == "2")) HttpStatusCode.ServiceUnavailable else HttpStatusCode.OK,
@@ -189,6 +189,7 @@ class WebRuntimeUiTest {
             f.runtime.start()
             setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
             onNodeWithTag("browse-tv:7").assertExists()
+            onNodeWithTag("browse-movie:7").assertDoesNotExist()
             val generation = f.generation.current
             runOnIdle { f.language = "fr"; f.storageRevision.value++ }
             waitUntil { f.reads.any { it.path == "/api/tmdb/discover/tv" && it.language == "fr" && it.sort == "name.asc" } }
