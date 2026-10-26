@@ -1,6 +1,7 @@
 package com.techgv.cineverse.ui.web
 
 import com.techgv.cineverse.data.auth.AuthSession
+import com.techgv.cineverse.data.library.*
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.storage.*
 import com.techgv.cineverse.data.tmdb.*
@@ -13,14 +14,62 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.test.*
 import kotlin.test.*
 
-internal class WebDetailActionsFake : LibraryActions {
-    val value = MutableStateFlow(LibraryState.Unknown)
-    val actions = mutableListOf<Pair<LibraryKind, Title>>()
+/**
+ * The real [LibraryActionsStateHolder] over the real [LibraryRepository] with fake sources. [writes] records the identity
+ * each write actually reached the store with; [actions] the reported toggles and opened Rate prompts.
+ */
+internal class WebDetailActionsFake {
+    val repositorySession = MutableStateFlow<AuthSession?>(null)
+    val snapshot = MutableStateFlow(LibraryStateSnapshot(LibraryState.Unknown))
+    var failAccountRead = false
     val refs = mutableListOf<MediaRef>()
-    override fun state(ref: MediaRef): Flow<LibraryState> { refs += ref; return value }
-    override fun toggleWatchlist(title: Title) { actions += LibraryKind.WATCHLIST to title }
-    override fun toggleFavourite(title: Title) { actions += LibraryKind.FAVOURITE to title }
-    override fun openRate(title: Title) { actions += LibraryKind.RATING to title }
+    val accountState: (MediaRef) -> Flow<LibraryStateSnapshot> = { ref ->
+        refs += ref
+        flow {
+            if (failAccountRead) throw BrowserStorageException(BrowserStorageFailure.Blocked)
+            emitAll(snapshot)
+        }
+    }
+    val writes = mutableListOf<String>()
+    val actions = mutableListOf<Pair<LibraryKind, Title>>()
+    val prompts = mutableListOf<RatePrompt>()
+    private val rows = MutableStateFlow<List<GuestLibraryRow>>(emptyList())
+    private val guest = object : GuestLibraryStore {
+        override fun observeKind(kind: LibraryKind, media: MediaType) = rows.map { all -> all.filter { it.kind == kind && it.ref.mediaType == media } }
+        override fun observeTitle(ref: MediaRef) = rows.map { all -> all.filter { it.ref == ref } }
+        override suspend fun all() = rows.value
+        override suspend fun upsert(row: GuestLibraryRow) {
+            writes += "guest:${row.kind}/${row.ref.key}"
+            rows.value = rows.value.filterNot { it.ref == row.ref && it.kind == row.kind } + row
+        }
+        override suspend fun delete(ref: MediaRef, kind: LibraryKind) {
+            writes += "guest:$kind/${ref.key}"
+            rows.value = rows.value.filterNot { it.ref == ref && it.kind == kind }
+        }
+    }
+    private val account = object : AccountLibrarySource {
+        override suspend fun page(session: AuthSession, kind: LibraryKind, media: MediaType, page: Int): LibraryPage = error("No list reads")
+        override fun invalidateLists() = Unit
+        override suspend fun states(session: AuthSession, ref: MediaRef) = LibraryState(true, false, false, null, emptySet())
+        override suspend fun write(session: AuthSession, ref: MediaRef, kind: LibraryKind, target: LibraryState) {
+            writes += "${session.accountObjectId.value}#${session.sessionGeneration}:$kind/${ref.key}"
+        }
+    }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    val holder = LibraryActionsStateHolder(LibraryRepository(repositorySession, GuestLibrarySource(guest), account), scope, scope, { outcome ->
+        if (outcome.result is LibraryWriteResult.Done) actions += when (outcome.write) {
+            LibraryWrite.ToggleWatchlist -> LibraryKind.WATCHLIST
+            LibraryWrite.ToggleFavourite -> LibraryKind.FAVOURITE
+            else -> LibraryKind.RATING
+        } to outcome.title
+    })
+
+    init {
+        scope.launch { holder.ratePrompt.filterNotNull().collect { prompts += it; actions += LibraryKind.RATING to it.title } }
+    }
+
+    /** A producer snapshot carrying [origin] as its source proof. */
+    fun known(state: LibraryState, origin: AuthSession?) { snapshot.value = LibraryStateSnapshot(state, sourceIdentityKnown = true, sourceIdentity = origin) }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -53,7 +102,8 @@ class WebDetailOwnerTest {
         }
         val catalog = CatalogRepository(api, generation, { actual })
         fun owner(scope: CoroutineScope, entry: WebEntry = entry()): WebDetailOwner = WebDetailOwner(entry, catalog, generation,
-            rawSettings, session, storage, { upstreamRetries++; onRetry() }, { failures += it; storage.value = BrowserStorageFailure.Blocked }, library, scope)
+            rawSettings, session, storage, { upstreamRetries++; onRetry() }, { failures += it; storage.value = BrowserStorageFailure.Blocked },
+            library.holder, library.accountState, scope)
         fun act(owner: WebDetailOwner, kind: LibraryKind) =
             owner.act(kind, owner.state.value.producer.request, session.value as? WebSessionState.Ready)
     }
@@ -167,7 +217,7 @@ class WebDetailOwnerTest {
     @Test fun equalRecoveryRevokesEveryReadySnapshotUntilRealReplacementCompletes() = runTest {
         val f = Fixture()
         f.session.value = WebSessionState.Ready(null)
-        f.library.value.value = LibraryState(true, false, false, null, emptySet())
+        f.library.known(LibraryState(true, false, false, null, emptySet()), null)
         val owner = f.owner(backgroundScope)
         backgroundScope.launch { owner.holder.accountState.collect {} }
         runCurrent()
@@ -206,7 +256,7 @@ class WebDetailOwnerTest {
         val f = Fixture()
         f.storage.value = BrowserStorageFailure.Blocked
         f.session.value = WebSessionState.Ready(null)
-        f.library.value.value = LibraryState(true, false, false, null, emptySet())
+        f.library.known(LibraryState(true, false, false, null, emptySet()), null)
         val parent = Job(backgroundScope.coroutineContext[Job])
         val owner = f.owner(CoroutineScope(parent + UnconfinedTestDispatcher(testScheduler)))
         backgroundScope.launch { owner.holder.accountState.collect {} }
@@ -307,7 +357,7 @@ class WebDetailOwnerTest {
     @Test fun idleAppGenerationNeedsRootEventAndClickRejectsOldRenderedContext() = runTest {
         val f = Fixture()
         f.session.value = WebSessionState.Ready(null)
-        f.library.value.value = LibraryState(true, false, false, null, emptySet())
+        f.library.known(LibraryState(true, false, false, null, emptySet()), null)
         val owner = f.owner(backgroundScope)
         backgroundScope.launch { owner.holder.accountState.collect {} }
         runCurrent()
@@ -331,7 +381,9 @@ class WebDetailOwnerTest {
         val first = WebSessionState.Ready(AuthSession(AccountObjectId("account"), "Fixture", 9007199254740992L))
         val second = WebSessionState.Ready(AuthSession(AccountObjectId("account"), "Fixture", 9007199254740993L))
         f.session.value = first
-        f.library.value.value = LibraryState(true, false, false, null, emptySet())
+        f.library.known(LibraryState(true, false, false, null, emptySet()), first.session)
+        f.library.repositorySession.value = first.session
+        f.library.holder.onIdentity(first.session)
         val owner = f.owner(backgroundScope)
         backgroundScope.launch { owner.holder.accountState.collect {} }
         runCurrent()
@@ -341,7 +393,10 @@ class WebDetailOwnerTest {
         assertTrue(f.library.actions.isEmpty())
         owner.retryDetail(); runCurrent()
         owner.act(LibraryKind.WATCHLIST, rendered, second)
+        owner.act(LibraryKind.RATING, owner.state.value.producer.request, first)
         assertTrue(f.library.actions.isEmpty())
+        assertTrue(f.library.writes.isEmpty())
+        assertTrue(f.library.prompts.isEmpty())
         owner.close()
     }
 
@@ -418,7 +473,7 @@ class WebDetailOwnerTest {
         f.session.value = WebSessionState.Ready(null)
         f.act(owner, LibraryKind.WATCHLIST)
         assertTrue(f.library.actions.isEmpty())
-        f.library.value.value = LibraryState(true, true, false, 7.5, setOf(LibraryKind.FAVOURITE)); runCurrent()
+        f.library.known(LibraryState(true, true, false, 7.5, setOf(LibraryKind.FAVOURITE)), null); runCurrent()
         f.act(owner, LibraryKind.FAVOURITE)
         assertTrue(f.library.actions.isEmpty())
         f.act(owner, LibraryKind.WATCHLIST); f.act(owner, LibraryKind.RATING)
@@ -431,6 +486,95 @@ class WebDetailOwnerTest {
         f.session.value = WebSessionState.Ready(null); f.storage.value = BrowserStorageFailure.Blocked
         f.act(owner, LibraryKind.WATCHLIST)
         assertEquals(2, f.library.actions.size)
+        owner.close()
+    }
+
+    @Test fun explicitOverloadsDispatchTheRenderedSessionNotTheHoldersForwardedIdentity() = runTest {
+        val f = Fixture()
+        val a = AuthSession(AccountObjectId("account-a"), "Fixture", 41L)
+        f.session.value = WebSessionState.Ready(a)
+        f.library.repositorySession.value = a
+        f.library.known(LibraryState(true, false, false, null, emptySet()), a)
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        // onIdentity was never forwarded: a legacy invocation-capture toggle would capture guest and be superseded.
+        f.act(owner, LibraryKind.WATCHLIST); f.act(owner, LibraryKind.FAVOURITE)
+        assertEquals(listOf("account-a#41:WATCHLIST/Movie:7", "account-a#41:FAVOURITE/Movie:7"), f.library.writes)
+        assertEquals(listOf(LibraryKind.WATCHLIST, LibraryKind.FAVOURITE), f.library.actions.map { it.first })
+        assertTrue(f.library.actions.all { it.second == (owner.state.value.section as SectionState.Content).value.toTitle() })
+        owner.close()
+    }
+
+    @Test fun rateOpensThroughOpenRateWithTheRenderedSessionAndIsRejectedWhenUnknownOrPending() = runTest {
+        val f = Fixture()
+        val a = AuthSession(AccountObjectId("account-a"), "Fixture", 41L)
+        f.session.value = WebSessionState.Ready(a)
+        f.library.repositorySession.value = a
+        f.library.holder.onIdentity(a)
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        f.act(owner, LibraryKind.RATING)
+        f.library.known(LibraryState(true, false, false, 6.0, setOf(LibraryKind.RATING)), a); runCurrent()
+        f.act(owner, LibraryKind.RATING)
+        assertTrue(f.library.prompts.isEmpty())
+        f.library.known(LibraryState(true, false, false, 6.0, emptySet()), a); runCurrent()
+        f.act(owner, LibraryKind.RATING)
+        val prompt = f.library.prompts.single()
+        assertEquals(a, prompt.identity)
+        assertEquals(MediaRef(MediaType.Movie, 7), prompt.title.ref)
+        assertTrue(f.library.writes.isEmpty())
+        owner.close()
+    }
+
+    @Test fun accountSnapshotIsActionableOnlyForItsFullSourceIdentityAndNeverRelabelled() = runTest {
+        val a = AuthSession(AccountObjectId("account-a"), "Fixture", 41L)
+        val a2 = a.copy(sessionGeneration = 42L)
+        val state = LibraryState(true, true, false, null, emptySet())
+        fun origin(known: Boolean, identity: AuthSession?) = LibraryStateSnapshot(state, known, identity)
+        assertEquals(state, origin(true, a).webDetailAccount(WebSessionState.Ready(a)))
+        assertEquals(state, origin(true, null).webDetailAccount(WebSessionState.Ready(null)))
+        assertEquals(LibraryState.Unknown, origin(true, null).webDetailAccount(WebSessionState.Ready(a))) // Guest data, signed-in render.
+        assertEquals(LibraryState.Unknown, origin(true, a).webDetailAccount(WebSessionState.Ready(null)))
+        assertEquals(LibraryState.Unknown, origin(true, a).webDetailAccount(WebSessionState.Ready(a2)))
+        assertEquals(LibraryState.Unknown, origin(false, null).webDetailAccount(WebSessionState.Ready(null)))
+        assertEquals(LibraryState.Unknown, origin(true, a).webDetailAccount(null))
+
+        val f = Fixture()
+        f.session.value = WebSessionState.Ready(a2)
+        f.library.repositorySession.value = a2
+        f.library.known(state, a) // The previous sign-in's snapshot.
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        f.act(owner, LibraryKind.WATCHLIST)
+        f.library.known(state, null); runCurrent()
+        f.act(owner, LibraryKind.WATCHLIST)
+        assertTrue(f.library.writes.isEmpty())
+        assertEquals(LibraryStateSnapshot(state, true, null), owner.account.value) // Published as produced, never relabelled.
+        f.library.known(state, a2); runCurrent()
+        f.act(owner, LibraryKind.WATCHLIST)
+        assertEquals(listOf("account-a#42:WATCHLIST/Movie:7"), f.library.writes)
+        owner.close()
+    }
+
+    @Test fun accountReadStorageFailureReportsMasksAndRecollectsOnlyOnExplicitRetry() = runTest {
+        val f = Fixture()
+        f.session.value = WebSessionState.Ready(null)
+        f.library.failAccountRead = true
+        f.library.known(LibraryState(true, false, false, null, emptySet()), null)
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        assertEquals(1, f.failures.size)
+        assertEquals(LibraryStateSnapshot(LibraryState.Unknown), owner.account.value)
+        f.library.failAccountRead = false
+        f.storage.value = null; runCurrent() // External recovery re-reads the catalog, never replays the account read.
+        assertEquals(1, f.library.refs.size)
+        f.act(owner, LibraryKind.WATCHLIST)
+        assertTrue(f.library.writes.isEmpty())
+        owner.retryReads(); runCurrent()
+        assertEquals(2, f.library.refs.size)
+        assertEquals(LibraryStateSnapshot(LibraryState(true, false, false, null, emptySet()), true, null), owner.account.value)
+        f.act(owner, LibraryKind.WATCHLIST)
+        assertEquals(listOf("guest:WATCHLIST/Movie:7"), f.library.writes)
         owner.close()
     }
 
