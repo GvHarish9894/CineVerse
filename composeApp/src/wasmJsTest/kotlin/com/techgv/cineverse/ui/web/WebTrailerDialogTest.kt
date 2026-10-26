@@ -87,6 +87,8 @@ class WebTrailerDialogTest {
             assertEquals(listOf(src(TRAILER.key, autoplay = 1)), host.srcs)
             val slot = assertNotNull(host.lastSlot)
             assertEquals(16f / 9f, slot.width / slot.height, 0.05f)
+            // Wider than any 560dp dialog's content (560 - 2 × 36 padding): the player uses the 1000dp kit width.
+            assertTrue(slot.width > 488f, "Trailer slot is ${slot.width}dp wide")
         }
         onNodeWithText(TRAILER.key, substring = true).assertDoesNotExist()
         onNodeWithContentDescription("Play").assertDoesNotExist()

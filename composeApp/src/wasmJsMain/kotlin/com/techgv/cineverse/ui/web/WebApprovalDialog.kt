@@ -1,13 +1,18 @@
 package com.techgv.cineverse.ui.web
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.di.WebSessionState
@@ -24,8 +29,8 @@ fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester) {
     if (state.phase == WebApprovalPhase.Closed) return
     CvDialog(
         onDismissRequest = owner::dismiss,
-        title = "Sign in with TMDB",
-        kicker = "YOUR BROWSER ACCOUNT",
+        title = "Sign in to CineVerse",
+        kicker = "TMDB account",
         restoreFocus = restoreFocus,
         modifier = Modifier.testTag("web-approval-dialog"),
     ) {
@@ -33,8 +38,13 @@ fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester) {
             Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).testTag("web-approval-content"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("1. Prepare a sign-in request.\n2. Continue to TMDB in a separate tab and approve.\n3. Return here and check your browser session.",
-                style = bodyStyle(15.sp), color = Tokens.Colors.TextPrimary)
+            Text("We use your TMDB account, so your watchlist, favourites and ratings live on TMDB instead of only in this browser.",
+                Modifier.padding(top = 10.dp), style = bodyStyle(15.5.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.8f))
+            Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                ApprovalStep(1, "Prepare a sign-in request, then continue to themoviedb.org in a new tab.")
+                ApprovalStep(2, "Sign in there and approve CineVerse.")
+                ApprovalStep(3, "Come back to this tab and check your session.")
+            }
             Text(when (state.phase) {
                 WebApprovalPhase.Starting -> "Preparing your request. No TMDB tab has been opened."
                 WebApprovalPhase.Waiting -> if (state.openRequested) "An open was requested. If no tab appeared, allow popups and choose Open TMDB again. After approving, return here and check session."
@@ -51,20 +61,32 @@ fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester) {
                     else -> "Session could not be checked. Retry the read; sign-in requests will not be replayed."
                 }
                 else -> "Prepare a request when your browser session is verified as signed out."
-            }, style = bodyStyle(15.sp), color = Tokens.Colors.TextSecondary)
+            }, Modifier.padding(top = 6.dp), style = bodyStyle(15.sp), color = Tokens.Colors.TextPrimary)
             Text(when (val session = state.session) {
                 WebSessionState.Checking -> "Browser identity is being verified."
                 is WebSessionState.Failed -> "Browser identity is unknown. Check session before starting or opening TMDB."
                 is WebSessionState.Ready -> if (session.session == null) "No verified browser sign-in is currently shown. Returning from TMDB alone is not proof of sign-in."
                     else "This browser has a verified signed-in identity."
-            }, style = bodyStyle(15.sp), color = Tokens.Colors.TextSecondary)
+            }, style = bodyStyle(14.sp), color = Tokens.Colors.TextSecondary)
+            FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (state.canStart) PillButton("Prepare sign-in", owner::startApproval)
+                if (state.canOpen) PillButton(if (state.openRequested) "Open TMDB again" else "Continue to TMDB", owner::continueToTmdb)
+                PillButton("Check session", owner::approvalReturned, variant = ButtonVariant.Ghost, enabled = state.canCheck)
+                PillButton("Not now", owner::dismiss, variant = ButtonVariant.Ghost, enabled = state.phase != WebApprovalPhase.Cancelling)
+            }
             Text("Not now cancels all pending sign-in requests for this browser, including other tabs. It does not sign out an existing session.",
-                style = bodyStyle(15.sp), color = Tokens.Colors.TextSecondary)
-            if (state.canStart) PillButton("Prepare sign-in", owner::startApproval, Modifier.fillMaxWidth())
-            if (state.canOpen) PillButton(if (state.openRequested) "Open TMDB again" else "Continue to TMDB", owner::continueToTmdb, Modifier.fillMaxWidth())
-            PillButton("Check session", owner::approvalReturned, Modifier.fillMaxWidth(), variant = ButtonVariant.Ghost, enabled = state.canCheck)
-            PillButton("Not now", owner::dismiss, Modifier.fillMaxWidth(), variant = ButtonVariant.Ghost,
-                enabled = state.phase != WebApprovalPhase.Cancelling)
+                style = bodyStyle(13.sp), color = Tokens.Colors.TextTertiary)
         }
+    }
+}
+
+/** Kit `.step`: a 26dp accent circle with the number, then the instruction. */
+@Composable
+private fun ApprovalStep(number: Int, text: String) {
+    Row(Modifier.semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(26.dp).background(Tokens.Colors.Accent, CircleShape), contentAlignment = Alignment.Center) {
+            Text("$number", style = bodyStyle(12.5.sp, FontWeight.Bold), color = Tokens.Colors.OnAccent)
+        }
+        Text(text, Modifier.padding(top = 3.dp), style = bodyStyle(15.sp), color = Tokens.Colors.TextPrimary)
     }
 }

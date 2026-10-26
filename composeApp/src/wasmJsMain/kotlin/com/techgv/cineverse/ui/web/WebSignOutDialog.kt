@@ -42,15 +42,15 @@ fun WebSignOutDialog(owner: WebAccountOwner, restoreFocus: FocusRequester) {
                 WebSignOutPhase.StillSignedIn -> "Sign-out did not complete. This browser is still signed in as $name."
                 WebSignOutPhase.Changed -> "This browser's account changed or is already signed out. Check the account shown before trying again."
                 else -> "Sign-out may or may not have completed, and the browser session could not be checked. Check session reads it again; sign-out is never repeated automatically."
-            }, style = bodyStyle(15.sp), color = Tokens.Colors.TextPrimary)
-            if (state.signOut == WebSignOutPhase.Confirm || state.signOut == WebSignOutPhase.SigningOut) {
-                PillButton("Sign out", owner::confirmSignOut, Modifier.fillMaxWidth(), enabled = state.canConfirmSignOut)
+            }, Modifier.padding(top = 10.dp), style = bodyStyle(15.5.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.8f))
+            FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (state.signOut == WebSignOutPhase.Confirm || state.signOut == WebSignOutPhase.SigningOut) {
+                    PillButton("Sign out", owner::confirmSignOut, enabled = state.canConfirmSignOut)
+                }
+                if (state.signOut == WebSignOutPhase.Unknown) PillButton("Check session", owner::checkSignOut)
+                PillButton(if (state.signOut == WebSignOutPhase.Confirm) "Cancel" else "Close", owner::dismiss,
+                    variant = ButtonVariant.Ghost, enabled = !busy)
             }
-            if (state.signOut == WebSignOutPhase.Unknown) {
-                PillButton("Check session", owner::checkSignOut, Modifier.fillMaxWidth())
-            }
-            PillButton(if (state.signOut == WebSignOutPhase.Confirm) "Cancel" else "Close", owner::dismiss,
-                Modifier.fillMaxWidth(), variant = ButtonVariant.Ghost, enabled = !busy)
         }
     }
 }

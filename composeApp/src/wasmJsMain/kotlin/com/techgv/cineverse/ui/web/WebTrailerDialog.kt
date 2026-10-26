@@ -50,6 +50,7 @@ fun WebTrailerDialog(
         kicker = current.type,
         restoreFocus = restoreFocus,
         modifier = Modifier.testTag("web-trailer-dialog"),
+        maxWidth = 1000.dp, // the kit `.player`; other dialogs keep 560
     ) {
         Box(
             Modifier.padding(top = 20.dp).fillMaxWidth().aspectRatio(16f / 9f)

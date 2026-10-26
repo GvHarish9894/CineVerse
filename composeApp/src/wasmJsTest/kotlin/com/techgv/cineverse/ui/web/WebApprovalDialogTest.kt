@@ -210,7 +210,9 @@ class WebApprovalDialogTest {
                     WebApprovalDialog(f.owner, remember { FocusRequester() })
                 }
             }
-            onNodeWithText("1. Prepare a sign-in request.", substring = true).assertExists()
+            onNodeWithText("Sign in to CineVerse").assertExists()
+            listOf("Prepare a sign-in request, then continue to themoviedb.org in a new tab.", "Sign in there and approve CineVerse.",
+                "Come back to this tab and check your session.").forEach { onNodeWithText(it).assertExists() }
             onNodeWithTag("web-approval-content").performScrollToNode(hasText("Not now"))
             onNodeWithText("Not now").assertIsDisplayed()
             runOnIdle { width = WindowClass.Desktop }
