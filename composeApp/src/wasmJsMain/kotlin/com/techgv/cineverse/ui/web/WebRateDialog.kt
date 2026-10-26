@@ -102,12 +102,12 @@ private fun RatingStars(shown: Double?, chosen: Double?, onHover: (Double?) -> U
                     Key.MoveHome -> -MAX_RATING
                     Key.MoveEnd -> MAX_RATING
                     Key.Enter, Key.NumPadEnter -> {
-                        if (event.type == KeyEventType.KeyDown) onSubmit()
+                        if (event.type == KeyEventType.KeyDown) { hover(null); onSubmit() } // keys act on chosen, never on a stale hover preview
                         return@onKeyEvent true
                     }
                     else -> return@onKeyEvent false
                 }
-                if (event.type == KeyEventType.KeyDown) onChoose(((chosen ?: 0.0) + step).coerceIn(MIN_RATING, MAX_RATING))
+                if (event.type == KeyEventType.KeyDown) { hover(null); onChoose(((chosen ?: 0.0) + step).coerceIn(MIN_RATING, MAX_RATING)) }
                 true
             }
             .semantics {

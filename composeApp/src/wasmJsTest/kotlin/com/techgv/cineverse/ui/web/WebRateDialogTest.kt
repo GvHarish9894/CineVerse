@@ -120,6 +120,13 @@ class WebRateDialogTest {
             stars.performKeyInput { pressKey(Key.MoveEnd); repeat(3) { pressKey(Key.DirectionLeft) } }
             assertValue("8.5", "Great")
             assertTrue(f.writes.isEmpty())
+            // A stale hover preview must not survive a key press: the display and the submitted value agree.
+            stars.performMouseInput { moveTo(segment(6)) } // preview 3.0 while chosen is 8.5
+            assertValue("3.0", "Poor")
+            stars.performKeyInput { pressKey(Key.DirectionRight) }
+            assertValue("9.0", "Masterpiece")
+            stars.performKeyInput { pressKey(Key.DirectionLeft) }
+            assertValue("8.5", "Great")
             stars.performKeyInput { pressKey(Key.Enter) }
             onNodeWithTag("web-rate-dialog").assertDoesNotExist()
             assertEquals(listOf("$movieRating=8.5"), f.writes)
@@ -160,7 +167,7 @@ class WebRateDialogTest {
         } finally { f.dispose() }
     }
 
-    @Test fun guestPromptSavesInThisBrowserAndRemovesTheGuestRating() = runComposeUiTest {
+    @Test fun guestPromptIsLabelledThisBrowserAndRemovesTheGuestRating() = runComposeUiTest {
         val f = WebRateFixture(signedIn = null)
         try {
             f.seedGuestRating(MOVIE.ref, 4.0)
