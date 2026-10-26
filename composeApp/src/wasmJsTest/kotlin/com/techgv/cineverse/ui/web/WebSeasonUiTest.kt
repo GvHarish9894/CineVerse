@@ -37,9 +37,11 @@ class WebSeasonUiTest {
         assertEquals(WebRoute.Detail("tv", 7), fake.destinations.last())
         onNodeWithText("Real network").assertExists()
         onNodeWithTag("web-season").performScrollToNode(hasTestTag("season-7-episode-4"))
-        onNodeWithText("4 · Actual episode").assertExists()
-        onNodeWithText("2020-01-02 · 42 min").assertExists()
-        onNodeWithText("NR").assertExists()
+        onNodeWithText("Actual episode").assertExists()
+        onNodeWithText("Jan 2, 2020 · 42m").assertExists()
+        // No votes: no rating badge at all (neither a guessed ★ nor an "NR" label).
+        onAllNodes(hasText("★", substring = true)).assertCountEquals(0)
+        onNodeWithText("NR").assertDoesNotExist()
         onNodeWithText("Actual overview").assertExists()
         onNodeWithTag("season-7-episode-4").performClick()
         onNodeWithText("Episode details · 4").assertExists()
@@ -60,7 +62,7 @@ class WebSeasonUiTest {
         waitUntil { owner.state.value.bodyReady }
         onNodeWithText("Specials").performClick()
         assertEquals(WebRoute.Season(7, 0), fake.destinations.last())
-        onNodeWithText("← Back").performClick()
+        onNodeWithText("Back").performClick()
         assertEquals(WebRoute.Home, fake.destinations.last())
         runOnIdle { owner.close() }
     }
@@ -79,8 +81,8 @@ class WebSeasonUiTest {
             WebSeasonContent(owner, state, today)
         }
         waitUntil { owner.state.value.bodyReady }
-        onNodeWithTag("web-season").performScrollToNode(hasText("Airs 2030-02-03"))
-        onNodeWithText("Airs 2030-02-03").assertExists()
+        onNodeWithTag("web-season").performScrollToNode(hasText("Airs Feb 3, 2030"))
+        onNodeWithText("Airs Feb 3, 2030").assertExists()
         onNodeWithTag("web-season").performScrollToNode(hasText("Air date unknown"))
         onNodeWithText("Air date unknown").assertExists()
         onNodeWithText("★ 9.0").assertDoesNotExist()
@@ -116,7 +118,7 @@ class WebSeasonUiTest {
         waitUntil { owner.state.value.bodyReady }
         onNodeWithTag("web-season").performScrollToNode(hasText("Requested season is unavailable."))
         onNodeWithText("Requested season is unavailable.").assertExists()
-        onNodeWithText("4 · Actual episode").assertDoesNotExist()
+        onNodeWithText("Actual episode").assertDoesNotExist()
         assertTrue(fake.calls.none { it.startsWith("season:") })
         runOnIdle { owner.close() }
     }
