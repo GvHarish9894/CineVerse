@@ -238,6 +238,10 @@ Origin gates completed cleanac960c1bc0d69c92aa3637d3851a4493e90485f4: initial34=
 
 C3 cleanc690f66 Season now receives sole serialized first Gradle/Karma lease: compile new source/tests, run only24owner+10UI prepared cases, actual counts/heads/evidence required. Repairs only five owned WebSeason files, no timeout/runner/assertion weakening or other-source changes. C1 correction writer source-only; C2 review read-only. C5 captured-session lane remains paused at preserved partials until explicit operator retry. Native/iOS/F4/live-account/promotion holds unchanged.
 
+## Model policy change (operator)
+
+Operator switched orchestration to the fable model and directed ALL subagents to use Opus 5.5. Exact registry id used: `cliproxyapi/claude-opus-5-5` (no fallback to other ids/providers; stop on provider failure as before). Workflow05e30b18 (Season first gates, origin review, Person English-identity fix) hit the gpt-6.1-sol usage limit before any edits/builds: parent verified all three trees clean at their prior heads (c1@2e13c259 on g8-person-english-identity, c2@ac960c1, c3@c690f66), no owned CineVerse build/browser jobs, snapshot under checkpoints/usage-limit-05e30b18-zWGEAoUX/. Those three lanes relaunch fresh under the new model with unchanged scope/leases: C3 Season sole Gradle/Karma lease; C1 fix source-only; C2 review read-only. C5 captured-session lane stays paused (tests-firsta733021 + preserved partials) pending explicit operator retry.
+
 ## Execution and leases
 
 All workers/reviewers `cliproxyapi/gpt-6.1-sol` only; no provider/model/CLI/auth fallback, nested agents, new worktrees, merges/pushes by workers, credentials output/overwrite, profile access, resets/permission changes or live user data operations. Author `GvHarish9894 <hariharangv9894@gmail.com>`. Gradle `--max-workers=2`, no configure-on-demand; filters scoped per task. ANDROID_HOME=$HOME/Library/Android/sdk and DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer are normal build environment only, not device/runtime grants.
