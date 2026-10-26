@@ -41,21 +41,3 @@ internal fun DiscoverSort.webValue(media: String): String = when (this) {
     DiscoverSort.ReleaseDate -> if (media == "movie") "primary_release_date.desc" else "first_air_date.desc"
     DiscoverSort.Title -> if (media == "movie") "title.asc" else "name.asc"
 }
-
-internal fun BrowseSelection.sourceLabel(): String = when (this) {
-    is BrowseSelection.Movies -> "Movies · " + when (list) {
-        MovieList.Popular -> "Popular"
-        MovieList.NowPlaying -> "Now playing"
-        MovieList.Upcoming -> "Upcoming"
-        MovieList.TopRated -> "Top rated"
-    }
-    is BrowseSelection.Tv -> "TV Shows · " + when (list) {
-        TvList.Popular -> "Popular"
-        TvList.AiringToday -> "Airing today"
-        TvList.OnTheAir -> "On TV"
-        TvList.TopRated -> "Top rated"
-    }
-    BrowseSelection.People -> "Popular people"
-    is BrowseSelection.Discover -> "${if (media == MediaType.Movie) "Movies" else "TV Shows"} · Discover"
-    is BrowseSelection.Trending -> "Trending · $window"
-}
