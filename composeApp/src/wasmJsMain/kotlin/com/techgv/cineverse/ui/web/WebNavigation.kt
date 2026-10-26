@@ -2,6 +2,9 @@
 
 package com.techgv.cineverse.ui.web
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import com.techgv.cineverse.presentation.StateSaver
 import com.techgv.cineverse.presentation.BrowseSelection
 import kotlinx.browser.window
@@ -9,6 +12,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.w3c.dom.events.Event
 
 interface WebHistory {
@@ -36,7 +41,22 @@ private external fun historySaved(): String
 @JsFun("(url, saved, replace) => { const state = {...history.state, cineverse:saved}; history[replace ? 'replaceState' : 'pushState'](state, '', url); }")
 private external fun historyWrite(url: String, saved: String, replace: Boolean)
 
-class WebEntry internal constructor(val route: WebRoute, private val values: MutableMap<String, String>) : StateSaver {
+class WebEntry internal constructor(route: WebRoute, private val values: MutableMap<String, String>) : StateSaver {
+    var route: WebRoute by mutableStateOf(route)
+        private set
+    internal fun replaceSearch(next: WebRoute.Search, write: (String) -> Unit) {
+        val previous = route as WebRoute.Search
+        val updated = values.toMutableMap()
+        if (previous.query.trim() != next.query.trim() || previous.facet != next.facet) {
+            updated.keys.removeAll { it in setOf("search.page", "search.index", "search.offset") }
+        }
+        next.saveSearchInput(updated)
+        // Publish only after history accepted the complete route/scalar transaction.
+        write(Json.encodeToString(updated))
+        values.clear()
+        values.putAll(updated)
+        route = next
+    }
     internal var changed: () -> Unit = {}
     internal fun encoded() = Json.encodeToString(values)
     override fun getString(key: String): String? = values[key]?.takeUnless { key == "home.trend" && it !in setOf("Day", "Week") }
@@ -57,8 +77,14 @@ class WebNavigation(private val history: WebHistory) {
     private fun restored(): WebEntry {
         val route = parseWebRoute(history.url)
         return try {
+            if (route is WebRoute.Search && history.saved.isNotEmpty()) {
+                val objectState = Json.parseToJsonElement(history.saved) as? JsonObject ?: throw IllegalArgumentException("Invalid Search history")
+                require(objectState.values.all { it is JsonPrimitive && it.isString })
+            }
             val values = if (history.saved.isEmpty()) mutableMapOf() else Json.decodeFromString<Map<String, String>>(history.saved).toMutableMap()
             require(values.all { (key, value) -> when {
+                key == "search.page" -> value.toIntOrNull()?.let { it in 1..500 } == true
+                key == "search.index" || key == "search.offset" -> value.toIntOrNull()?.let { it in 0..100000 } == true
                 key.endsWith(".index") || key.endsWith(".offset") -> value.toIntOrNull()?.let { it >= 0 } == true
                 key == "browse.page" -> value.toIntOrNull()?.let { it in 1..500 } == true
                 key == "home.trend" -> value in setOf("Day", "Week")
@@ -75,6 +101,12 @@ class WebNavigation(private val history: WebHistory) {
                     saved.saveTo(WebEntry(route, canonical))
                     require(values.filterKeys { it.startsWith("productBrowse.") } == canonical)
                 }
+            }
+            if (route is WebRoute.Search) {
+                require(values["productSearch.query"] == null || values["productSearch.query"] == route.query)
+                require(values["productSearch.facet"] == null || values["productSearch.facet"] == route.searchFacet().name)
+                require(values.keys.none { it.startsWith("productSearch.") && it !in setOf("productSearch.query", "productSearch.facet") })
+                route.saveSearchInput(values)
             }
             entry
         } catch (_: IllegalArgumentException) {
@@ -102,7 +134,13 @@ class WebNavigation(private val history: WebHistory) {
         val url = route.url()
         val valid = parseWebRoute(url)
         if (valid == current.value.route) return
-        val next = WebEntry(valid, mutableMapOf())
+        if (replace && current.value.route is WebRoute.Search && valid is WebRoute.Search) {
+            current.value.replaceSearch(valid) { history.replace(url, it) }
+            return
+        }
+        val values = mutableMapOf<String, String>()
+        if (valid is WebRoute.Search) valid.saveSearchInput(values)
+        val next = WebEntry(valid, values)
         if (replace) history.replace(url, next.encoded()) else history.push(url, next.encoded())
         current.value.changed = {}
         current.value = next

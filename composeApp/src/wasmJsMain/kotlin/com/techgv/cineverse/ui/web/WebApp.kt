@@ -17,6 +17,8 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.techgv.cineverse.data.search.RecentQueryStore
+import androidx.compose.ui.platform.testTag
 import com.techgv.cineverse.data.storage.BrowserStorageFailure
 import com.techgv.cineverse.data.tmdb.CatalogRepository
 import com.techgv.cineverse.di.WebRuntime
@@ -33,7 +35,7 @@ import kotlinx.coroutines.flow.Flow
 import com.techgv.cineverse.data.settings.Settings
 
 @Composable
-fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: GenerationCounter, browseSettings: Flow<Settings>, history: WebHistory = remember { BrowserHistory() }) {
+fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: GenerationCounter, browseSettings: Flow<Settings>, recent: RecentQueryStore, history: WebHistory = remember { BrowserHistory() }) {
     val navigation = remember(history) { WebNavigation(history) }
     DisposableEffect(navigation) { onDispose { navigation.close() } }
     val entry by navigation.entry.collectAsState()
@@ -44,19 +46,42 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     val appearance = settings?.let {
         AppearanceSettings(it.motion, it.glow, it.haptics, com.techgv.cineverse.ui.haptics.HapticStrength.valueOf(it.strength.name))
     } ?: AppearanceSettings(reduceMotion = true, ambientGlow = false, haptics = false)
+    val searchScope = rememberCoroutineScope()
+    val searchOwner = if (settings != null && entry.route is WebRoute.Search) remember(entry) {
+        WebSearchOwner(entry, catalog, generation, browseSettings, recent, searchScope, navigation::navigate, runtime::reportStorageFailure)
+    } else null
+    val searchEnabled = entry.route !is WebRoute.Search || searchOwner != null
+    LaunchedEffect(searchOwner, entry.route) {
+        val route = entry.route as? WebRoute.Search
+        if (searchOwner != null && route != null) searchOwner.holder.setInput(route.query, route.searchFacet())
+    }
+    DisposableEffect(searchOwner) { onDispose { searchOwner?.dispose() } }
+    var headerSubmission by remember { mutableStateOf<WebEntry?>(null) }
+    LaunchedEffect(entry, searchOwner) {
+        if (headerSubmission === entry && searchOwner != null) { headerSubmission = null; searchOwner.submit() }
+        else if (headerSubmission !== entry) headerSubmission = null
+    }
     val settingsFlow = remember(runtime) { runtime.settingsHolder.state.mapNotNull { it?.settings } }
     CineVerseTheme(ShellStyle.Web, appearance) {
         ProvideWindowClass(Modifier.fillMaxSize()) {
             WebShell {
                 val searchFocus = remember { FocusRequester() }
                 var searchFocused by remember { mutableStateOf(false) }
+                var mainSearchFocused by remember(entry) { mutableStateOf(false) }
                 Column(Modifier.fillMaxSize().onPreviewKeyEvent {
-                    if (!searchFocused && it.type == KeyEventType.KeyDown && it.key == Key.Slash && !it.isCtrlPressed && !it.isMetaPressed) {
+                    if (searchEnabled && !searchFocused && !mainSearchFocused && it.type == KeyEventType.KeyDown && it.key == Key.Slash && !it.isCtrlPressed && !it.isMetaPressed) {
                         searchFocus.requestFocus(); true
                     } else false
                 }) {
-                    WebHeader(entry.route, session, searchFocus, navigation::navigate) { searchFocused = it }
-                    WebStatus(session, storage.takeUnless { settings != null && (entry.route == WebRoute.Home || entry.route is WebRoute.Browse || entry.route == WebRoute.People) }, runtime::revalidateSession, runtime::retryStorage)
+                    WebHeader(entry.route, session, searchFocus, navigation::navigate, { searchFocused = it },
+                        searchOwner?.query, { searchOwner?.change(it) }, {
+                            if (searchOwner != null) searchOwner.submit()
+                            else if (entry.route !is WebRoute.Search) {
+                                navigation.navigate(WebRoute.Search(it))
+                                headerSubmission = navigation.entry.value
+                            }
+                        }, searchEnabled = searchEnabled)
+                    WebStatus(session, storage.takeUnless { settings != null && (entry.route == WebRoute.Home || entry.route is WebRoute.Browse || entry.route == WebRoute.People || entry.route is WebRoute.Search) }, runtime::revalidateSession, runtime::retryStorage)
                     if (settings == null) {
                         Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                             Text(if (storage == null) "Reading saved settings…" else "Saved settings are unavailable. Retry storage to continue.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -66,6 +91,12 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                             WebHome(entry, catalog, generation, settingsFlow, session, runtime, navigation::navigate)
                         } else if (entry.route is WebRoute.Browse || entry.route == WebRoute.People) {
                             WebBrowse(entry, catalog, generation, browseSettings, runtime, navigation::navigate)
+                        } else if (searchOwner != null) {
+                            WebSearch(searchOwner, storage, {
+                                runtime.retryStorage()
+                                searchOwner.holder.retrySettings()
+                                searchOwner.holder.retryRecentRead()
+                            }, navigation::navigate) { mainSearchFocused = it }
                         } else WebPlaceholder(entry.route, navigation::navigate)
                     }
                 }
@@ -97,12 +128,25 @@ internal fun WebStorageNotice(failure: BrowserStorageFailure, retry: () -> Unit,
 }
 
 @Composable
-internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: FocusRequester, navigate: (WebRoute, Boolean) -> Unit, searchFocused: (Boolean) -> Unit = {}) {
+internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: FocusRequester, navigate: (WebRoute, Boolean) -> Unit,
+                       searchFocused: (Boolean) -> Unit = {}, searchQuery: String? = null, searchChange: (String) -> Unit = {}, searchSubmit: (String) -> Unit = {}, searchEnabled: Boolean = true) {
     var query by remember(route) { mutableStateOf((route as? WebRoute.Search)?.query.orEmpty()) }
     var edited by remember(route) { mutableStateOf(false) }
+    val displayed = searchQuery ?: query
+    val candidate = WebRoute.Search(displayed, (route as? WebRoute.Search)?.facet ?: "all")
+    val invalid = !candidate.representable()
     LaunchedEffect(query, edited) {
-        if (edited) { delay(300); navigate(WebRoute.Search(query), route is WebRoute.Search) }
+        if (edited && route !is WebRoute.Search && WebRoute.Search(query).representable()) {
+            delay(300)
+            navigate(WebRoute.Search(query), false)
+        }
     }
+    val change: (String) -> Unit = {
+        if (searchEnabled) {
+            if (route is WebRoute.Search) searchChange(it) else { query = it; edited = true }
+        }
+    }
+    val submit = { if (searchEnabled && !invalid) searchSubmit(displayed) }
     BoxWithConstraints(Modifier.fillMaxWidth().background(Tokens.Colors.SurfaceGlass)) {
         val narrow = maxWidth <= 860.dp
         Column(Modifier.fillMaxWidth().padding(horizontal = if (maxWidth <= 640.dp) 16.dp else 32.dp, vertical = 12.dp)) {
@@ -122,7 +166,7 @@ internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: F
                     NavButton("My Library") { navigate(WebRoute.Library(), false) }
                 }
                 if (!narrow) Spacer(Modifier.weight(1f))
-                if (!narrow) SearchField(query, { query = it; edited = true }, searchFocus, Modifier.widthIn(max = 340.dp).weight(1f).onFocusChanged { searchFocused(it.isFocused) })
+                if (!narrow) WebSearchEditor(displayed, change, submit, Modifier.widthIn(max = 340.dp).weight(1f).focusRequester(searchFocus).testTag("header-search-input").onFocusChanged { searchFocused(it.isFocused) }, invalid, enabled = searchEnabled)
                 when (session) {
                     is WebSessionState.Ready -> if (session.session == null) {
                         PillButton("Sign in", { navigate(WebRoute.Settings, false) }, small = true, variant = ButtonVariant.Ghost)
@@ -131,14 +175,11 @@ internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: F
                     is WebSessionState.Failed -> Text("Unverified", style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (narrow) SearchField(query, { query = it; edited = true }, searchFocus, Modifier.fillMaxWidth().padding(top = 8.dp).onFocusChanged { searchFocused(it.isFocused) })
+            if (!searchEnabled) Text("Search is unavailable until saved settings are loaded. Your URL query and facet are unchanged.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            if (invalid) Text(SEARCH_URL_ERROR, color = MaterialTheme.colorScheme.error)
+            if (narrow) WebSearchEditor(displayed, change, submit, Modifier.fillMaxWidth().padding(top = 8.dp).focusRequester(searchFocus).testTag("header-search-input").onFocusChanged { searchFocused(it.isFocused) }, invalid, enabled = searchEnabled)
         }
     }
-}
-
-@Composable
-private fun SearchField(query: String, change: (String) -> Unit, focus: FocusRequester, modifier: Modifier) {
-    OutlinedTextField(query, change, modifier.focusRequester(focus), singleLine = true, label = { Text("Search movies, TV and people") })
 }
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)

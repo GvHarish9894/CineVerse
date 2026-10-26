@@ -4,6 +4,7 @@ package com.techgv.cineverse.ui.web
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
+import com.techgv.cineverse.data.search.RecentQueryStore
 import com.techgv.cineverse.data.settings.*
 import com.techgv.cineverse.data.storage.*
 import com.techgv.cineverse.data.tmdb.CatalogRepository
@@ -23,7 +24,10 @@ import kotlin.test.*
 
 /** Real existing graph/holders and fake remote transport/settings only; never a real sign-in or write. */
 class WebRuntimeUiTest {
-    private class Fixture : AutoCloseable {
+    internal class Fixture(private val allowRecentWrites: Boolean = false) : AutoCloseable {
+        var recentValue: String? = null
+        var edits = 0
+        var failWrite = false
         var failSession = true
         var failSettings = true
         var sessionReads = 0
@@ -35,12 +39,12 @@ class WebRuntimeUiTest {
         var paged = false
         var failNextPage = false
         var language = "en-US"
-        data class Read(val path: String, val page: String?, val language: String?, val sort: String?, val genres: String?)
+        data class Read(val path: String, val page: String?, val language: String?, val sort: String?, val genres: String?, val query: String?)
         val reads = mutableListOf<Read>()
         val storageRevision = MutableStateFlow(0)
         var gate: CompletableDeferred<Unit>? = null
         private val values = object : SettingsValues {
-            override fun string(key: String): String? = if (key == "language") language else null
+            override fun string(key: String): String? = if (key == "language") language else if (key == "search.recentQueries") recentValue else null
             override fun boolean(key: String): Boolean? = if (key == "motion") true else null
             override fun stringSet(key: String): Set<String>? = null
         }
@@ -57,7 +61,20 @@ class WebRuntimeUiTest {
                         }
                     } finally { activeSettingsReaders-- }
                 }
-                override suspend fun edit(transform: (MutableSettingsValues) -> Unit) { error("No writes allowed in root fixture") }
+                override suspend fun edit(transform: (MutableSettingsValues) -> Unit) {
+                    check(allowRecentWrites) { "No writes allowed in root fixture" }
+                    edits++
+                    if (failWrite) throw BrowserStorageException(BrowserStorageFailure.Quota)
+                    var next = recentValue
+                    transform(object : MutableSettingsValues, SettingsValues by values {
+                        override fun setString(key: String, value: String) { check(key == "search.recentQueries"); next = value }
+                        override fun remove(key: String) { check(key == "search.recentQueries"); next = null }
+                        override fun setBoolean(key: String, value: Boolean) { error("Unexpected settings write") }
+                        override fun setStringSet(key: String, value: Set<String>) { error("Unexpected settings write") }
+                    })
+                    recentValue = next
+                    storageRevision.value++
+                }
             } }
             single { SettingsRepository(get<SettingsStore>()) }
             single<HttpClient> { HttpClient(object : HttpClientEngineBase("web-root-fixture") {
@@ -67,7 +84,7 @@ class WebRuntimeUiTest {
                     val session = data.url.encodedPath == "/api/session"
                     if (session) sessionReads++ else {
                         catalogReads++
-                        reads += Read(data.url.encodedPath, data.url.parameters["page"], data.url.parameters["language"], data.url.parameters["sort_by"], data.url.parameters["with_genres"])
+                        reads += Read(data.url.encodedPath, data.url.parameters["page"], data.url.parameters["language"], data.url.parameters["sort_by"], data.url.parameters["with_genres"], data.url.parameters["query"])
                         try { gate?.await() } catch (canceled: CancellationException) { canceledReads++; throw canceled }
                     }
                     val body = when {
@@ -75,7 +92,7 @@ class WebRuntimeUiTest {
                         session -> """{"signedIn":false,"accountObjectId":null,"displayName":null,"sessionGeneration":"0"}"""
                         data.url.encodedPath.contains("/genre/") -> """{"genres":[{"id":28,"name":"Action"}]}"""
                         failNextPage && data.url.parameters["page"] == "2" -> """{"error":"upstream_error"}"""
-                        withTitles && data.url.encodedPath.contains("/person/") -> """{"page":1,"results":[{"id":42,"name":"Loaded person","known_for_department":"Acting","known_for":[]}],"total_pages":1,"total_results":1}"""
+                        withTitles && (data.url.encodedPath.contains("/person/") || data.url.encodedPath.endsWith("/person")) -> """{"page":1,"results":[{"id":42,"name":"Loaded person","known_for_department":"Acting","known_for":[]}],"total_pages":1,"total_results":1}"""
                         withTitles -> """{"page":${data.url.parameters["page"] ?: "1"},"results":[{"id":${if (data.url.parameters["page"] == "2") 8 else 7},"media_type":"${if (data.url.encodedPath.contains("/tv/") || data.url.encodedPath.endsWith("/tv")) "tv" else "movie"}","title":"Loaded film","name":"Loaded series","overview":"Retained public overview","vote_average":8.1,"vote_count":20}],"total_pages":${if (paged) 2 else 1},"total_results":2}"""
                         else -> """{"page":1,"results":[],"total_pages":1,"total_results":0}"""
                     }
@@ -88,6 +105,7 @@ class WebRuntimeUiTest {
         val catalog = app.koin.get<CatalogRepository>()
         val generation = app.koin.get<GenerationCounter>()
         val settings = app.koin.get<SettingsRepository>().settings
+        val recent = RecentQueryStore(app.koin.get<SettingsStore>())
         override fun close() { runtime.stop(); app.close() }
     }
 
@@ -96,7 +114,7 @@ class WebRuntimeUiTest {
         val history = FakeHistory()
         try {
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             waitUntil(timeoutMillis = 10_000) { f.sessionReads > 0 && f.runtime.session.value is WebSessionState.Failed && f.runtime.storageFailure.value != null }
             onNodeWithText("Sign in").assertDoesNotExist()
             onNodeWithText("Saved settings are unavailable. Retry storage to continue.").assertExists()
@@ -121,7 +139,7 @@ class WebRuntimeUiTest {
             f.failSession = false; f.failSettings = false
             f.gate = CompletableDeferred()
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             waitUntil(timeoutMillis = 10_000) { f.catalogReads >= 7 }
             onNodeWithText("My Library").assertIsDisplayed().performClick()
             waitUntil(timeoutMillis = 10_000) { f.canceledReads >= 7 }
@@ -137,7 +155,7 @@ class WebRuntimeUiTest {
         try {
             f.failSession = false; f.failSettings = false; f.withTitles = true
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             onNodeWithTag("browse-movie:7").assertExists()
             assertTrue(f.reads.any { it.path == "/api/tmdb/movie/upcoming" })
             onNodeWithText("Action").performClick()
@@ -162,7 +180,7 @@ class WebRuntimeUiTest {
         try {
             f.failSession = true; f.failSettings = false; f.withTitles = true
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             onNodeWithTag("browse-movie:7").assertExists()
             onNodeWithText("Sign in").assertDoesNotExist()
             runOnIdle { f.failSettings = true; f.storageRevision.value++ }
@@ -188,7 +206,7 @@ class WebRuntimeUiTest {
         try {
             f.failSession = false; f.failSettings = false; f.withTitles = true
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             onNodeWithTag("browse-tv:7").assertExists()
             onNodeWithTag("browse-movie:7").assertDoesNotExist()
             val generation = f.generation.current
@@ -208,7 +226,7 @@ class WebRuntimeUiTest {
             f.failSession = false; f.failSettings = false
             f.gate = CompletableDeferred()
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             waitUntil { f.catalogReads >= 2 }
             onNodeWithText("My Library").performClick()
             waitUntil { f.canceledReads >= 2 }
@@ -226,7 +244,7 @@ class WebRuntimeUiTest {
         try {
             f.failSession = false; f.failSettings = false; f.withTitles = true; f.paged = true; f.failNextPage = true
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             onNodeWithTag("web-browse").performScrollToNode(hasText("Load more"))
             onNodeWithText("Load more").performClick()
             onNodeWithText("Could not load results. Loaded results are retained.").assertExists()
@@ -258,7 +276,7 @@ class WebRuntimeUiTest {
         try {
             f.failSession = false; f.failSettings = false; f.withTitles = true
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             onNodeWithText("Retained public overview").assertExists()
             val settingsBefore = f.runtime.settingsHolder.state.value?.settings
             failTrendingRead(f)
@@ -286,7 +304,7 @@ class WebRuntimeUiTest {
         try {
             f.failSession = false; f.failSettings = false; f.withTitles = true
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             failTrendingRead(f)
             runOnIdle { f.failSettings = false }
             retryWithin("home-trending-recovery")
@@ -304,7 +322,7 @@ class WebRuntimeUiTest {
         try {
             f.failSession = false; f.failSettings = false; f.withTitles = true
             f.runtime.start()
-            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, history) }
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             failTrendingRead(f)
             onNodeWithText("My Library").performClick()
             val reads = f.catalogReads
