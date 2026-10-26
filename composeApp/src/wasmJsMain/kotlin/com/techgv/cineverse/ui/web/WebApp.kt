@@ -52,9 +52,6 @@ private val libraryResultIdentity: (LibraryUiState) -> WebLibraryResultIdentity?
 }
 private val libraryResultPage: (LibraryUiState, MediaType) -> Int? = { state, media -> state.group(media).loadedPage }
 
-/** Root-owned notice for a Settings account action whose owner has not landed; it never calls runtime/auth. */
-internal data class WebUnavailableNotice(val entry: WebEntry, val title: String, val body: String)
-
 /**
  * [settingsRepository] is the strict repository behind [browseSettings]; null only in hosts without one, where
  * the Settings route stays a placeholder. [historyBack] is the component Back action (browser history by default).
@@ -72,6 +69,10 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     // App lifetime, above key(entry): route changes never recreate it; closed only when the app root leaves.
     val approval = remember(runtime, approvalOpener) { WebApprovalOwner(runtime, approvalOpener, uiScope) }
     DisposableEffect(approval) { onDispose { approval.close() } }
+    // The only caller of settingsHolder.signOut() and the only collector of its signOutResults.
+    val account = remember(runtime) { WebAccountOwner(runtime, uiScope) }
+    DisposableEffect(account) { onDispose { account.close() } }
+    val accountState by account.state.collectAsState()
     val pageVisible = rememberPageVisible()
     LaunchedEffect(approval, pageVisible) { if (pageVisible) approval.approvalReturned() } // Hint only, never identity.
     DisposableEffect(approval) {
@@ -93,17 +94,16 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     var contextRevision by remember(runtime) { mutableLongStateOf(0L) }
     LaunchedEffect(runtime) { runtime.contextInvalidations.collect { contextRevision++ } }
     var trailer by remember { mutableStateOf<Triple<WebEntry, List<Video>, Video>?>(null) }
-    var notice by remember { mutableStateOf<WebUnavailableNotice?>(null) }
-    LaunchedEffect(entry) {
-        if (trailer?.first !== entry) trailer = null
-        if (notice?.entry !== entry) notice = null
-    }
+    LaunchedEffect(entry) { if (trailer?.first !== entry) trailer = null }
     val shownTrailer = trailer?.takeIf { it.first === entry }
     val trailerOpen = shownTrailer != null
-    // The trailer is the web Player: the rate prompt waits (holder) while it is up.
-    LaunchedEffect(libraryActions, trailerOpen) { libraryActions.setPlayerActive(trailerOpen) }
+    // The trailer is the web Player: the rate prompt and import offers wait (holders) while it is up.
+    LaunchedEffect(libraryActions, account, trailerOpen) {
+        libraryActions.setPlayerActive(trailerOpen)
+        account.setPlayerActive(trailerOpen)
+    }
     val ratePrompt by libraryActions.ratePrompt.collectAsState(null)
-    val shownNotice = notice?.takeIf { it.entry === entry }
+    val accountDialog = accountState.signOut != WebSignOutPhase.Closed || accountState.importPrompt != null || accountState.importNotice != null
     val storage by runtime.storageFailure.collectAsState()
     val settingsState by runtime.settingsHolder.state.collectAsState()
     val settings = settingsState?.settings
@@ -175,24 +175,19 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                                 { id -> navigation.navigate(WebRoute.Detail("tv", id)) }, { id, number -> navigation.navigate(WebRoute.Season(id, number)) })
                             is WebRoute.Library -> WebLibrary(entry, runtime, libraryResultIdentity, libraryResultPage) { navigation.navigate(it) }
                             WebRoute.Settings -> if (settingsRepository == null) WebPlaceholder(route, navigation::navigate)
-                            else WebSettings(entry, settingsRepository, runtime, approval::show,
-                                onSignOut = { account -> notice = WebUnavailableNotice(entry, "Sign out isn't available yet",
-                                    "Signing out of the web app is not available in this build. You are still signed in as ${account.displayName.ifBlank { "your account" }}. Nothing was changed.") },
-                                onImport = { notice = WebUnavailableNotice(entry, "Import isn't available yet",
-                                    "Importing your guest library is not available in this build. Nothing was imported or changed.") })
+                            // WebSettingsOwner passes the authoritative runtime Ready.session (never settingsHolder/auth state).
+                            else WebSettings(entry, settingsRepository, runtime, approval::show, onSignOut = account::startSignOut, onImport = account::startImport)
                             else -> WebPlaceholder(route, navigation::navigate)
                         }
                     }
                 }
-                // One root dialog at a time: the rate dialog is never composed with the trailer; approval waits behind both.
-                // shortcut: rate focus returns to the header logo; Detail does not expose its Rate button's requester.
+                // One root dialog at a time: trailer, then account (sign-out/import), then rate, then approval.
+                // shortcut: rate/account focus returns to the header logo; Detail/Settings do not expose their trigger requesters.
                 if (shownTrailer != null) key(entry, shownTrailer.third) {
                     WebTrailerDialog(shownTrailer.second, shownTrailer.third, autoplay = false, onClose = { trailer = null }, restoreFocus = homeFocus, host = trailerHost)
-                } else if (shownNotice != null) {
-                    CvDialog(onDismissRequest = { notice = null }, title = shownNotice.title, restoreFocus = homeFocus, modifier = Modifier.testTag("web-unavailable-notice")) {
-                        Text(shownNotice.body, Modifier.padding(top = 12.dp))
-                        PillButton("OK", { notice = null }, Modifier.padding(top = 16.dp))
-                    }
+                } else if (accountDialog) {
+                    WebSignOutDialog(account, homeFocus)
+                    WebImportDialog(account, homeFocus) // Hides itself while the sign-out dialog is open.
                 } else if (ratePrompt != null) WebRateDialog(libraryActions, homeFocus)
                 else WebApprovalDialog(approval, signInFocus)
             }

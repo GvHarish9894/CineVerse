@@ -185,33 +185,6 @@ class WebRootTest {
         } finally { f.close() }
     }
 
-    @Test fun signedInSettingsAccountActionsOpenHonestNoticesWithoutRuntimeOrAuthCalls() = runComposeUiTest {
-        val f = Fixture(signedIn = true)
-        val history = FakeHistory("/settings")
-        try {
-            root(f, history)
-            exists("web-settings")
-            val signed = f.runtime.session.value
-            assertNotNull((signed as WebSessionState.Ready).session)
-            val requests = f.http.size
-            onNodeWithText("Sign out").performClick()
-            exists("web-unavailable-notice")
-            onNodeWithText("Sign out isn't available yet").assertExists()
-            onNodeWithText("Signing out of the web app is not available in this build. You are still signed in as Fixture viewer. Nothing was changed.").assertExists()
-            onNodeWithText("OK").performClick()
-            onNodeWithTag("web-unavailable-notice").assertDoesNotExist()
-            onNodeWithText("Import guest library").performClick()
-            exists("web-unavailable-notice")
-            onNodeWithText("Import isn't available yet").assertExists()
-            onNodeWithText("Importing your guest library is not available in this build. Nothing was imported or changed.").assertExists()
-            onNodeWithText("OK").performClick()
-            onNodeWithTag("web-unavailable-notice").assertDoesNotExist()
-            assertEquals(requests, f.http.size)
-            assertEquals(signed, f.runtime.session.value)
-            assertNull(f.runtime.storageFailure.value)
-        } finally { f.close() }
-    }
-
     @Test fun detailPlayTrailerOpensExactlyOneDialogAndEntryChangeRemovesTheFrame() = runComposeUiTest {
         val f = Fixture()
         val history = FakeHistory("/movie/1")
