@@ -176,8 +176,8 @@ class WebRootTest {
             waitUntil(timeoutMillis = 10_000) { "movie:1" in f.calls }
             onNodeWithText("Play trailer").assertExists()
             // Unmasked: the verified guest's origin-tagged snapshot matches the rendered Ready(null), so actions are live (none clicked).
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
-            onNodeWithText("Add to watchlist").assertIsEnabled()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithContentDescription("Add to watchlist").assertIsEnabled()
             go(history, "/person/1")
             exists("web-person")
             waitUntil(timeoutMillis = 10_000) { "person:1" in f.calls }
@@ -205,12 +205,12 @@ class WebRootTest {
             root(f, history)
             val rendered = (f.runtime.session.value as WebSessionState.Ready).session!!
             exists("web-detail")
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
-            onNodeWithText("Add to watchlist").performClick()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithContentDescription("Add to watchlist").performClick()
             waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Synced to your TMDB account").fetchSemanticsNodes().isNotEmpty() }
             assertEquals(listOf("fixture-account#${rendered.sessionGeneration}:WATCHLIST/movie:1"), f.writes)
             onNodeWithText("Added “Root film” to Watchlist").assertExists()
-            onNodeWithText("In watchlist").assertExists()
+            onNodeWithContentDescription("In watchlist").assertExists()
         } finally { f.close() }
     }
 
@@ -223,8 +223,8 @@ class WebRootTest {
             root(f, history)
             val rendered = (f.runtime.session.value as WebSessionState.Ready).session!!
             exists("web-detail")
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rate").fetchSemanticsNodes().isNotEmpty() }
-            onNodeWithText("Rate").performClick()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Rate").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithContentDescription("Rate").performClick()
             exists("web-rate-dialog")
             onNodeWithTag("web-rate-stars").performSemanticsAction(SemanticsActions.SetProgress) { it(8f) }
             onNodeWithText("Submit rating").performClick()
@@ -238,11 +238,11 @@ class WebRootTest {
         try {
             root(f, history)
             exists("web-detail")
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rate").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Rate").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText("Play trailer").performClick()
             exists("web-trailer-dialog")
             // The Detail button stays in the tree behind the trailer modal; its click action reaches openRate.
-            onNodeWithText("Rate").performSemanticsAction(SemanticsActions.OnClick)
+            onNodeWithContentDescription("Rate").performSemanticsAction(SemanticsActions.OnClick)
             onNodeWithTag("web-rate-dialog").assertDoesNotExist()
             onNodeWithTag("web-trailer-dialog").assertExists()
             assertEquals(emptyList(), f.writes)
@@ -256,12 +256,12 @@ class WebRootTest {
             root(f, history)
             val rendered = (f.runtime.session.value as WebSessionState.Ready).session!!
             exists("web-detail")
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
             f.sessionGate = CompletableDeferred()
             runOnIdle { f.runtime.revalidateSession() } // Checking: the repository still publishes the account-origin snapshot.
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Watchlist · unknown").fetchSemanticsNodes().isNotEmpty() }
-            onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
-            onNodeWithText("Rating · unknown").assertIsNotEnabled()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Watchlist · unknown").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithContentDescription("Watchlist · unknown").assertIsNotEnabled()
+            onNodeWithContentDescription("Rating · unknown").assertIsNotEnabled()
             var snapshot: LibraryStateSnapshot? = null
             val read = CoroutineScope(Dispatchers.Unconfined).launch {
                 snapshot = f.runtime.libraryStateWithOrigin(MediaRef(MediaType.Movie, 1)).first { it.sourceIdentityKnown }
@@ -270,7 +270,7 @@ class WebRootTest {
             read.cancel()
             assertEquals(rendered, snapshot!!.sourceIdentity) // Known account data, masked only because the render is not Ready.
             runOnIdle { f.sessionGate!!.complete(Unit) }
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
             assertEquals(emptyList(), f.writes)
         } finally { f.close() }
     }
