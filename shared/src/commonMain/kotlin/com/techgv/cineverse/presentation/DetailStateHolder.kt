@@ -127,7 +127,7 @@ class DetailStateHolder(
         verifiedTuple = null
         readsEnabled = true
         oldReader?.cancel()
-        _state.update { if (readerCurrent(epoch)) it.copy(settingsRead = DetailSettingsRead.Unknown) else it }
+        _state.update { if (readerCurrent(epoch)) it.copy(settingsRead = DetailSettingsRead.Unknown, request = null) else it }
         // State observers may synchronously cancel or retry during publication.
         if (!readerCurrent(epoch)) return
         val job = scope.launch(start = CoroutineStart.LAZY) {
