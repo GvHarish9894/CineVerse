@@ -1,10 +1,14 @@
 package com.techgv.cineverse.ui.web
 
+import com.techgv.cineverse.data.settings.Settings
+import com.techgv.cineverse.data.storage.*
 import com.techgv.cineverse.data.tmdb.*
-
 import com.techgv.cineverse.domain.MediaType
+import com.techgv.cineverse.util.GenerationCounter
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 
-/** Base for test fakes: every [TmdbApi] call the fake does not override fails loudly (the JVM tests use a Proxy). */
+/** Unexpected endpoints fail loudly; no transport or network is installed. */
 internal open class WebSeasonUnusedApi : TmdbApi {
     private fun unused(name: String): Nothing = throw UnsupportedOperationException("TmdbApi.$name not faked")
 
@@ -37,18 +41,18 @@ internal open class WebSeasonUnusedApi : TmdbApi {
 }
 
 internal class WebSeasonFake {
-    val generation = com.techgv.cineverse.util.GenerationCounter()
-    val preferences = kotlinx.coroutines.flow.MutableStateFlow(com.techgv.cineverse.data.settings.Settings())
-    val storage = kotlinx.coroutines.flow.MutableStateFlow<com.techgv.cineverse.data.storage.BrowserStorageFailure?>(null)
-    val invalidations = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    val generation = GenerationCounter()
+    val preferences = MutableStateFlow(Settings())
+    val storage = MutableStateFlow<BrowserStorageFailure?>(null)
+    val invalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
     val calls = mutableListOf<String>()
     val destinations = mutableListOf<WebRoute>()
-    val reports = mutableListOf<com.techgv.cineverse.data.storage.StorageException>()
+    val reports = mutableListOf<StorageException>()
     var upstreamRetries = 0
     var subscriptions = 0
     var readFailure = false
-    var showGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
-    var episodeGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    var showGate: CompletableDeferred<Unit>? = null
+    var episodeGate: CompletableDeferred<Unit>? = null
     var stubborn = false
     var showError: TmdbError? = null
     var episodeError: TmdbError? = null
@@ -63,7 +67,7 @@ internal class WebSeasonFake {
             calls += "show:$id:$language"
             val result = show
             val gate = showGate
-            if (stubborn) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { gate?.await() } else gate?.await()
+            if (stubborn) withContext(NonCancellable) { gate?.await() } else gate?.await()
             showError?.let { throw TmdbException(it) }
             return result
         }
@@ -71,24 +75,23 @@ internal class WebSeasonFake {
             calls += "season:$seriesId:$seasonNumber:$language"
             val result = season
             val gate = episodeGate
-            if (stubborn) kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { gate?.await() } else gate?.await()
+            if (stubborn) withContext(NonCancellable) { gate?.await() } else gate?.await()
             episodeError?.let { throw TmdbException(it) }
             return result
         }
     }
     val catalog = CatalogRepository(api, generation, { preferences.value })
-    val raw = kotlinx.coroutines.flow.flow {
+    val raw: Flow<Settings> = flow {
         subscriptions++
-        if (readFailure) throw com.techgv.cineverse.data.storage.BrowserStorageException(com.techgv.cineverse.data.storage.BrowserStorageFailure.Corrupt)
-        emitAllPreferences()
-    }
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<com.techgv.cineverse.data.settings.Settings>.emitAllPreferences() {
-        preferences.collect { emit(it) }
+        preferences.collect {
+            if (readFailure) throw BrowserStorageException(BrowserStorageFailure.Corrupt)
+            emit(it)
+        }
     }
     fun entry(number: Int = 7, values: Map<String, String> = emptyMap()) = WebEntry(WebRoute.Season(7, number), values.toMutableMap())
-    fun owner(scope: kotlinx.coroutines.CoroutineScope, entry: WebEntry = entry(),
+    fun owner(scope: CoroutineScope, entry: WebEntry = entry(),
               retryUpstream: () -> Unit = { upstreamRetries++; storage.value = null },
-              report: (com.techgv.cineverse.data.storage.StorageException) -> Unit = { reports += it }) =
+              report: (StorageException) -> Unit = { reports += it }) =
         WebSeasonOwner(entry, catalog, raw, storage, generation, invalidations, scope, retryUpstream, report,
             { destinations += WebRoute.Home }, { destinations += WebRoute.Detail("tv", it) },
             { id, number -> destinations += WebRoute.Season(id, number) })

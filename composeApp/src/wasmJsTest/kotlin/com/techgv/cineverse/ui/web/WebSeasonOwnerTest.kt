@@ -68,6 +68,13 @@ class WebSeasonOwnerTest {
         val owner = fake.owner(backgroundScope)
         runCurrent()
         val original = owner.state.value.context
+        fake.readFailure = true
+        fake.preferences.value = Settings(sounds = true)
+        runCurrent()
+        assertIs<WebSeasonReader.Failed>(owner.state.value.reader)
+        assertSame(original, owner.state.value.retainedSeason?.context)
+        fake.readFailure = false
+        fake.preferences.value = Settings()
         val observed = mutableListOf<WebSeasonState>()
         val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { owner.state.collect { observed += it } }
         fake.catalog.onContentSettingsChanged()
@@ -98,6 +105,31 @@ class WebSeasonOwnerTest {
         assertTrue(inactive.calls.isEmpty())
     }
 
+    @Test fun queuedRawSubscriptionRechecksActualBlockedStatusBeforeReading() = runTest {
+        val fake = WebSeasonFake()
+        val owner = fake.owner(backgroundScope)
+        fake.storage.value = BrowserStorageFailure.Blocked
+        runCurrent()
+        assertEquals(0, fake.subscriptions)
+        assertTrue(fake.calls.isEmpty())
+        owner.close()
+    }
+
+    @Test fun holderForwardingRechecksActualStorageAfterConstructionBeforeIo() = runTest {
+        val fake = WebSeasonFake()
+        val owner = fake.owner(backgroundScope)
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            owner.state.collect {
+                if (it.current?.show == SectionState.Loading) fake.storage.value = BrowserStorageFailure.Blocked
+            }
+        }
+        runCurrent()
+        assertTrue(fake.calls.isEmpty())
+        assertIs<WebSeasonReader.Failed>(owner.state.value.reader)
+        observer.cancel()
+        owner.close()
+    }
+
     @Test fun immutableSaverInputAndLateShowWriteCannotChangeLiveHistory() = runTest {
         val fake = WebSeasonFake().apply { stubborn = true; showGate = CompletableDeferred() }
         val entry = fake.entry(values = mapOf("selectedSeason" to "7"))
@@ -115,6 +147,48 @@ class WebSeasonOwnerTest {
         assertTrue(fake.calls.none { it.startsWith("season:7:0:") })
         assertNull(owner.state.value.context)
         assertNotNull(old)
+        owner.close()
+    }
+
+    @Test fun currentHolderReadsItsValidatedSnapshotRatherThanLaterLiveSelection() = runTest {
+        val fake = WebSeasonFake().apply { showGate = CompletableDeferred() }
+        val entry = fake.entry(values = mapOf("selectedSeason" to "7"))
+        val owner = fake.owner(backgroundScope, entry)
+        runCurrent()
+        entry.putInt("selectedSeason", 0)
+        fake.showGate!!.complete(Unit)
+        runCurrent()
+        assertEquals(7, owner.state.value.current!!.selected)
+        assertEquals("7", entry.getString("selectedSeason"))
+        assertEquals(listOf("show:7:en-US", "season:7:7:en-US"), fake.calls)
+        owner.close()
+    }
+
+    @Test fun parentOnlyCancellationRejectsLateSaverWritesAndCatalogResults() = runTest {
+        val fake = WebSeasonFake().apply { stubborn = true; showGate = CompletableDeferred() }
+        val parent = Job(coroutineContext[Job])
+        val entry = fake.entry()
+        val owner = fake.owner(CoroutineScope(coroutineContext + parent), entry)
+        runCurrent()
+        parent.cancel()
+        entry.putInt("selectedSeason", 0)
+        val saved = entry.encoded()
+        fake.showGate!!.complete(Unit)
+        runCurrent()
+        assertEquals(saved, entry.encoded())
+        assertNull(owner.state.value.current)
+        owner.back()
+        assertTrue(fake.destinations.isEmpty())
+        owner.close()
+    }
+
+    @Test fun unsupportedReaderTupleIsTypedCorruptWithoutCatalogIo() = runTest {
+        val fake = WebSeasonFake().apply { preferences.value = Settings(language = "fr-FR") }
+        val owner = fake.owner(backgroundScope)
+        runCurrent()
+        assertEquals(WebSeasonReader.Failed(BrowserStorageFailure.Corrupt), owner.state.value.reader)
+        assertTrue(fake.calls.isEmpty())
+        assertIs<BrowserStorageException>(fake.reports.single())
         owner.close()
     }
 

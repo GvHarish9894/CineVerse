@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
@@ -169,6 +170,50 @@ class WebSeasonUiTest {
         runOnIdle { assertEquals(8, entry.getInt("season.index")); owner.close() }
     }
 
+    @Test fun initialShowErrorPreservesScrollTargetUntilActualRetryBody() = runComposeUiTest {
+        val fake = WebSeasonFake().apply {
+            showError = TmdbError.Network
+            season = season.copy(episodes = (1..14).map { EpisodeDto(it, it, 7, "Episode $it") })
+        }
+        val entry = fake.entry(values = mapOf("season.index" to "4", "season.offset" to "37"))
+        lateinit var owner: WebSeasonOwner
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            val scope = rememberCoroutineScope()
+            owner = remember { fake.owner(scope, entry) }
+            val state by owner.state.collectAsState()
+            WebSeasonContent(owner, state, today)
+        }
+        waitUntil { owner.state.value.current?.show is SectionState.Error }
+        onNodeWithText("Show: Offline.").assertExists()
+        runOnIdle {
+            assertEquals("4", entry.getString("season.index"))
+            assertEquals("37", entry.getString("season.offset"))
+            fake.showError = null
+        }
+        onNodeWithText("Retry").performClick()
+        waitUntil { owner.state.value.bodyReady }
+        waitUntil { entry.getInt("season.index") == 4 && entry.getInt("season.offset") == 37 }
+        onNodeWithTag("season-7-episode-4").assertIsDisplayed()
+        runOnIdle { owner.close() }
+    }
+
+    @Test fun realEmptyEpisodeListIsNotUnavailableOrFabricatedEpisode() = runComposeUiTest {
+        val fake = WebSeasonFake().apply { season = season.copy(episodes = emptyList()) }
+        lateinit var owner: WebSeasonOwner
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            val scope = rememberCoroutineScope()
+            owner = remember { fake.owner(scope, fake.entry(values = mapOf("openEpisode" to "4"))) }
+            val state by owner.state.collectAsState()
+            WebSeasonContent(owner, state, today)
+        }
+        waitUntil { owner.state.value.bodyReady }
+        onNodeWithTag("web-season").performScrollToNode(hasText("No episodes were returned for this season."))
+        onNodeWithText("No episodes were returned for this season.").assertExists()
+        onNodeWithText("Episode details · 4").assertDoesNotExist()
+        onNodeWithText("Requested season is unavailable.").assertDoesNotExist()
+        runOnIdle { owner.close() }
+    }
+
     @Test fun keyboardOpensActualDetailsEscapeClosesAndReturnsFocus() = runComposeUiTest {
         val fake = WebSeasonFake()
         lateinit var owner: WebSeasonOwner
@@ -180,7 +225,7 @@ class WebSeasonUiTest {
         }
         waitUntil { owner.state.value.bodyReady }
         onNodeWithTag("web-season").performScrollToNode(hasTestTag("season-7-episode-4"))
-        onNodeWithTag("season-7-episode-4").performSemanticsAction(SemanticsActions.RequestFocus)
+        onNodeWithTag("season-7-episode-4").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         onNodeWithTag("season-7-episode-4").performKeyInput { pressKey(Key.Enter) }
         onNodeWithText("Episode details · 4").assertExists()
         onNodeWithTag("season-7-episode-4").performKeyInput { pressKey(Key.Escape) }
