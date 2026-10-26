@@ -90,7 +90,7 @@ class LibraryStateOriginTest {
     private fun Throwable.assertStorageFailure(expected: StorageException) {
         assertIs<StorageException>(this)
         // JVM coroutine stack-trace recovery may copy the exception, retaining the original as its cause.
-        assertSame(expected, generateSequence(this) { it.cause }.last())
+        assertSame(expected, generateSequence<Throwable>(this) { it.cause }.last())
     }
 
     @Test fun manuallyConstructedSnapshotsDoNotInventSourceProof() {
