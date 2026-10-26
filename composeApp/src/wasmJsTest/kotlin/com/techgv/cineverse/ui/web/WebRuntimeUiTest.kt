@@ -178,12 +178,12 @@ class WebRuntimeUiTest {
             onNodeWithTag("browse-movie:7").assertExists()
             assertTrue(f.reads.any { it.path == "/api/tmdb/movie/upcoming" })
             onNodeWithText("Action").performClick()
-            onNodeWithText("Movies · Discover").assertExists()
+            waitUntil { onAllNodes(hasTestTag("browse-count") and hasText("filtered by Action", substring = true)).fetchSemanticsNodes().isNotEmpty() }; onNode(hasText("Upcoming") and isSelectable()).assertIsNotSelected()
             waitUntil { f.reads.any { it.path == "/api/tmdb/discover/movie" && it.genres == "28" && it.sort == "popularity.desc" } }
             runOnIdle { history.back() }
-            onNodeWithText("Movies · Upcoming").assertExists()
+            onNode(hasText("Upcoming") and isSelectable()).assertIsSelected()
             runOnIdle { history.forward() }
-            onNodeWithText("Movies · Discover").assertExists()
+            onNode(hasText("Upcoming") and isSelectable()).assertIsNotSelected()
             onNodeWithText("People").performClick()
             onNodeWithTag("browse-person:42").assertExists()
             assertTrue(f.reads.any { it.path == "/api/tmdb/person/popular" })
@@ -234,7 +234,7 @@ class WebRuntimeUiTest {
             runOnIdle { f.language = "es-ES"; f.storageRevision.value++ }
             waitUntil { f.reads.any { it.path == "/api/tmdb/discover/tv" && it.language == "es-ES" && it.sort == "name.asc" } }
             assertTrue(f.generation.current > generation)
-            onNodeWithText("TV Shows · Discover").assertExists()
+            onNodeWithTag("browse-sort").assert(hasText("Title")); onAllNodes(isSelectable() and hasAnyAncestor(hasTestTag("web-browse"))).assertAll(isNotSelected())
             onNodeWithTag("browse-tv:7").assertExists()
         } finally { f.close() }
     }
@@ -275,7 +275,7 @@ class WebRuntimeUiTest {
             onNodeWithText("Retry").performClick()
             waitUntil { f.reads.count { it.page == "2" } == 2 }
             onNodeWithTag("browse-movie:8").assertExists()
-            onNodeWithText("2 titles loaded · not a total result count").assertExists()
+            onNodeWithTag("browse-count").assert(hasText("2 titles"))
         } finally { f.close() }
     }
 

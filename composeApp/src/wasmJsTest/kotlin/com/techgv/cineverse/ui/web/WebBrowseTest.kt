@@ -28,8 +28,13 @@ class WebBrowseTest {
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             WebBrowseContent(entry("/movies?list=upcoming"), state(), { destination = it }, {}, {}, {}, {}, null)
         }
-        onNodeWithText("Movies · Upcoming").assertExists()
-        onNodeWithText("1 titles loaded · not a total result count").assertExists()
+        onNodeWithText("Movies").assertExists()
+        onNodeWithText("What people are watching on TMDB this week").assertExists()
+        onNodeWithText("Upcoming").assertIsSelected()
+        // One page read and more exist: the loaded count is never presented as a total.
+        onNodeWithTag("browse-count").assert(hasText("1+ titles"))
+        onNodeWithText("loaded", substring = true).assertDoesNotExist()
+        onNodeWithText("Curated TMDB list", substring = true).assertDoesNotExist()
         onNodeWithTag("browse-movie:7").performClick()
         assertEquals(WebRoute.Detail("movie", 7), destination)
         onNodeWithText("Add to watchlist").assertDoesNotExist()
@@ -46,14 +51,15 @@ class WebBrowseTest {
         }
         onNodeWithText("Action").performClick()
         assertEquals(WebRoute.Browse("movie", "discover", genres = listOf(28)), next)
-        onNodeWithText("Movies · Discover").assertExists()
-        onNodeWithText("Generic Discover results", substring = true).assertExists()
-        onNodeWithText("Movies · Upcoming").assertDoesNotExist()
+        onNodeWithText("Action").assertIsSelected()
+        onNodeWithText("Upcoming").assertIsNotSelected()
+        onNodeWithTag("browse-count").assert(hasText("1+ titles · filtered by Action"))
         onNodeWithText("Clear genres").performClick()
         assertEquals(WebRoute.Browse("movie", "discover"), next)
         onNodeWithText("Upcoming").performClick()
         assertEquals(WebRoute.Browse("movie", "upcoming"), next)
-        onNodeWithText("Movies · Upcoming").assertExists()
+        onNodeWithText("Upcoming").assertIsSelected()
+        onNodeWithText("Clear genres").assertDoesNotExist()
     }
 
     @Test fun sortPopupUsesMediaSpecificDiscoverMappingEvenForPopularity() = runComposeUiTest {
@@ -62,11 +68,14 @@ class WebBrowseTest {
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             WebBrowseContent(current, state(BrowseSelection.Tv(TvList.OnTheAir)), { next = it }, {}, {}, {}, {}, null)
         }
-        onNodeWithText("Sort: Popularity ▾").performClick()
-        onNodeWithText("Release date").performClick()
+        onNodeWithText("SORT").assertExists()
+        onNodeWithTag("browse-sort").assert(hasText("Popularity"))
+        onNodeWithText("▾", substring = true).assertDoesNotExist()
+        onNodeWithTag("browse-sort").performClick()
+        onNode(hasText("Release date") and hasAnyAncestor(isPopup())).performClick()
         assertEquals(WebRoute.Browse("tv", "discover", "first_air_date.desc"), next)
-        onNodeWithText("Sort: Popularity ▾").performClick()
-        onNodeWithText("Popularity", useUnmergedTree = true).performClick()
+        onNodeWithTag("browse-sort").performClick()
+        onNode(hasText("Popularity") and hasAnyAncestor(isPopup())).performClick()
         assertEquals(WebRoute.Browse("tv", "discover"), next)
     }
 
@@ -79,9 +88,35 @@ class WebBrowseTest {
         }
         onNodeWithText("Popular people").assertExists()
         onNodeWithText("Loaded film").assertExists()
-        onNodeWithText("Discover filters").assertDoesNotExist()
+        onNodeWithText("SORT").assertDoesNotExist()
+        onNodeWithText("GENRES").assertDoesNotExist()
+        onNodeWithTag("browse-count").assert(hasText("1 person"))
         onNodeWithTag("browse-person:42").performClick()
         assertEquals(WebRoute.Person(42), next)
+    }
+
+    @Test fun everyCardHasARingNrWithoutVotesAndLastPageCountIsExact() = runComposeUiTest {
+        val unrated = Hero.OfTitle(title.copy(ref = MediaRef(MediaType.Movie, 8), voteAverage = 7.0, voteCount = 0))
+        val read = state().copy(grid = SectionState.Content(PagedItems(listOf(Hero.OfTitle(title), unrated), 1, false)))
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            WebBrowseContent(entry("/movies?list=upcoming"), read, {}, {}, {}, {}, {}, null)
+        }
+        onNodeWithTag("browse-count").assert(hasText("2 titles"))
+        onNodeWithContentDescription("User score 81 percent", useUnmergedTree = true).assertExists()
+        onNodeWithContentDescription("Not rated", useUnmergedTree = true).assertExists()
+        onNodeWithContentDescription("User score 70 percent", useUnmergedTree = true).assertDoesNotExist()
+        onAllNodesWithText("Jan 1, 2026").assertCountEquals(2)
+        onNodeWithText("2026-01-01").assertDoesNotExist()
+    }
+
+    @Test fun filtersThatRemoveEverythingShowTheEmptyStateWithoutACount() = runComposeUiTest {
+        val empty = state(BrowseSelection.Discover(MediaType.Movie, listOf(28))).copy(grid = SectionState.Empty)
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            WebBrowseContent(entry("/movies?list=discover&genres=28"), empty, {}, {}, {}, {}, {}, null)
+        }
+        onNodeWithText("No titles match").assertExists()
+        onNodeWithTag("browse-count").assertDoesNotExist()
+        onNodeWithText("Clear genres").assertExists()
     }
 
     @Test fun retainedPageErrorHasOnlyExplicitRetryAndDoesNotRequestMore() = runComposeUiTest {

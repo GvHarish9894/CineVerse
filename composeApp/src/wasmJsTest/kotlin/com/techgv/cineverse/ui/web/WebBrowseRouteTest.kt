@@ -19,9 +19,8 @@ class WebBrowseRouteTest {
     @Test fun legacyFilteredCuratedUrlsAreTruthfullyGenericDiscover() {
         val upcoming = parseWebRoute("/movies?list=upcoming&genres=28&sort=vote_average.desc")
         assertEquals(BrowseSelection.Discover(MediaType.Movie, listOf(28), DiscoverSort.Rating), upcoming.browseSelection())
-        assertEquals("Movies · Discover", upcoming.browseSelection().sourceLabel())
         val onAir = parseWebRoute("/tv?list=on_the_air&genres=18")
-        assertEquals("TV Shows · Discover", onAir.browseSelection().sourceLabel())
+        assertEquals(BrowseSelection.Discover(MediaType.Tv, listOf(18)), onAir.browseSelection())
         assertEquals(BrowseSelection.Discover(MediaType.Tv), parseWebRoute("/tv?list=discover").browseSelection())
         assertEquals(BrowseSelection.Discover(MediaType.Movie), parseWebRoute("/movies?list=upcoming&sort=popularity.desc").browseSelection())
     }
