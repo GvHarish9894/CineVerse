@@ -67,7 +67,8 @@ fun WebSettings(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val gutter = contentGutter(ShellStyle.Web, maxWidth)
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(340.dp),
+                // Kit minmax(340) → 300: three panels side by side from a 1024 window, so Account stays above the fold.
+                columns = GridCells.Adaptive(300.dp),
                 modifier = Modifier.fillMaxSize().testTag("web-settings"),
                 contentPadding = PaddingValues(start = gutter, end = gutter, bottom = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
