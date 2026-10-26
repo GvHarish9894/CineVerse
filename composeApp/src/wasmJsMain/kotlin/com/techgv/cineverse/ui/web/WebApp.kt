@@ -33,6 +33,7 @@ import com.techgv.cineverse.ui.theme.*
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.Flow
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.settings.SettingsRepository
@@ -85,13 +86,13 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     val contextInvalidations = runtime.contextInvalidations
     var contextRevision by remember(runtime) { mutableLongStateOf(0L) }
     LaunchedEffect(runtime) { runtime.contextInvalidations.collect { contextRevision++ } }
-    var trailer by remember { mutableStateOf<Pair<WebEntry, Video>?>(null) }
+    var trailer by remember { mutableStateOf<Triple<WebEntry, List<Video>, Video>?>(null) }
     var notice by remember { mutableStateOf<WebUnavailableNotice?>(null) }
     LaunchedEffect(entry) {
         if (trailer?.first !== entry) trailer = null
         if (notice?.entry !== entry) notice = null
     }
-    val shownTrailer = trailer?.takeIf { it.first === entry }?.second
+    val shownTrailer = trailer?.takeIf { it.first === entry }
     val shownNotice = notice?.takeIf { it.entry === entry }
     val storage by runtime.storageFailure.collectAsState()
     val settingsState by runtime.settingsHolder.state.collectAsState()
@@ -152,8 +153,9 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                             }, navigation::navigate) { mainSearchFocused = it }
                         } else when (val route = entry.route) {
                             is WebRoute.Detail -> WebDetail(entry, catalog, generation, browseSettings, contextInvalidations, runtime,
-                                library = null, navigate = { navigation.navigate(it) }, back = historyBack,
-                                playTrailer = { _, video -> trailer = entry to video })
+                                // Masked: the integration owner supplies runtime stateWithOrigin when it unmasks Detail.
+                                library = null, accountState = { emptyFlow() }, navigate = { navigation.navigate(it) }, back = historyBack,
+                                playTrailer = { _, videos, video -> trailer = Triple(entry, videos, video) })
                             is WebRoute.Person -> WebPerson(entry, catalog, generation, browseSettings, runtime.storageFailure, contextRevision,
                                 runtime::retryStorage, runtime::reportStorageFailure,
                                 { ref -> navigation.navigate(WebRoute.Detail(ref.mediaType.path, ref.id)) }, historyBack)
@@ -172,8 +174,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                     }
                 }
                 // One root dialog at a time; no rate dialog exists yet, and approval waits while a trailer plays.
-                if (shownTrailer != null) key(entry, shownTrailer) {
-                    WebTrailerDialog(listOf(shownTrailer), shownTrailer, autoplay = false, onClose = { trailer = null }, restoreFocus = homeFocus, host = trailerHost)
+                if (shownTrailer != null) key(entry, shownTrailer.third) {
+                    WebTrailerDialog(shownTrailer.second, shownTrailer.third, autoplay = false, onClose = { trailer = null }, restoreFocus = homeFocus, host = trailerHost)
                 } else if (shownNotice != null) {
                     CvDialog(onDismissRequest = { notice = null }, title = shownNotice.title, restoreFocus = homeFocus, modifier = Modifier.testTag("web-unavailable-notice")) {
                         Text(shownNotice.body, Modifier.padding(top = 12.dp))

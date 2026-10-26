@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.techgv.cineverse.data.library.LibraryStateSnapshot
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.storage.BrowserStorageFailure
 import com.techgv.cineverse.data.tmdb.CatalogRepository
@@ -30,11 +31,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
- * Explicit component seam; the root supplies raw (not defaulted/stateIn) settings, its runtime, optional
- * identity-bound LibraryActions, real navigation/back, and a trailer controller accepting the real Title/Video.
- * The root must supply reliable contextInvalidations for actual generation/entry/content-context events (not
- * a fake continuous GenerationCounter flow). Clicks independently recheck current authority. LibraryActions
- * still require separately certified private account-source binding; catalog metadata cannot certify it.
+ * Explicit component seam; the root supplies raw (not defaulted/stateIn) settings, its runtime, the optional actions
+ * holder (identity forwarded by the root), a stable [accountState] producer of origin-carrying snapshots (repository
+ * stateWithOrigin), real navigation/back, and a trailer controller accepting the Title, the full validated video
+ * list and the clicked video. The root must supply reliable contextInvalidations for actual generation/entry/
+ * content-context events (not a fake continuous GenerationCounter flow). Clicks independently recheck current
+ * authority; account state is shown only for a snapshot whose source identity equals the rendered session.
  * No dialog/player/account orchestration is owned here.
  */
 @Composable
@@ -45,10 +47,11 @@ fun WebDetail(
     settings: Flow<Settings>,
     contextInvalidations: Flow<Unit>,
     runtime: WebRuntime,
-    library: LibraryActions?,
+    library: LibraryActionsStateHolder?,
+    accountState: (MediaRef) -> Flow<LibraryStateSnapshot>,
     navigate: (WebRoute) -> Unit,
     back: () -> Unit,
-    playTrailer: (Title, Video) -> Unit,
+    playTrailer: (Title, List<Video>, Video) -> Unit,
 ) {
     val valid = remember(entry) {
         try { validateWebDetailEntry(entry); true } catch (_: IllegalArgumentException) { false }
@@ -61,20 +64,20 @@ fun WebDetail(
         return
     }
     val scope = rememberCoroutineScope()
-    val owner = remember(entry, catalog, generation, settings, runtime, library) {
+    val owner = remember(entry, catalog, generation, settings, runtime, library, accountState) {
         WebDetailOwner(entry, catalog, generation, settings, runtime.session, runtime.storageFailure,
-            runtime::retryStorage, runtime::reportStorageFailure, library, scope)
+            runtime::retryStorage, runtime::reportStorageFailure, library, accountState, scope)
     }
     DisposableEffect(owner) { onDispose { owner.close() } }
     LaunchedEffect(owner, contextInvalidations) { contextInvalidations.collect { owner.contextChanged() } }
     val state by owner.state.collectAsState()
-    val account by owner.holder.accountState.collectAsState()
+    val account by owner.account.collectAsState()
     val session by runtime.session.collectAsState()
     val storage by runtime.storageFailure.collectAsState()
-    WebDetailContent(entry, state, account, session, library != null, storage, owner::retryReads,
-        owner::retryDetail, owner::act,
+    WebDetailContent(entry, state, account.webDetailAccount(session as? WebSessionState.Ready), session, library != null, storage,
+        owner::retryReads, owner::retryDetail, owner::act,
         { route -> owner.browse { navigate(route) } }, { owner.browse(back) },
-        { title, video -> owner.browse { playTrailer(title, video) } })
+        { title, videos, video -> owner.browse { playTrailer(title, videos, video) } })
 }
 
 @Composable
@@ -90,7 +93,7 @@ internal fun WebDetailContent(
     act: (LibraryKind, DetailReadContext?, WebSessionState.Ready?) -> Unit,
     navigate: (WebRoute) -> Unit,
     back: () -> Unit,
-    playTrailer: (Title, Video) -> Unit,
+    playTrailer: (Title, List<Video>, Video) -> Unit,
 ) {
     val validated = remember(entry) { validateWebDetailEntry(entry) }
     val scroll = remember(entry) { LazyListState() }
@@ -154,7 +157,7 @@ internal fun WebDetailContent(
                 ScrollRow("Videos") {
                     items(videos, key = { it.key }) { video ->
                         VideoCard(video.name.ifBlank { video.type }, video.type.takeIf { it.isNotBlank() }, detailPalette,
-                            { playTrailer(detail.toTitle(), video) }, Modifier.testTag("detail-video-${video.key}"),
+                            { playTrailer(detail.toTitle(), videos, video) }, Modifier.testTag("detail-video-${video.key}"),
                             webImage(detail.backdropPath, "w780"))
                     }
                 }
@@ -180,7 +183,7 @@ internal fun WebDetailContent(
 private val detailPalette = ArtPalette(Tokens.Colors.Accent, Tokens.Colors.Secondary)
 
 @Composable
-private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boolean, act: (LibraryKind) -> Unit, playTrailer: (Title, Video) -> Unit) {
+private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boolean, act: (LibraryKind) -> Unit, playTrailer: (Title, List<Video>, Video) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val phone = maxWidth <= 640.dp
         Box(Modifier.fillMaxWidth()) {
@@ -204,7 +207,8 @@ private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boo
                             { act(LibraryKind.FAVOURITE) }, enabled = actionable && account.canToggle(LibraryKind.FAVOURITE), variant = ButtonVariant.Ghost)
                         PillButton(if (!actionable || !account.known) "Rating · unknown" else account.rating?.let { "Rated $it" } ?: "Rate",
                             { act(LibraryKind.RATING) }, enabled = actionable && account.canToggle(LibraryKind.RATING), variant = ButtonVariant.Ghost)
-                        detail.webDetailVideos().firstOrNull()?.let { video -> PillButton("Play trailer", { playTrailer(detail.toTitle(), video) }) }
+                        val videos = detail.webDetailVideos()
+                        videos.firstOrNull()?.let { video -> PillButton("Play trailer", { playTrailer(detail.toTitle(), videos, video) }) }
                     }
                     detail.webDetailTagline()?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
                     detail.webDetailOverview()?.let {
