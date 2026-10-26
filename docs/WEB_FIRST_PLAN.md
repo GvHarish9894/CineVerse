@@ -214,6 +214,10 @@ Producer metadata comes from exact guest emission or SAME immutable AccountStore
 
 No new private-data clearance yet. Root later must correlate producer snapshot with authoritative Ready, capture expected context/session at render, update provider/collector keys on identity changes, mask unknown/mismatched origin, and preserve 401/409/ambiguous reconciliation. Existing no-op/default callbacks remain forbidden. Producer/dispatch milestones receive their own focused checks and independent review before this integration.
 
+## Captured-action lane provider interruption
+
+G9 captured writer a9c19990 stopped on provider `auth_unavailable / server_is_overloaded`; no fallback or automatic retry. C5/g9-captured-library-actions has committed tests-firsta733021c5bb59ab2d809b3038a7509088d6247e8 plus partial MODIFIED LibraryActionsStateHolder.kt/CapturedLibraryActionsTest.kt. Parent saved tracked/staged patches and untracked source archive under checkpoints/g9-captured-actions-failed-E90xlBtk/. No build lease/gates were granted to this source-only lane. Explicit operator retry needed for ONLY unfinished captured dispatch; don't redo committed tests/reset partials or rerun completed gates. Already-authorized Person gates, read-origin source and Season source are independent and may continue; no other ownership/lease changed. Private/root acceptance remains blocked.
+
 ## Execution and leases
 
 All workers/reviewers `cliproxyapi/gpt-6.1-sol` only; no provider/model/CLI/auth fallback, nested agents, new worktrees, merges/pushes by workers, credentials output/overwrite, profile access, resets/permission changes or live user data operations. Author `GvHarish9894 <hariharangv9894@gmail.com>`. Gradle `--max-workers=2`, no configure-on-demand; filters scoped per task. ANDROID_HOME=$HOME/Library/Android/sdk and DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer are normal build environment only, not device/runtime grants.
