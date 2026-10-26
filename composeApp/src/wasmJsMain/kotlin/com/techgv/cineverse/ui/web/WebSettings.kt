@@ -1,6 +1,8 @@
 package com.techgv.cineverse.ui.web
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -8,9 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.settings.HapticStrength
 import com.techgv.cineverse.data.settings.Settings
@@ -22,10 +25,10 @@ import com.techgv.cineverse.presentation.LANGUAGE_NAMES
 import com.techgv.cineverse.presentation.REGION_NAMES
 import com.techgv.cineverse.presentation.Toggle
 import com.techgv.cineverse.ui.adaptive.ProvideWindowClass
-import com.techgv.cineverse.ui.adaptive.LocalWindowClass
-import com.techgv.cineverse.ui.adaptive.WindowClass
+import com.techgv.cineverse.ui.adaptive.ShellStyle
 import com.techgv.cineverse.ui.components.*
 import com.techgv.cineverse.ui.design.Tokens
+import com.techgv.cineverse.ui.theme.bodyStyle
 
 /** Unconnected component. Host owns account dialogs and the repository/runtime identity. No saved scalars. */
 @Composable
@@ -61,17 +64,18 @@ fun WebSettings(
 ) {
     val state by owner.state.collectAsState()
     ProvideWindowClass(Modifier.fillMaxSize()) {
-        val gutter = if (LocalWindowClass.current == WindowClass.Phone) 16.dp else 32.dp
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val columnWidth = ((maxWidth - gutter * 2).coerceAtLeast(0.dp)).coerceAtMost(1320.dp)
+            val gutter = contentGutter(ShellStyle.Web, maxWidth)
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(320.dp),
-                modifier = Modifier.width(columnWidth).fillMaxHeight().align(androidx.compose.ui.Alignment.TopCenter).testTag("web-settings"),
-                contentPadding = PaddingValues(vertical = 24.dp),
+                columns = GridCells.Adaptive(340.dp),
+                modifier = Modifier.fillMaxSize().testTag("web-settings"),
+                contentPadding = PaddingValues(start = gutter, end = gutter, bottom = 48.dp),
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                item("title", span = { GridItemSpan(maxLineSpan) }) { Text("Settings", modifier = Modifier.semantics { heading() }) }
+                item("title", span = { GridItemSpan(maxLineSpan) }) {
+                    WebPageTitle("Settings", Modifier.padding(bottom = 10.dp), subtitle = "How CineVerse looks, feels and what it shows you")
+                }
                 if (storageFailure != null) item("storage", span = { GridItemSpan(maxLineSpan) }) {
                     WebStorageNotice(storageFailure, owner::retryStorage, Modifier.testTag("settings-storage-recovery"))
                 }
@@ -80,56 +84,63 @@ fun WebSettings(
                 }
                 if (state.writeFailure != null) item("write-error", span = { GridItemSpan(maxLineSpan) }) {
                     Panel(title = "Preference write failed") {
-                        Text("The edit was not confirmed. Retry reads to check stored values; the edit will not be replayed.")
-                        PillButton("Retry reads", owner::retryStorage)
-                        PillButton("Dismiss write error", owner::dismissWriteFailure, variant = ButtonVariant.Ghost)
+                        Text("The edit was not confirmed. Retry reads to check stored values; the edit will not be replayed.", style = bodyStyle(15.sp))
+                        FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            PillButton("Retry reads", owner::retryStorage, small = true)
+                            PillButton("Dismiss write error", owner::dismissWriteFailure, variant = ButtonVariant.Ghost, small = true)
+                        }
                     }
                 }
-                if (state.pendingWrites > 0) item("pending", span = { GridItemSpan(maxLineSpan) }) { Text("Preference writes in progress") }
+                if (state.pendingWrites > 0) item("pending", span = { GridItemSpan(maxLineSpan) }) { Caption("Preference writes in progress") }
                 val observed = state.settings
-                if (observed == null) item("unknown", span = { GridItemSpan(maxLineSpan) }) { Text("Preferences are unknown. Waiting for a successful read.") }
+                if (observed == null) item("unknown", span = { GridItemSpan(maxLineSpan) }) { Caption("Preferences are unknown. Waiting for a successful read.") }
                 if (observed != null) {
                     item("look") {
                         Panel(Modifier.testTag("settings-look"), "Look and feel") {
                             val editable = state.readFailure == null && storageFailure == null
                             PreferenceToggle("Ambient glow", "Colour behind pages", Toggle.Glow, observed.glow, editable, owner)
-                            PreferenceToggle("Reduce motion", "Limit interface animations", Toggle.Motion, observed.motion, editable, owner)
-                            PreferenceToggle("Haptic taps on phones", "Supported phone browsers only", Toggle.Haptics, observed.haptics, editable, owner)
-                            Text("Haptic strength · saved preference (web taps use a fixed 10 ms)")
-                            PreferenceChoices(HapticStrength.entries.map { it.name }, observed.strength.name, editable, "strength") {
-                                owner.selectStrength(HapticStrength.valueOf(it))
+                            PreferenceToggle("Reduce motion", "Limit interface animations", Toggle.Motion, observed.motion, editable, owner, divider = true)
+                            PreferenceToggle("Haptic taps on phones", "Supported phone browsers only", Toggle.Haptics, observed.haptics, editable, owner, divider = true)
+                            PreferenceBlock("Haptic strength", "Saved preference · web taps use a fixed 10 ms") {
+                                PreferenceChoices(HapticStrength.entries.map { it.name }, observed.strength.name, editable, "strength") {
+                                    owner.selectStrength(HapticStrength.valueOf(it))
+                                }
                             }
                         }
                     }
                     item("content") {
                         Panel(Modifier.testTag("settings-content"), "Content") {
                             val editable = state.readFailure == null && storageFailure == null
-                            Text("Content language · language=${observed.language}")
-                            PreferenceChoices(Settings.LANGUAGES, observed.language, editable, "language", { LANGUAGE_NAMES.getValue(it) + " · " + it }, owner::selectLanguage)
-                            Text("Region · region=${observed.region}")
-                            Text("Release dates and certifications")
-                            PreferenceChoices(Settings.REGIONS, observed.region, editable, "region", { REGION_NAMES.getValue(it) + " · " + it }, owner::selectRegion)
-                            PreferenceToggle("Include adult titles", "Search · include_adult=${observed.includeAdult}", Toggle.Adult, observed.includeAdult, editable, owner)
+                            PreferenceBlock("Content language", null, "language=${observed.language}", divider = false) {
+                                // Latin name only: the bundled fonts have no Devanagari/Tamil/Malayalam glyphs (tofu).
+                                PreferenceChoices(Settings.LANGUAGES, observed.language, editable, "language", { LANGUAGE_NAMES.getValue(it).substringAfterLast(" · ") + " · " + it }, owner::selectLanguage)
+                            }
+                            PreferenceBlock("Region", "Release dates and certifications", "region=${observed.region}") {
+                                PreferenceChoices(Settings.REGIONS, observed.region, editable, "region", { REGION_NAMES.getValue(it) + " · " + it }, owner::selectRegion)
+                            }
+                            PreferenceToggle("Include adult titles", "Search · include_adult=${observed.includeAdult}", Toggle.Adult, observed.includeAdult, editable, owner, divider = true)
                         }
                     }
                 }
                 item("account") {
                     Panel(Modifier.testTag("settings-account"), "Account") {
                         when (session) {
-                            WebSessionState.Checking -> Text("Checking account. Account actions are unavailable.")
+                            WebSessionState.Checking -> Caption("Checking account. Account actions are unavailable.")
                             is WebSessionState.Failed -> {
-                                Text("Account verification failed. Account actions are unavailable.")
-                                PillButton("Retry account check", retrySession)
+                                Caption("Account verification failed. Account actions are unavailable.")
+                                PillButton("Retry account check", retrySession, Modifier.padding(top = 14.dp), variant = ButtonVariant.Ghost, small = true)
                             }
                             is WebSessionState.Ready -> {
                                 val account = session.session
                                 if (account == null) {
-                                    Text("Guest · preferences are saved on this browser")
-                                    PillButton("Sign in", owner::signIn)
+                                    Text("Guest · preferences are saved in this browser", style = bodyStyle(15.5.sp, FontWeight.SemiBold))
+                                    PillButton("Sign in", owner::signIn, Modifier.padding(top = 14.dp), small = true)
                                 } else {
-                                    Text(account.displayName)
-                                    PillButton("Sign out", owner::signOut)
-                                    PillButton("Import guest library", owner::importLibrary, variant = ButtonVariant.Ghost)
+                                    Text("Signed in as ${account.displayName}", style = bodyStyle(15.5.sp, FontWeight.SemiBold))
+                                    FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        PillButton("Sign out", owner::signOut, variant = ButtonVariant.Ghost, small = true)
+                                        PillButton("Import guest library", owner::importLibrary, variant = ButtonVariant.Ghost, small = true)
+                                    }
                                 }
                             }
                         }
@@ -141,15 +152,35 @@ fun WebSettings(
 }
 
 @Composable
-private fun PreferenceToggle(title: String, description: String, toggle: Toggle, checked: Boolean, editable: Boolean, owner: WebSettingsOwner) {
+private fun Caption(text: String, modifier: Modifier = Modifier) =
+    Text(text, modifier, style = bodyStyle(13.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.62f))
+
+/** `.setrow` without a switch: title, optional description, the control, then the TMDB parameter as a small `.api` caption. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PreferenceBlock(title: String, description: String?, api: String? = null, divider: Boolean = true, control: @Composable () -> Unit) {
+    if (divider) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.07f)))
+    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column {
+            Text(title, style = bodyStyle(15.5.sp, FontWeight.SemiBold))
+            if (description != null) Caption(description, Modifier.padding(top = 2.dp))
+        }
+        control()
+        if (api != null) Text(api, style = bodyStyle(12.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.8f),
+            modifier = Modifier.background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp))
+    }
+}
+
+@Composable
+private fun PreferenceToggle(title: String, description: String, toggle: Toggle, checked: Boolean, editable: Boolean, owner: WebSettingsOwner, divider: Boolean = false) {
     if (editable) SettingRow(title, description, when (toggle) {
         Toggle.Glow -> CvIcons.Glow
         Toggle.Motion -> CvIcons.Motion
         Toggle.Haptics -> CvIcons.Vibrate
         Toggle.Adult, Toggle.Sounds -> CvIcons.Globe
     }, Tokens.Colors.Accent,
-        SettingTrailing.Toggle(checked) { owner.setToggle(toggle, it) }, Modifier.testTag("settings-toggle-${toggle.name}"))
-    else Text("$title · ${if (checked) "On" else "Off"} · editing unavailable")
+        SettingTrailing.Toggle(checked) { owner.setToggle(toggle, it) }, Modifier.testTag("settings-toggle-${toggle.name}"), showDivider = divider)
+    else Caption("$title · ${if (checked) "On" else "Off"} · editing unavailable", Modifier.padding(vertical = 10.dp))
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -159,7 +190,7 @@ private fun PreferenceChoices(values: List<String>, selected: String, editable: 
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         values.forEach { value ->
             if (editable) Chip(label(value), selected == value, { select(value) }, Modifier.testTag("settings-$tag-$value"))
-            else Text(label(value) + if (selected == value) " · selected" else "")
+            else Caption(label(value) + if (selected == value) " · selected" else "")
         }
     }
 }
