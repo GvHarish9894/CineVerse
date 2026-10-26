@@ -29,7 +29,6 @@ class WebRootTest {
     private class Fixture(signedIn: Boolean = false) : AutoCloseable {
         val calls = mutableListOf<String>()
         val http = mutableListOf<String>()
-        var settingsSubscriptions = 0
         val opened = mutableListOf<String>()
         val trailerHost = WebTrailerHostFake()
         var backs = 0
@@ -69,8 +68,9 @@ class WebRootTest {
             single { BrowserDatabase(id) } // Lazy/unopened: every store below is fake.
             single { BrowserChanges("$id.bus") }
             single<TmdbApi> { api }
+            single { TmdbCache(get(), maxEntries = 0) } // Nothing is retained, so every reader restart is an observable API read.
             single<SettingsStore> { object : SettingsStore {
-                override val data: Flow<SettingsValues> get() = flow { settingsSubscriptions++; emit(values); awaitCancellation() }
+                override val data: Flow<SettingsValues> get() = flow { emit(values); awaitCancellation() }
                 override suspend fun edit(transform: (MutableSettingsValues) -> Unit) { error("No settings writes in root tests") }
             } }
             single { SettingsRepository(get<SettingsStore>()) }
@@ -172,12 +172,13 @@ class WebRootTest {
         val history = FakeHistory("/person/1")
         try {
             root(f, history)
-            for (url in listOf("/person/1", "/tv/1/season/0", "/movie/1")) {
+            for ((url, read) in listOf("/person/1" to "person:1", "/tv/1/season/0" to "season:1:0", "/movie/1" to "movie:1")) {
                 go(history, url)
-                waitUntil(timeoutMillis = 10_000) { f.calls.any { it.startsWith(if (url.startsWith("/person")) "person:1" else if (url.contains("season")) "season:1:0" else "movie:1") } }
-                val before = f.settingsSubscriptions
-                runOnIdle { f.runtime.revalidateSession() }
-                waitUntil(timeoutMillis = 10_000) { f.settingsSubscriptions > before && f.runtime.session.value is WebSessionState.Ready }
+                waitUntil(timeoutMillis = 10_000) { read in f.calls }
+                runOnIdle { assertTrue(f.runtime.session.value is WebSessionState.Ready) }
+                val before = f.calls.count { it == read }
+                runOnIdle { f.runtime.revalidateSession() } // Bumps the generation; only the fanned-in event restarts the reader.
+                waitUntil(timeoutMillis = 10_000) { f.calls.count { it == read } > before }
             }
         } finally { f.close() }
     }

@@ -1,3 +1,5 @@
+@file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+
 package com.techgv.cineverse.ui.web
 
 import androidx.compose.foundation.background
