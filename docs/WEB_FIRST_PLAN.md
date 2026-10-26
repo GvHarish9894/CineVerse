@@ -164,6 +164,16 @@ C3/g8-season-route-policy starts from9384512, retaining G6 branch. Sole common w
 
 Person/Detail writers have NO initial build/browser lease and return durable source handoffs without broker wait. Season UI is a separate future writer after route policy gates/review; existing episode clicks expose metadata only, never fictitious episode streaming. All four lanes retain typed dependencies/house components, no service location/new endpoints/deps/parallel repositories. Parent remains sole later router/integration owner, max six worktrees, no UI merge/push/promotion to main.
 
+## Operator retry after usage-limit reporting failures
+
+Operator explicitly requested retry. G7 reviewer1129e6a2 CLEARED d5fcc01 four-P1 correction with no issues, directly reviewing10-red/32-green evidence; do not repeat review/gates. Component remains disconnected, not live/root/release accepted.
+
+G8 Season worker7000c317 finished source AND gates before reporting failed: clean a434b16c5be0c9874ff475d06e2017e62a809b22, four commits8f2c24f/ce8b458/0b4a834/a434b16. Parent directly parsed17-case XML: API-present old behavior5 intended failures/12pass, corrected17/0, both sharedWasm compiles executed/pass atsamea434. Initial nullable expected-list compile red remains separate. Two files+184/-10, fullpatch860c081c277ea3c8303a9f8d696b0dfeace69ec92ca4312b40715d0cc5f46b14. Parent recovered source hashes/commands/head/cleanup; PARENT_RECOVERY.md beside persistent20261026T103134Z-worker evidence. DO NOT retry completed Season implementation/JVM/Wasm gates; independent source review is next.
+
+C1 Person partial:9384512 with TWO untracked production files WebPerson.kt/WebPersonOwner.kt, no tests/report yet. C5 Detail adapter partial: committed tests-firstcd4ee07f2a72ca78076ec01b502c23cf4cd038fb plus TWO modified production files WebDetail.kt/WebDetailOwner.kt. No corrected adapter gates yet. Parent preserved tracked/staged diffs and untracked source archives under checkpoints/retry-861e1c65-FtzhOFWn/. Continue these exact partials, don't overwrite/recreate/reset or redo copied G6 source.
+
+Fresh same-model checkpoint workers retry unfinished Detail/Person only; Season becomes read/search-only review. Parent observed no active build/Karma/headless/webpack. C5 gets sole serialized Gradle/Karma lease AFTER completing/committing its source for FIRST affected owner/UI compile/tests; C1 remains source-only, no broker wait. No signature/API compile red is behavioral proof. No G7/G6/scroll/Season successful-gate repetition, native/iOS/F4 work or UI/main promotion.
+
 ## Execution and leases
 
 All workers/reviewers `cliproxyapi/gpt-6.1-sol` only; no provider/model/CLI/auth fallback, nested agents, new worktrees, merges/pushes by workers, credentials output/overwrite, profile access, resets/permission changes or live user data operations. Author `GvHarish9894 <hariharangv9894@gmail.com>`. Gradle `--max-workers=2`, no configure-on-demand; filters scoped per task. ANDROID_HOME=$HOME/Library/Android/sdk and DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer are normal build environment only, not device/runtime grants.
