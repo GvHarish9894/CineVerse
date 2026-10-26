@@ -499,7 +499,7 @@ class WebDetailOwnerTest {
         runCurrent()
         // onIdentity was never forwarded: a legacy invocation-capture toggle would capture guest and be superseded.
         f.act(owner, LibraryKind.WATCHLIST); f.act(owner, LibraryKind.FAVOURITE)
-        assertEquals(listOf("account-a#41:WATCHLIST/Movie:7", "account-a#41:FAVOURITE/Movie:7"), f.library.writes)
+        assertEquals(listOf("account-a#41:WATCHLIST/movie:7", "account-a#41:FAVOURITE/movie:7"), f.library.writes)
         assertEquals(listOf(LibraryKind.WATCHLIST, LibraryKind.FAVOURITE), f.library.actions.map { it.first })
         assertTrue(f.library.actions.all { it.second == (owner.state.value.section as SectionState.Content).value.toTitle() })
         owner.close()
@@ -552,7 +552,7 @@ class WebDetailOwnerTest {
         assertEquals(LibraryStateSnapshot(state, true, null), owner.account.value) // Published as produced, never relabelled.
         f.library.known(state, a2); runCurrent()
         f.act(owner, LibraryKind.WATCHLIST)
-        assertEquals(listOf("account-a#42:WATCHLIST/Movie:7"), f.library.writes)
+        assertEquals(listOf("account-a#42:WATCHLIST/movie:7"), f.library.writes)
         owner.close()
     }
 
@@ -574,7 +574,7 @@ class WebDetailOwnerTest {
         assertEquals(2, f.library.refs.size)
         assertEquals(LibraryStateSnapshot(LibraryState(true, false, false, null, emptySet()), true, null), owner.account.value)
         f.act(owner, LibraryKind.WATCHLIST)
-        assertEquals(listOf("guest:WATCHLIST/Movie:7"), f.library.writes)
+        assertEquals(listOf("guest:WATCHLIST/movie:7"), f.library.writes)
         owner.close()
     }
 
