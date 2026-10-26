@@ -72,7 +72,9 @@ class WebAccountOwner(private val runtime: WebRuntime, appScope: CoroutineScope)
     fun startSignOut(expected: AuthSession) {
         if (!active() || pending != null) return
         captured = expected
-        publishSignOut(if (authoritative() == expected) WebSignOutPhase.Confirm else WebSignOutPhase.Changed)
+        // Only a verified Ready session can prove a change; Checking/Failed keeps Confirm (disabled) until a read lands.
+        val now = runtime.session.value
+        publishSignOut(if (now is WebSessionState.Ready && now.session != expected) WebSignOutPhase.Changed else WebSignOutPhase.Confirm)
     }
 
     fun confirmSignOut() {
@@ -102,7 +104,10 @@ class WebAccountOwner(private val runtime: WebRuntime, appScope: CoroutineScope)
     /** Settings' onImport: re-offers the existing holder flow for [expected] only. */
     fun startImport(expected: AuthSession) {
         if (!active()) return
-        if (authoritative() != expected) return notice(WebImportNotice.Changed)
+        if (authoritative() != expected) {
+            if (runtime.session.value is WebSessionState.Ready) notice(WebImportNotice.Changed) // unknown session: no claim
+            return
+        }
         // An open prompt, an offer in flight or a running Player keeps the existing flow; it is never restarted.
         if (playerActive || offering || mutable.value.importPrompt != null) return
         offering = true

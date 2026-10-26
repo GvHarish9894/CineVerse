@@ -156,6 +156,8 @@ class SettingsStateHolder(
                     signedOut = true
                     signOutEvents.trySend(true)
                 }
+                // A web sign-out can return normally while the follow-up read still shows a session: report it, never hang.
+                if (!signedOut) signOutEvents.trySend(false)
             } catch (e: IOException) {
                 if (!signedOut) signOutEvents.trySend(false)
             } catch (e: TmdbException) {
