@@ -144,7 +144,8 @@ class WebRuntimeUiTest {
             onNodeWithText("My Library").assertIsDisplayed().performClick()
             waitUntil(timeoutMillis = 10_000) { f.canceledReads >= 7 }
             runOnIdle { f.gate!!.complete(Unit) }
-            onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertExists()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Guest library · saved on this browser; kept separate from account lists").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertDoesNotExist()
             assertEquals("/library?tab=watchlist", history.url)
         } finally { f.close() }
     }
@@ -170,7 +171,8 @@ class WebRuntimeUiTest {
             assertTrue(f.reads.any { it.path == "/api/tmdb/person/popular" })
             onNodeWithTag("browse-person:42").performClick()
             assertEquals("/person/42", history.url)
-            onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertExists()
+            onNodeWithTag("web-person").assertExists()
+            onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertDoesNotExist()
         } finally { f.close() }
     }
 
@@ -234,7 +236,8 @@ class WebRuntimeUiTest {
             runOnIdle { f.gate!!.complete(Unit); f.runtime.retryStorage() }
             assertEquals(reads, f.catalogReads)
             assertEquals("/library?tab=watchlist", history.url)
-            onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertExists()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Guest library · saved on this browser; kept separate from account lists").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertDoesNotExist()
         } finally { f.close() }
     }
 
@@ -331,7 +334,8 @@ class WebRuntimeUiTest {
             waitUntil(timeoutMillis = 10_000) { f.runtime.storageFailure.value == null }
             assertEquals(reads, f.catalogReads)
             assertEquals("/library?tab=watchlist", history.url)
-            onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertExists()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Guest library · saved on this browser; kept separate from account lists").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertDoesNotExist()
         } finally { f.close() }
     }
 

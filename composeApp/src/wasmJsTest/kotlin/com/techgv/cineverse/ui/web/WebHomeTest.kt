@@ -113,7 +113,7 @@ class WebHomeTest {
     @Test fun internalPlayerAndInvalidRoutesCannotPretendToPlayOrMutate() = runComposeUiTest {
         var route by mutableStateOf<WebRoute>(WebRoute.Trailer("aB_09-xYz12", "Fixture film"))
         setThemedContent(ShellStyle.Web) { WebPlaceholder(route) { next, _ -> route = next } }
-        onNodeWithText("Playback is not implemented in this preview. No video is playing.").assertExists()
+        onNodeWithText("Open this trailer from its title page. No video is playing.").assertExists()
         runOnIdle { route = WebRoute.NotFound }
         onNodeWithText("This URL is unknown or invalid. No account operation was performed.").assertExists()
     }
