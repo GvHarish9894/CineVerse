@@ -87,8 +87,7 @@ class WebRateDialogTest {
             stars.performMouseInput { exit() }
             assertValue("–", "Choose a rating")
             onNodeWithText("Submit rating").assertIsNotEnabled()
-            stars.performMouseInput { click(segment(14)) }
-            stars.performMouseInput { exit() }
+            stars.performMouseInput { click(segment(14)) } // The press ends hovering; Release clears the preview.
             assertValue("7.0", "Good")
             onNodeWithText("Submit rating").assertIsEnabled()
             assertTrue(f.writes.isEmpty())
@@ -236,7 +235,7 @@ class WebRateDialogTest {
         try {
             show(f)
             runOnIdle { f.actions.openRate(MOVIE) }
-            onNodeWithTag("web-rate-stars").performMouseInput { click(segment(15)); exit() }
+            onNodeWithTag("web-rate-stars").performMouseInput { click(segment(15)) }
             assertValue("7.5", "Great")
             runOnIdle { f.actions.openRate(OTHER) }
             onNodeWithText("Quiet Harbour").assertIsDisplayed()
