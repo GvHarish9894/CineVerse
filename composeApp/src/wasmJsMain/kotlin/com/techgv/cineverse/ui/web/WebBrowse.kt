@@ -40,6 +40,7 @@ import com.techgv.cineverse.ui.theme.bodyStyle
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 
 @Composable
 internal fun WebBrowse(entry: WebEntry, catalog: CatalogRepository, generation: GenerationCounter, settings: Flow<Settings>, runtime: WebRuntime, navigate: (WebRoute, Boolean) -> Unit) {
@@ -204,7 +205,8 @@ private val AsideGap = 36.dp
 /**
  * The kit's `.split` page around one lazy grid (the page's only scroll): the [header] item and the footer span the
  * full width; wide screens (> 860dp) show [aside] (filters, facets) in a 300dp column left of the grid, held below the
- * header while the grid scrolls and pushed up by the footer; phones stack it under the header.
+ * header while the grid scrolls and pushed up by the footer (which is held below the aside when the content is
+ * shorter than it); phones stack it under the header.
  * Item keys "header" and "footer" are reserved.
  */
 @Composable
@@ -223,13 +225,20 @@ internal fun WebAsideGrid(
         val gutter = contentGutter(ShellStyle.Web, maxWidth)
         val start = if (wide) gutter + AsideWidth + AsideGap else gutter
         val bleed = Modifier.bleed(start, gutter)
-        val spacing = with(LocalDensity.current) { verticalSpacing.roundToPx() }
+        val density = LocalDensity.current
+        val spacing = with(density) { verticalSpacing.roundToPx() }
+        var height by remember { mutableIntStateOf(0) }
+        // Room above the footer so short content (error, empty) never pulls the aside over the header.
+        var room by remember { mutableIntStateOf(0) }
         if (wide) {
-            var height by remember { mutableIntStateOf(0) }
+            LaunchedEffect(state, spacing) {
+                snapshotFlow { asideRoom(state.layoutInfo, height, spacing, header != null) }
+                    .filterNotNull().distinctUntilChanged().collect { room = it }
+            }
             // First in composition (keyboard order before the grid), drawn and hit-tested above it.
             Column(
                 Modifier.zIndex(1f).padding(start = gutter).width(AsideWidth).heightIn(max = maxHeight)
-                    .offset { IntOffset(0, asideTop(state.layoutInfo, height, spacing)) }
+                    .offset { IntOffset(0, asideTop(state.layoutInfo, height, spacing, room)) }
                     .onSizeChanged { height = it.height }
                     // Wheel/drag over the aside scrolls the page (the grid) once the aside itself cannot scroll.
                     .scrollable(state, Orientation.Vertical, reverseDirection = true)
@@ -246,17 +255,34 @@ internal fun WebAsideGrid(
                 }
             }
             content()
-            item(key = "footer", span = { GridItemSpan(maxLineSpan) }) { Footer(bleed.padding(top = 40.dp)) }
+            item(key = "footer", span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    if (wide) Spacer(Modifier.height(with(density) { room.toDp() }))
+                    Footer(bleed.padding(top = 40.dp))
+                }
+            }
         }
     }
 }
 
-/** Below the header item (or the top once it has scrolled away), and never over the footer. */
-private fun asideTop(info: LazyGridLayoutInfo, height: Int, spacing: Int): Int {
+/** Below the header item (or the top once it has scrolled away), and never over the footer (below its [room]). */
+private fun asideTop(info: LazyGridLayoutInfo, height: Int, spacing: Int, room: Int): Int {
     val items = info.visibleItemsInfo
     val top = items.firstOrNull { it.key == "header" }?.let { it.offset.y + it.size.height + spacing } ?: 0
     val footer = items.firstOrNull { it.key == "footer" }?.offset?.y ?: return top
-    return minOf(top, footer - height - spacing)
+    return minOf(top, footer + room - height - spacing)
+}
+
+/**
+ * The footer item's top room so the aside fits between the content start and the footer; null (keep) unless both are
+ * visible. Scroll-independent: both offsets move together, and the room sits inside the footer item.
+ */
+private fun asideRoom(info: LazyGridLayoutInfo, height: Int, spacing: Int, hasHeader: Boolean): Int? {
+    val items = info.visibleItemsInfo
+    val start = if (hasHeader) items.firstOrNull { it.key == "header" }?.let { it.offset.y + it.size.height + spacing }
+        else items.firstOrNull { it.index == 0 }?.offset?.y
+    val footer = items.firstOrNull { it.key == "footer" }?.offset?.y
+    return if (start == null || footer == null) null else maxOf(0, start + height + spacing - footer)
 }
 
 /** Lays a full-span lazy item across the grid's content padding (header, footer). */

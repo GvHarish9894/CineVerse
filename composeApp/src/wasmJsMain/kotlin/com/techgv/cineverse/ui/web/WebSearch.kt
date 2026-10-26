@@ -92,8 +92,10 @@ internal fun WebSearchContent(entry: WebEntry, state: ProductSearchUiState, quer
             Box(Modifier.padding(top = 22.dp).widthIn(max = 820.dp).fillMaxWidth()) {
                 WebSearchField(query, change, submit, Modifier.fillMaxWidth().testTag("search-input").onFocusChanged { focused(it.isFocused) },
                     invalid = invalidUrl || state.inputError != null, large = true)
-                if (query.isNotEmpty()) RoundIconButton(CvIcons.Close, "Clear search", { change("") }, Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
-                    diameter = 32.dp, container = Color.White.copy(alpha = 0.10f))
+                // The web RoundIconButton wraps a tooltip box, so the alignment goes on a holder.
+                if (query.isNotEmpty()) Box(Modifier.align(Alignment.CenterEnd).padding(end = 6.dp)) {
+                    RoundIconButton(CvIcons.Close, "Clear search", { change("") }, diameter = 32.dp, container = Color.White.copy(alpha = 0.10f))
+                }
             }
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (invalidUrl) Text(SEARCH_URL_ERROR, color = MaterialTheme.colorScheme.error)
