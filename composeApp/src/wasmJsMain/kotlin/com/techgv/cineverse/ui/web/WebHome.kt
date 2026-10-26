@@ -277,8 +277,8 @@ private fun HomeHero(state: HomeUiState, select: (Hero) -> Unit, play: (Title) -
             if (hero != null) {
                 val path = when (hero) { is Hero.OfTitle -> hero.title.backdropPath; is Hero.OfPerson -> hero.person.profilePath }
                 PaletteArt(webImage(path, "w1280"), webPalette(hero.key), ArtStyle.Backdrop, Modifier.fillMaxSize())
+                Box(Modifier.matchParentSize().webHeroScrim())
             }
-            Box(Modifier.matchParentSize().webHeroScrim())
             WebPage(Modifier.align(Alignment.CenterStart).padding(bottom = 40.dp)) {
                 Column(Modifier.widthIn(max = 760.dp)) {
                     if (hero != null) {
