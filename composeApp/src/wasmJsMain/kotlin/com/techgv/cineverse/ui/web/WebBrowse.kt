@@ -235,7 +235,7 @@ internal fun WebAsideGrid(
                     .scrollable(state, Orientation.Vertical, reverseDirection = true)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) { if (aside != null) aside(true) }
+            ) { aside(true) }
         }
         LazyVerticalGrid(columns, modifier.fillMaxSize(), state, PaddingValues(start = start, end = gutter),
             horizontalArrangement = Arrangement.spacedBy(horizontalSpacing), verticalArrangement = Arrangement.spacedBy(verticalSpacing)) {
