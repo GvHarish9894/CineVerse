@@ -25,7 +25,7 @@ import org.koin.dsl.module
 import kotlin.test.assertTrue
 
 /** Owned fake engine/stores/opener only. No production opener, cookie access or real HTTP fallback. */
-internal class WebApprovalFixture {
+internal class WebApprovalFixture(ownerDispatcher: CoroutineDispatcher = Dispatchers.Unconfined) {
     companion object {
         private var next = 0
         const val GUEST = """{"signedIn":false,"accountObjectId":null,"displayName":null,"sessionGeneration":"0"}"""
@@ -45,7 +45,7 @@ internal class WebApprovalFixture {
     private val gates = mutableListOf<CompletableDeferred<Unit>>()
     fun gate() = CompletableDeferred<Unit>().also { gates += it }
     fun count(path: String) = calls.count { it.second == path }
-    val ownerScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    val ownerScope = CoroutineScope(SupervisorJob() + ownerDispatcher)
     private val id = "cineverse.g7.approval.test.${++next}"
     private val client = HttpClient(object : HttpClientEngineBase("g7-approval-fixture") {
         override val config = HttpClientEngineConfig().apply { dispatcher = Dispatchers.Unconfined }

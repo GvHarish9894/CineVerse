@@ -78,7 +78,7 @@ class WebApprovalDialogTest {
         } finally { f.dispose() }
     }
 
-    @Test fun escapeBeforeStartClosesLocallyAndReturnsFocus() = runComposeUiTest {
+    @Test fun escapeBeforeStartCancelsBrowserAttemptsAndReturnsFocus() = runComposeUiTest {
         val f = WebApprovalFixture()
         try {
             f.runtime.start()
@@ -94,8 +94,10 @@ class WebApprovalDialogTest {
             onNodeWithText("Sign in trigger").performKeyInput { pressKey(Key.Enter) }
             onNodeWithContentDescription("Close").assertIsFocused()
             onNodeWithContentDescription("Close").performKeyInput { pressKey(Key.Escape) }
+            waitUntil { f.owner.state.value.phase == WebApprovalPhase.Closed }
+            onNodeWithTag("web-approval-dialog").assertDoesNotExist()
             onNodeWithText("Sign in trigger").assertIsFocused()
-            assertEquals(0, f.count("/api/auth/cancel"))
+            assertEquals(1, f.count("/api/auth/cancel"))
         } finally { f.dispose() }
     }
 
@@ -143,13 +145,12 @@ class WebApprovalDialogTest {
         } finally { f.dispose() }
     }
 
-    @Test fun cancellingAndUncertainCopyRemainTruthfulAndReadDoesNotReplayCancel() = runComposeUiTest {
+    @Test fun notNowWithoutLocalDescriptorCancelsAndUncertainReadDoesNotReplayCancel() = runComposeUiTest {
         val f = WebApprovalFixture()
         try {
             f.runtime.start()
             waitUntil { f.runtime.session.value is WebSessionState.Ready }
-            f.owner.show(); f.owner.startApproval()
-            waitUntil { f.owner.state.value.canOpen }
+            f.owner.show()
             val gate = f.gate()
             f.cancelStatus = HttpStatusCode.ServiceUnavailable
             f.beforeReply = { if (it == "/api/auth/cancel") gate.await() }
@@ -216,8 +217,9 @@ class WebApprovalDialogTest {
             onNodeWithTag("web-approval-content").performScrollToNode(hasText("Prepare sign-in"))
             onNodeWithText("Prepare sign-in").assertIsDisplayed()
             onNodeWithContentDescription("Close").performClick()
+            waitUntil { f.owner.state.value.phase == WebApprovalPhase.Closed }
             onNodeWithTag("web-approval-dialog").assertDoesNotExist()
-            assertEquals(0, f.count("/api/auth/cancel"))
+            assertEquals(1, f.count("/api/auth/cancel"))
         } finally { f.dispose() }
     }
 }

@@ -4,9 +4,12 @@ import com.techgv.cineverse.di.WebSessionState
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class WebApprovalOwnerTest {
     @Test fun unknownFailedAndSignedAreNotGuestStartAuthority() = runTest {
         val f = WebApprovalFixture()
@@ -270,13 +273,10 @@ class WebApprovalOwnerTest {
         } finally { f.close() }
     }
 
-    @Test fun disposalStopsFeedbackWithoutServerCancelAndSimpleCloseWithoutAttemptIsLocal() = runTest {
+    @Test fun disposalStopsFeedbackWithoutServerCancel() = runTest {
         val f = WebApprovalFixture()
         try {
-            f.start(); f.owner.show(); f.owner.dismiss()
-            assertEquals(WebApprovalPhase.Closed, f.owner.state.value.phase)
-            assertEquals(0, f.count("/api/auth/cancel"))
-            f.owner.show()
+            f.start(); f.owner.show()
             val gate = f.gate()
             f.beforeReply = { if (it == "/api/auth/start") withContext(NonCancellable) { gate.await() } }
             f.owner.startApproval()
@@ -287,6 +287,193 @@ class WebApprovalOwnerTest {
             f.owner.show(); f.owner.startApproval(); f.owner.dismiss(); f.owner.approvalReturned()
             assertEquals(WebApprovalPhase.Closed, f.owner.state.value.phase)
             assertTrue(f.opened.isEmpty())
+            assertEquals(0, f.count("/api/auth/cancel"))
+            assertEquals(0, f.count("/api/auth/logout"))
+        } finally { f.close() }
+    }
+
+    @Test fun noLocalDescriptorDismissCancelsOtherBrowserAttemptOnce() = runTest {
+        val f = WebApprovalFixture()
+        try {
+            f.start()
+            f.runtime.startApproval() // A previous app/tab owns the attempt, not this owner.
+            f.owner.show()
+            val gate = f.gate()
+            f.beforeReply = { if (it == "/api/auth/cancel") gate.await() }
+            f.owner.dismiss(); f.owner.dismiss(); f.owner.approvalReturned()
+            assertEquals(WebApprovalPhase.Cancelling, f.owner.state.value.phase)
+            while (f.count("/api/auth/cancel") == 0) yield()
+            assertEquals(1, f.count("/api/auth/cancel"))
+            assertEquals(1, f.count("/api/auth/start"))
+            assertTrue(f.opened.isEmpty())
+            gate.complete(Unit)
+            f.settled(WebApprovalPhase.Closed)
+            assertNull((f.runtime.session.value as WebSessionState.Ready).session)
+            assertEquals(0, f.count("/api/auth/logout"))
+        } finally { f.close() }
+    }
+
+    @Test fun openRequestedObserverCloseRevokesSynchronousOpener() = runTest {
+        assertOpenRequestedRevocation { it.owner.close() }
+    }
+
+    @Test fun openRequestedObserverDismissRevokesSynchronousOpener() = runTest {
+        assertOpenRequestedRevocation { it.owner.dismiss() }
+    }
+
+    @Test fun openRequestedObserverParentCancellationRevokesSynchronousOpener() = runTest {
+        assertOpenRequestedRevocation { it.ownerScope.cancel() }
+    }
+
+    @Test fun openRequestedObserverSessionInvalidationRevokesSynchronousOpener() = runTest {
+        assertOpenRequestedRevocation { it.runtime.revalidateSession() }
+    }
+
+    private suspend fun assertOpenRequestedRevocation(revoke: (WebApprovalFixture) -> Unit) = coroutineScope {
+        val f = WebApprovalFixture()
+        try {
+            f.start(); f.owner.show(); f.owner.startApproval()
+            f.settled(WebApprovalPhase.Waiting)
+            f.owner.state.first { it.canOpen }
+            val gate = f.gate()
+            f.beforeReply = { if (it == "/api/session") gate.await() }
+            var revoked = false
+            val observer = launch(Dispatchers.Unconfined, start = CoroutineStart.UNDISPATCHED) {
+                f.owner.state.first { it.openRequested }
+                revoke(f)
+                revoked = true
+            }
+            f.owner.continueToTmdb()
+            assertTrue(revoked, "Observer must revoke within openRequested publication")
+            assertTrue(f.opened.isEmpty())
+            observer.join()
+        } finally { f.close() }
+    }
+
+    @Test fun queuedStartRevokedByCheckingReleasesBookkeepingForExplicitStart() = runTest {
+        val ownerScheduler = TestCoroutineScheduler()
+        val f = WebApprovalFixture(StandardTestDispatcher(ownerScheduler))
+        try {
+            f.start(); ownerScheduler.runCurrent(); f.owner.show(); f.owner.startApproval()
+            val gate = f.gate()
+            f.beforeReply = { if (it == "/api/session") gate.await() }
+            f.runtime.revalidateSession()
+            assertIs<WebSessionState.Checking>(f.runtime.session.value)
+            assertEquals(WebApprovalPhase.Starting, f.owner.state.value.phase)
+            val reads = f.count("/api/session")
+            ownerScheduler.runCurrent()
+            assertEquals(reads, f.count("/api/session"))
+            assertEquals(0, f.count("/api/auth/start"))
+            assertEquals(WebApprovalPhase.Ready, f.owner.state.value.phase)
+            assertTrue(f.owner.state.value.canCheck)
+            assertFalse(f.owner.state.value.canStart)
+            gate.complete(Unit)
+            f.runtime.session.first { it is WebSessionState.Ready }
+            ownerScheduler.runCurrent()
+            assertTrue(f.owner.state.value.canStart)
+            assertEquals(0, f.count("/api/auth/start")) // Recovery cannot replay the skipped mutation.
+            f.owner.startApproval()
+            while (!f.owner.state.value.canOpen) { ownerScheduler.runCurrent(); yield() }
+            assertEquals(WebApprovalPhase.Waiting, f.owner.state.value.phase)
+            assertEquals(1, f.count("/api/auth/start"))
+            assertEquals(0, f.count("/api/auth/cancel"))
+        } finally { f.close() }
+    }
+
+    @Test fun queuedStartRevokedByFailedSessionReleasesBookkeepingForExplicitStart() = runTest {
+        val ownerScheduler = TestCoroutineScheduler()
+        val f = WebApprovalFixture(StandardTestDispatcher(ownerScheduler))
+        try {
+            f.start(); ownerScheduler.runCurrent(); f.owner.show(); f.owner.startApproval()
+            f.sessionStatus = HttpStatusCode.ServiceUnavailable
+            f.refresh()
+            assertIs<WebSessionState.Failed>(f.runtime.session.value)
+            assertEquals(WebApprovalPhase.Starting, f.owner.state.value.phase)
+            val reads = f.count("/api/session")
+            ownerScheduler.runCurrent()
+            assertEquals(reads, f.count("/api/session"))
+            assertEquals(0, f.count("/api/auth/start"))
+            assertEquals(WebApprovalPhase.Ready, f.owner.state.value.phase)
+            assertTrue(f.owner.state.value.canCheck)
+            assertFalse(f.owner.state.value.canStart)
+            f.sessionStatus = HttpStatusCode.OK
+            f.refresh(); ownerScheduler.runCurrent()
+            assertTrue(f.owner.state.value.canStart)
+            assertEquals(0, f.count("/api/auth/start"))
+            f.owner.startApproval()
+            while (!f.owner.state.value.canOpen) { ownerScheduler.runCurrent(); yield() }
+            assertEquals(WebApprovalPhase.Waiting, f.owner.state.value.phase)
+            assertEquals(1, f.count("/api/auth/start"))
+            assertEquals(0, f.count("/api/auth/cancel"))
+        } finally { f.close() }
+    }
+
+    @Test fun queuedStartRevokedBySignedSessionCannotCreateAttemptOrStickBusy() = runTest {
+        val ownerScheduler = TestCoroutineScheduler()
+        val f = WebApprovalFixture(StandardTestDispatcher(ownerScheduler))
+        try {
+            f.start(); ownerScheduler.runCurrent(); f.owner.show(); f.owner.startApproval()
+            f.sessionBody = WebApprovalFixture.SIGNED
+            f.refresh()
+            assertNotNull((f.runtime.session.value as WebSessionState.Ready).session)
+            assertEquals(WebApprovalPhase.Starting, f.owner.state.value.phase)
+            val reads = f.count("/api/session")
+            ownerScheduler.runCurrent()
+            assertEquals(reads, f.count("/api/session"))
+            assertEquals(0, f.count("/api/auth/start"))
+            assertEquals(WebApprovalPhase.Closed, f.owner.state.value.phase)
+            f.sessionBody = WebApprovalFixture.GUEST
+            f.refresh(); ownerScheduler.runCurrent()
+            f.owner.show()
+            assertTrue(f.owner.state.value.canStart)
+            assertEquals(0, f.count("/api/auth/start"))
+            f.owner.startApproval()
+            while (!f.owner.state.value.canOpen) { ownerScheduler.runCurrent(); yield() }
+            assertEquals(WebApprovalPhase.Waiting, f.owner.state.value.phase)
+            assertEquals(1, f.count("/api/auth/start"))
+            assertEquals(0, f.count("/api/auth/cancel"))
+            assertEquals(0, f.count("/api/auth/logout"))
+        } finally { f.close() }
+    }
+
+    @Test fun parentScopeCancellationAloneGatesActionsAndSessionFeedback() = runTest {
+        val f = WebApprovalFixture()
+        try {
+            f.start(); f.owner.show(); f.owner.startApproval()
+            f.settled(WebApprovalPhase.Waiting)
+            f.owner.state.first { it.canOpen }
+            f.ownerScope.cancel() // No owner.close(): the parent lifetime itself is authoritative.
+            val snapshot = f.owner.state.value
+            val calls = f.calls.toList()
+            f.owner.continueToTmdb(); f.owner.show(); f.owner.startApproval()
+            f.owner.approvalReturned(); f.owner.dismiss()
+            assertTrue(f.opened.isEmpty())
+            assertEquals(calls, f.calls)
+            assertEquals(snapshot, f.owner.state.value)
+            f.sessionBody = WebApprovalFixture.SIGNED
+            f.refresh()
+            assertEquals(snapshot, f.owner.state.value)
+            assertEquals(0, f.count("/api/auth/cancel"))
+            assertEquals(0, f.count("/api/auth/logout"))
+        } finally { f.close() }
+    }
+
+    @Test fun parentScopeCancellationDropsLateStartWithoutAutomaticCleanup() = runTest {
+        val f = WebApprovalFixture()
+        try {
+            f.start(); f.owner.show()
+            val gate = f.gate()
+            f.beforeReply = { if (it == "/api/auth/start") withContext(NonCancellable) { gate.await() } }
+            f.owner.startApproval()
+            while (f.count("/api/auth/start") == 0) yield()
+            f.ownerScope.cancel()
+            val snapshot = f.owner.state.value
+            f.owner.dismiss(); f.owner.approvalReturned(); f.owner.startApproval(); f.owner.continueToTmdb()
+            gate.complete(Unit)
+            f.ownerScope.coroutineContext.job.join()
+            assertEquals(snapshot, f.owner.state.value)
+            assertTrue(f.opened.isEmpty())
+            assertEquals(1, f.count("/api/auth/start"))
             assertEquals(0, f.count("/api/auth/cancel"))
             assertEquals(0, f.count("/api/auth/logout"))
         } finally { f.close() }
