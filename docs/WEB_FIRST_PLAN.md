@@ -190,6 +190,14 @@ Detail retry completed clean3829953203541d58474f8fcb8ebe9c7f2da025b6 atop tests-
 
 C3 Season UI remains source-only; C5 lease has now released, no implicit grant to another writer. Person source handoff still pending before its first scoped gates. Read-only C2 scout may inspect actual LibraryRepository/LibraryActions producer path and propose smallest immutable source-identity +captured-render-session dispatch contract. LibraryState.Known/current Ready labels/cold observation order alone are NOT private-data provenance. Preserve existing TV APIs/defaults/mutation reconciliation and no replay; no implementation of new account API until parent approves scope. This is an explicit integration blocker, not an excuse to fabricate identity or disable required account behavior silently.
 
+## Current source/review handoff ownership
+
+Parent inspected Detail final audit: exact3829953 clean,20owner+13UI=33/0 single-head, patcha7067c7... verified, shared byte parity, port/profile/runner cleanup. C5 independent read/search review now owns only consumer correction versus9a9bd53. No33 rerun or new source writer during that review.
+
+C3/g8-web-season is prepared clean at cleareda434b16 for new UI source only. In addition to token-gated publication, its per-context saver must READ a validated immutable snapshot and gate every WRITE back to entry; legacy Season loader writes selectedSeason after show completion, so cancel-resistant old holders must never mutate saved state. Selection uses actual route navigation/new instance; actual episode panel membership only. No invented playback, raw-history repair or loading-layout scroll persistence.
+
+C2 read-only account-origin scout may propose immutable producer-origin snapshots and explicit captured-session dispatch while preserving existing LibraryActions/TV callers. No tagging live-originless flags with current Ready labels, mutating global onIdentity to retarget calls, per-session duplicate repositories, generic framework or new auth endpoints. This independent private-data/read-write contract is required before safe Root account binding; scout is not implementation approval. C1 Person remains existing sole source writer. Build lease currently released; no implicit Season/Person grant, future gates explicitly serialized.
+
 ## Execution and leases
 
 All workers/reviewers `cliproxyapi/gpt-6.1-sol` only; no provider/model/CLI/auth fallback, nested agents, new worktrees, merges/pushes by workers, credentials output/overwrite, profile access, resets/permission changes or live user data operations. Author `GvHarish9894 <hariharangv9894@gmail.com>`. Gradle `--max-workers=2`, no configure-on-demand; filters scoped per task. ANDROID_HOME=$HOME/Library/Android/sdk and DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer are normal build environment only, not device/runtime grants.
