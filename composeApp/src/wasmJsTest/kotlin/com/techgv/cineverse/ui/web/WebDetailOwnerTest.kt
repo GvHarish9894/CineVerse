@@ -202,6 +202,44 @@ class WebDetailOwnerTest {
         owner.close()
     }
 
+    @Test fun blockedImmediateConstructionNeverSubscribesOrFetchesUntilRealRecovery() = runTest {
+        val f = Fixture()
+        f.storage.value = BrowserStorageFailure.Blocked
+        f.session.value = WebSessionState.Ready(null)
+        f.library.value.value = LibraryState(true, false, false, null, emptySet())
+        val parent = Job(backgroundScope.coroutineContext[Job])
+        val owner = f.owner(CoroutineScope(parent + UnconfinedTestDispatcher(testScheduler)))
+        backgroundScope.launch { owner.holder.accountState.collect {} }
+        assertEquals(0, f.subscriptions)
+        assertTrue(f.api.calls.isEmpty())
+        assertEquals(DetailSettingsRead.Unknown, owner.holder.state.value.settingsRead)
+        f.act(owner, LibraryKind.WATCHLIST)
+        assertTrue(f.library.actions.isEmpty())
+        f.onRetry = { f.storage.value = null }
+        owner.retryReads(); runCurrent()
+        assertEquals(1, f.upstreamRetries)
+        assertEquals(1, f.subscriptions)
+        assertEquals(1, f.api.calls.size)
+        assertNotNull(owner.state.value.producer.completedWebDetail(owner.validated.ref, f.generation.current))
+        f.act(owner, LibraryKind.WATCHLIST)
+        assertEquals(1, f.library.actions.size)
+        owner.close(); parent.cancel()
+    }
+
+    @Test fun runtimeRecoveryCallbackCanCloseBeforeRawReaderRestarts() = runTest {
+        val f = Fixture()
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        f.onRetry = { owner.close() }
+        owner.retryReads(); runCurrent()
+        assertEquals(1, f.upstreamRetries)
+        assertEquals(1, f.subscriptions)
+        assertEquals(DetailSettingsRead.Unknown, owner.holder.state.value.settingsRead)
+        var browsed = false
+        owner.browse { browsed = true }
+        assertFalse(browsed)
+    }
+
     @Test fun cachedEqualCompletionAlsoRestoresAuthorityWithoutClaimingHttpFreshness() = runTest {
         val f = Fixture()
         val owner = f.owner(backgroundScope)

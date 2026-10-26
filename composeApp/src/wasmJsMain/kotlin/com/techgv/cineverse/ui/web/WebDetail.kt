@@ -32,7 +32,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 /**
  * Explicit component seam; the root supplies raw (not defaulted/stateIn) settings, its runtime, optional
  * identity-bound LibraryActions, real navigation/back, and a trailer controller accepting the real Title/Video.
- * No dialog/player/account orchestration is owned here. See WebDetailOwner's recovery integration blocker.
+ * The root must supply reliable contextInvalidations for actual generation/entry/content-context events (not
+ * a fake continuous GenerationCounter flow). Clicks independently recheck current authority. LibraryActions
+ * still require separately certified private account-source binding; catalog metadata cannot certify it.
+ * No dialog/player/account orchestration is owned here.
  */
 @Composable
 fun WebDetail(
@@ -40,6 +43,7 @@ fun WebDetail(
     catalog: CatalogRepository,
     generation: GenerationCounter,
     settings: Flow<Settings>,
+    contextInvalidations: Flow<Unit>,
     runtime: WebRuntime,
     library: LibraryActions?,
     navigate: (WebRoute) -> Unit,
@@ -62,12 +66,15 @@ fun WebDetail(
             runtime::retryStorage, runtime::reportStorageFailure, library, scope)
     }
     DisposableEffect(owner) { onDispose { owner.close() } }
+    LaunchedEffect(owner, contextInvalidations) { contextInvalidations.collect { owner.contextChanged() } }
     val state by owner.state.collectAsState()
     val account by owner.holder.accountState.collectAsState()
     val session by runtime.session.collectAsState()
     val storage by runtime.storageFailure.collectAsState()
     WebDetailContent(entry, state, account, session, library != null, storage, owner::retryReads,
-        owner::retryDetail, owner::act, navigate, back, playTrailer)
+        owner::retryDetail, owner::act,
+        { route -> owner.browse { navigate(route) } }, { owner.browse(back) },
+        { title, video -> owner.browse { playTrailer(title, video) } })
 }
 
 @Composable
@@ -80,7 +87,7 @@ internal fun WebDetailContent(
     storage: BrowserStorageFailure?,
     retryReads: () -> Unit,
     retryDetail: () -> Unit,
-    act: (LibraryKind) -> Unit,
+    act: (LibraryKind, DetailReadContext?, WebSessionState.Ready?) -> Unit,
     navigate: (WebRoute) -> Unit,
     back: () -> Unit,
     playTrailer: (Title, Video) -> Unit,
@@ -100,13 +107,17 @@ internal fun WebDetailContent(
             entry.putInt("detail.index", index); entry.putInt("detail.offset", offset)
         }
     }
-    val actionable = state.section is SectionState.Content && !state.freshnessUnverified && storage == null && session is WebSessionState.Ready && hasLibrary
+    val renderedContext = state.producer.request
+    val renderedSession = session as? WebSessionState.Ready
+    val actionable = state.section is SectionState.Content && !state.freshnessUnverified && storage == null &&
+        renderedSession != null && hasLibrary && renderedContext != null &&
+        state.producer.completedWebDetail(validated.ref, renderedContext.appGeneration) != null
     LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-detail"), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item("back") { PillButton("← Back", back, Modifier.padding(horizontal = 16.dp), variant = ButtonVariant.Ghost) }
         if (storage != null) item("storage") { WebStorageNotice(storage, retryReads, Modifier.testTag("detail-storage-recovery")) }
         if (state.freshnessUnverified) item("preferences") {
-            ErrorState(if (state.settingsFailed) "Saved preferences could not be read. Last real detail is frozen and unverified."
-                else "Read recovery requested. Detail freshness is still unverified; last real detail remains frozen.",
+            ErrorState(if (state.settingsFailed) "Saved preferences could not be read. Retained detail is stale and unverified."
+                else "Detail replacement is not verified. Retained detail is stale; completion may come from cache.",
                 retryReads, Modifier.padding(16.dp).testTag("detail-settings-recovery"))
         }
         when (val section = state.section) {
@@ -116,7 +127,7 @@ internal fun WebDetailContent(
             is SectionState.Content -> Unit
         }
         if (detail != null) {
-            item("hero") { WebDetailHero(detail, account, actionable, act, playTrailer) }
+            item("hero") { WebDetailHero(detail, account, actionable, { kind -> act(kind, renderedContext, renderedSession) }, playTrailer) }
             val people = (detail.cast + listOfNotNull(detail.leadCrew)).filter { it.personId > 0 }.distinctBy { it.personId to it.role }
             if (people.isNotEmpty()) item("cast") {
                 ScrollRow("Cast and lead crew") {
