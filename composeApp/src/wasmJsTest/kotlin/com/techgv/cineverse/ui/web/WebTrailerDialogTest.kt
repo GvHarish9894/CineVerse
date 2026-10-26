@@ -43,6 +43,17 @@ class WebTrailerDialogTest {
         if (open.value) WebTrailerDialog(videos, initial, autoplay = false, onClose = { open.value = false }, restoreFocus = trigger, host = host)
     }
 
+    /** Opens from the trigger, then parks the page's own focus off it (the dialog is a separate window) so only restoreFocus can return it. */
+    private fun ComposeUiTest.openAndParkPageFocus(host: WebTrailerHostFake) {
+        onNodeWithText("Play trailer").requestFocus()
+        onNodeWithText("Play trailer").performKeyInput { pressKey(Key.Enter) }
+        onNodeWithContentDescription("Close").assertIsFocused()
+        waitUntil { host.creates == 1 }
+        onNodeWithText("After trailer").requestFocus()
+        waitForIdle()
+        onNodeWithText("Play trailer").assertIsNotFocused()
+    }
+
     @Test fun invalidInitialOrEmptyListNeverShowsDialogOrCreatesNode() = runComposeUiTest {
         val host = WebTrailerHostFake()
         var case by mutableStateOf(0)
@@ -104,10 +115,9 @@ class WebTrailerDialogTest {
         val host = WebTrailerHostFake()
         val open = mutableStateOf(false)
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) { Harness(host, open) }
-        onNodeWithText("Play trailer").requestFocus()
-        onNodeWithText("Play trailer").performKeyInput { pressKey(Key.Enter) }
+        openAndParkPageFocus(host)
+        onNodeWithContentDescription("Close").requestFocus()
         onNodeWithContentDescription("Close").assertIsFocused()
-        waitUntil { host.creates == 1 }
         onNodeWithContentDescription("Close").performKeyInput { pressKey(Key.Escape) }
         onNodeWithTag("web-trailer-dialog").assertDoesNotExist()
         onNodeWithText("Play trailer").assertIsFocused()
@@ -121,9 +131,7 @@ class WebTrailerDialogTest {
         val host = WebTrailerHostFake()
         val open = mutableStateOf(false)
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) { Harness(host, open) }
-        onNodeWithText("Play trailer").requestFocus()
-        onNodeWithText("Play trailer").performKeyInput { pressKey(Key.Enter) }
-        waitUntil { host.creates == 1 }
+        openAndParkPageFocus(host)
         onNodeWithContentDescription("Close").performClick()
         onNodeWithTag("web-trailer-dialog").assertDoesNotExist()
         onNodeWithText("Play trailer").assertIsFocused()
@@ -134,9 +142,7 @@ class WebTrailerDialogTest {
         val host = WebTrailerHostFake()
         val open = mutableStateOf(false)
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) { Harness(host, open) }
-        onNodeWithText("Play trailer").requestFocus()
-        onNodeWithText("Play trailer").performKeyInput { pressKey(Key.Enter) }
-        waitUntil { host.creates == 1 }
+        openAndParkPageFocus(host)
         runOnIdle { open.value = false } // The route left without calling onClose.
         onNodeWithTag("web-trailer-dialog").assertDoesNotExist()
         onNodeWithText("Play trailer").assertIsFocused()
