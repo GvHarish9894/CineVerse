@@ -4,6 +4,8 @@ import com.techgv.cineverse.data.auth.AccountDefaultsMetadata
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
+import com.techgv.cineverse.data.library.LibraryStateSnapshot
+import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.storage.*
 import com.techgv.cineverse.data.tmdb.CatalogRepository
@@ -62,6 +64,9 @@ class WebRuntime internal constructor(
 
     fun libraryActions(uiScope: CoroutineScope, onOutcome: (LibraryWriteOutcome) -> Unit) =
         LibraryActionsStateHolder(library, scope, uiScope, onOutcome, ::reportStorageFailure)
+
+    /** Detail's origin-tagged account state: the snapshot names the identity it was read under. */
+    fun libraryStateWithOrigin(ref: MediaRef): Flow<LibraryStateSnapshot> = library.stateWithOrigin(ref)
 
     fun reportStorageFailure(failure: StorageException) {
         storageIssue.value = (failure as? BrowserStorageException)?.failure ?: BrowserStorageFailure.Unavailable
