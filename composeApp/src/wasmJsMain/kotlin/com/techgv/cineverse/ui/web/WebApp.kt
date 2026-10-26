@@ -33,7 +33,6 @@ import com.techgv.cineverse.ui.theme.*
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.Flow
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.settings.SettingsRepository
@@ -78,8 +77,10 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     }
     val signInFocus = remember { FocusRequester() }
     val homeFocus = remember { FocusRequester() }
-    // Bound now so its identity follows the authoritative session; Detail/Library dispatch stays unbound (library = null).
+    // Identity follows the authoritative session (openRate requires holder identity == the rendered session).
     val libraryActions = remember(runtime) { runtime.libraryActions(uiScope) { } }
+    // Remembered: Detail keys its owner on this function, so it must stay the same instance across recompositions.
+    val libraryStateWithOrigin = remember(runtime) { runtime::libraryStateWithOrigin }
     LaunchedEffect(libraryActions) {
         runtime.session.collect { (it as? WebSessionState.Ready)?.let { ready -> libraryActions.onIdentity(ready.session) } }
     }
@@ -153,8 +154,7 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                             }, navigation::navigate) { mainSearchFocused = it }
                         } else when (val route = entry.route) {
                             is WebRoute.Detail -> WebDetail(entry, catalog, generation, browseSettings, contextInvalidations, runtime,
-                                // Masked: the integration owner supplies runtime stateWithOrigin when it unmasks Detail.
-                                library = null, accountState = { emptyFlow() }, navigate = { navigation.navigate(it) }, back = historyBack,
+                                library = libraryActions, accountState = libraryStateWithOrigin, navigate = { navigation.navigate(it) }, back = historyBack,
                                 playTrailer = { _, videos, video -> trailer = Triple(entry, videos, video) })
                             is WebRoute.Person -> WebPerson(entry, catalog, generation, browseSettings, runtime.storageFailure, contextRevision,
                                 runtime::retryStorage, runtime::reportStorageFailure,

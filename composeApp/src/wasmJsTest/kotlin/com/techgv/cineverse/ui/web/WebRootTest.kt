@@ -126,7 +126,9 @@ class WebRootTest {
             exists("web-detail")
             waitUntil(timeoutMillis = 10_000) { "movie:1" in f.calls }
             onNodeWithText("Play trailer").assertExists()
-            onNodeWithText("Watchlist · unknown").assertIsNotEnabled() // library = null until explicit-expected dispatch lands.
+            // Unmasked: the verified guest's origin-tagged snapshot matches the rendered Ready(null), so actions are live (none clicked).
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Add to watchlist").assertIsEnabled()
             go(history, "/person/1")
             exists("web-person")
             waitUntil(timeoutMillis = 10_000) { "person:1" in f.calls }
