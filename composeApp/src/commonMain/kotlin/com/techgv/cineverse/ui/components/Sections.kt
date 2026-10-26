@@ -31,9 +31,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -77,6 +80,37 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
+ * Web section header (`.sec-h`): display title, [trailing] inline right after it (e.g. a [SegmentedControl]), and the
+ * ←/→ round buttons at the right edge when [onScrollLeft] and [onScrollRight] are given. It wraps like the kit's
+ * `flex-wrap`: on a phone the arrows drop to their own line (still right-aligned) instead of squeezing the title.
+ */
+@Composable
+fun WebSectionHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    onScrollLeft: (() -> Unit)? = null,
+    onScrollRight: (() -> Unit)? = null,
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
+    FlowRow(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        SectionTitle(title)
+        trailing()
+        if (onScrollLeft != null && onScrollRight != null) {
+            // 48dp touch targets around 40dp circles: the visible gap is the kit's 8dp.
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                RoundIconButton(CvIcons.ChevronLeft, "Scroll left", onScrollLeft, container = Color.White.copy(alpha = 0.08f))
+                RoundIconButton(CvIcons.ChevronRight, "Scroll right", onScrollRight, container = Color.White.copy(alpha = 0.08f))
+            }
+        }
+    }
+}
+
+/**
  * Titled horizontal row (`.row` / `.sec` + `.hs`): snap-to-start, content padded by the gutter, [headerTrailing] for a
  * segmented control or "See all". Web adds ←/→ buttons that scroll ~80% of the visible width (380 ms).
  */
@@ -97,20 +131,19 @@ fun ScrollRow(
         val gutter = contentGutter(shell, maxWidth)
         val pagePx = with(LocalDensity.current) { (maxWidth - gutter * 2).toPx() * 0.8f }
         Column {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = gutter).padding(bottom = if (web) 14.dp else 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (web) 16.dp else 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SectionTitle(title, Modifier.weight(1f, fill = false))
-                headerTrailing()
-                if (web) {
-                    Box(Modifier.weight(1f))
-                    fun scrollBy(px: Float) = scope.launch {
-                        if (reduceMotion) state.scrollBy(px) else state.animateScrollBy(px, Tokens.Motion.RowScroll.tween())
-                    }
-                    RoundIconButton(CvIcons.ChevronLeft, "Scroll left", { scrollBy(-pagePx) }, container = Color.White.copy(alpha = 0.08f))
-                    RoundIconButton(CvIcons.ChevronRight, "Scroll right", { scrollBy(pagePx) }, container = Color.White.copy(alpha = 0.08f))
+            if (web) {
+                fun scrollBy(px: Float) = scope.launch {
+                    if (reduceMotion) state.scrollBy(px) else state.animateScrollBy(px, Tokens.Motion.RowScroll.tween())
+                }
+                WebSectionHeader(title, Modifier.padding(horizontal = gutter).padding(bottom = 14.dp), { scrollBy(-pagePx) }, { scrollBy(pagePx) }, headerTrailing)
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = gutter).padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SectionTitle(title, Modifier.weight(1f, fill = false))
+                    headerTrailing()
                 }
             }
             LazyRow(
@@ -154,12 +187,19 @@ const val TMDB_ATTRIBUTION = "This product uses the TMDB API but is not endorsed
 @Immutable
 data class FooterLink(val label: String, val onClick: () -> Unit)
 
+/** The web footer's Browse / You columns, provided once by the app root so every page's [Footer] shows them. */
+@Immutable
+data class FooterLinks(val browse: List<FooterLink> = emptyList(), val you: List<FooterLink> = emptyList())
+
+val LocalFooterLinks = staticCompositionLocalOf { FooterLinks() }
+
 /**
- * Footer with the required TMDB attribution. Web: logo + one-liner, Browse / You link columns, attribution note.
+ * Footer with the required TMDB attribution. Web: top hairline, logo + one-liner, Browse / You link columns (default:
+ * [LocalFooterLinks]), attribution note.
  * Mobile: the centred attribution line only (`.attrib`).
  */
 @Composable
-fun Footer(modifier: Modifier = Modifier, browse: List<FooterLink> = emptyList(), you: List<FooterLink> = emptyList()) {
+fun Footer(modifier: Modifier = Modifier, browse: List<FooterLink> = LocalFooterLinks.current.browse, you: List<FooterLink> = LocalFooterLinks.current.you) {
     if (LocalShellStyle.current == ShellStyle.Mobile) {
         Text(
             "Data and images from TMDB · $TMDB_ATTRIBUTION",
@@ -171,6 +211,7 @@ fun Footer(modifier: Modifier = Modifier, browse: List<FooterLink> = emptyList()
     BoxWithConstraints(
         modifier.fillMaxWidth()
             .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.02f), Color.White.copy(alpha = 0.04f))))
+            .drawBehind { drawLine(Color.White.copy(alpha = 0.06f), Offset.Zero, Offset(size.width, 0f), 1.dp.toPx()) }
             .padding(top = 48.dp, bottom = 60.dp),
     ) {
         val gutter = contentGutter(ShellStyle.Web, maxWidth)

@@ -63,7 +63,10 @@ enum class ButtonVariant(val container: Color, val content: Color) {
 /** Web hover brightens fills by 8% (`filter: brightness(1.08)`), approximated by mixing toward white. */
 private fun Color.hovered(on: Boolean) = if (on) Color(red + (1 - red) * 0.08f, green + (1 - green) * 0.08f, blue + (1 - blue) * 0.08f, alpha) else this
 
-/** `.btn`: 46dp pill (38dp `small`, web), optional leading icon. Min touch target 48dp via M3's interactive size. */
+/**
+ * `.btn`: 46dp pill (38dp `small`, web), optional leading [icon] and [trailingIcon] (e.g. a select's chevron).
+ * Min touch target 48dp via M3's interactive size.
+ */
 @Composable
 fun PillButton(
     text: String,
@@ -74,6 +77,7 @@ fun PillButton(
     small: Boolean = false,
     haptic: HapticKind = HapticKind.Select,
     enabled: Boolean = true,
+    trailingIcon: ImageVector? = null,
 ) {
     val web = LocalShellStyle.current == ShellStyle.Web
     val source = remember { MutableInteractionSource() }
@@ -94,6 +98,7 @@ fun PillButton(
     ) {
         if (icon != null) Icon(icon, contentDescription = null, tint = variant.content, modifier = Modifier.size(if (web) 20.dp else 22.dp))
         Text(text, style = bodyStyle(if (small) 14.sp else 15.sp, FontWeight.SemiBold), color = variant.content, maxLines = 1)
+        if (trailingIcon != null) Icon(trailingIcon, contentDescription = null, tint = variant.content, modifier = Modifier.size(16.dp))
     }
 }
 
