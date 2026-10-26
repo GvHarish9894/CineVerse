@@ -39,13 +39,15 @@ class WebRuntimeUiTest {
         var paged = false
         var failNextPage = false
         var language = "en-US"
+        // test perf: glow off; glow-follows-preference covered by WebRuntimeUiTest.ambientGlowFollowsTheSavedPreference.
+        var glow = false
         data class Read(val path: String, val page: String?, val language: String?, val sort: String?, val genres: String?, val query: String?)
         val reads = mutableListOf<Read>()
         val storageRevision = MutableStateFlow(0)
         var gate: CompletableDeferred<Unit>? = null
         private val values = object : SettingsValues {
             override fun string(key: String): String? = if (key == "language") language else if (key == "search.recentQueries") recentValue else null
-            override fun boolean(key: String): Boolean? = if (key == "motion") true else null
+            override fun boolean(key: String): Boolean? = when (key) { "motion" -> true; "glow" -> glow; else -> null }
             override fun stringSet(key: String): Set<String>? = null
         }
         val app = koinApplication { modules(sharedModules(WebConfig("/api")) + module {
@@ -129,6 +131,22 @@ class WebRuntimeUiTest {
             onNodeWithText("Discover your next favourite").assertExists()
             assertNull(f.runtime.storageFailure.value)
             assertEquals(2, f.sessionReads)
+        } finally { f.close() }
+    }
+
+    @Test fun ambientGlowFollowsTheSavedPreference() = runComposeUiTest {
+        val f = Fixture()
+        val history = FakeHistory("/settings")
+        try {
+            f.failSession = false; f.failSettings = false; f.glow = true
+            f.runtime.start()
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
+            waitUntil(timeoutMillis = 10_000) { f.runtime.settingsHolder.state.value?.settings?.glow == true }
+            onNodeWithTag("web-ambient-glow").assertExists()
+            runOnIdle { f.glow = false; f.storageRevision.value++ }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("web-ambient-glow").fetchSemanticsNodes().isEmpty() }
+            runOnIdle { f.glow = true; f.storageRevision.value++ }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag("web-ambient-glow").fetchSemanticsNodes().isNotEmpty() }
         } finally { f.close() }
     }
 

@@ -4,7 +4,11 @@ package com.techgv.cineverse.ui.web
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsActions
+import com.techgv.cineverse.ui.adaptive.ShellStyle
+import com.techgv.cineverse.ui.setThemedContent
+import com.techgv.cineverse.ui.theme.AppearanceSettings
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.*
 import com.techgv.cineverse.data.web.WebProxyHttp
@@ -48,7 +52,17 @@ class WebRootTest {
                 return MovieDetailDto(id, title = "Root film", overview = "Root overview", videos = VideosDto(listOf(
                     VideoDto(key = WebTrailerHostFake.TRAILER.key, name = "Official Trailer", site = "YouTube", type = "Trailer", official = true))))
             }
-            override suspend fun videos(media: MediaType, id: Int, language: String): VideosDto = VideosDto().also { calls += "videos:$id" }
+            override suspend fun videos(media: MediaType, id: Int, language: String): VideosDto = VideosDto(listOf(
+                VideoDto(key = "tEaSeR_0001", name = "Teaser", site = "YouTube", type = "Teaser", official = true),
+                VideoDto(key = WebTrailerHostFake.TRAILER.key, name = "Official Trailer", site = "YouTube", type = "Trailer", official = true),
+            )).also { calls += "videos:$id" }
+            // Home: one trending movie; every other row and the genre lists are empty.
+            override suspend fun trending(window: TrendingWindow, language: String, page: Int) =
+                PageDto(page, listOf(MediaItemDto(1, mediaType = "movie", title = "Root film", releaseDate = "2026-03-13")), 1, 1)
+            override suspend fun movieList(list: MovieList, language: String, region: String, page: Int) = PageDto<MediaItemDto>(page, emptyList(), 1, 0)
+            override suspend fun tvList(list: TvList, language: String, timezone: String?, page: Int) = PageDto<MediaItemDto>(page, emptyList(), 1, 0)
+            override suspend fun popularPeople(language: String, page: Int) = PageDto<MediaItemDto>(page, emptyList(), 1, 0)
+            override suspend fun genres(media: MediaType, language: String) = GenreListDto()
             override suspend fun tvDetail(id: Int, language: String, append: String, sessionId: String?): TvDetailDto {
                 calls += "tv:$id"
                 return TvDetailDto(id, name = "Root series", seasons = listOf(SeasonSummaryDto(10, 0, "Specials")))
@@ -68,7 +82,8 @@ class WebRootTest {
         }
         private val values = object : SettingsValues {
             override fun string(key: String): String? = null
-            override fun boolean(key: String): Boolean? = null
+            // test perf: glow off; glow-follows-preference covered by WebRuntimeUiTest.ambientGlowFollowsTheSavedPreference.
+            override fun boolean(key: String): Boolean? = if (key == "glow") false else null
             override fun stringSet(key: String): Set<String>? = null
         }
         private val id = "cineverse.root.test.${++next}"
@@ -323,6 +338,31 @@ class WebRootTest {
                 runOnIdle { f.runtime.revalidateSession() } // Bumps the generation; only the fanned-in event restarts the reader.
                 waitUntil(timeoutMillis = 10_000) { f.calls.count { it == read } > before }
             }
+        } finally { f.close() }
+    }
+
+    /** Home over the real graph; the root's 1-line `trailer = …` binding is the one Detail's dialog test covers. */
+    @Test fun homePlayTrailerHandsTheRootTheTitlesRealValidatedVideoList() = runComposeUiTest {
+        val f = Fixture()
+        val routes = mutableListOf<WebRoute>()
+        val played = mutableListOf<Pair<List<Video>, Video>>()
+        try {
+            f.runtime.start()
+            waitUntil(timeoutMillis = 10_000) { f.runtime.session.value is WebSessionState.Ready }
+            setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+                val entry = remember { WebNavigation(FakeHistory("/")).entry.value }
+                WebHome(entry, f.catalog, f.generation, f.repository.settings, f.runtime.session.value, f.runtime, { route, _ -> routes += route },
+                    playTrailer = { videos, video -> played += videos to video }, signIn = {})
+            }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Play trailer").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Mar 13, 2026").assertExists() // The trending card's date, formatted; never the raw ISO string.
+            onNodeWithText("Play trailer").performClick()
+            waitUntil(timeoutMillis = 10_000) { played.isNotEmpty() }
+            // The holder's pick (official trailer first) plus the rest of the fetched list; nothing invented, no route.
+            val trailer = WebTrailerHostFake.TRAILER
+            assertEquals(listOf(listOf(trailer, Video("tEaSeR_0001", "Teaser", "Teaser", official = true)) to trailer), played)
+            assertEquals(emptyList(), routes)
+            assertEquals(emptyList(), f.writes)
         } finally { f.close() }
     }
 
