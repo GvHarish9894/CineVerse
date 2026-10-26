@@ -35,11 +35,19 @@ class WebPersonUiTest {
         onNodeWithText("Fixture person").assertExists()
         onNodeWithText("Biography (English)").assertExists()
         onNodeWithText("English fixture biography").assertExists()
-        onNodeWithText("1970-01-02").assertExists()
-        onNodeWithText("2020-03-04").assertExists()
+        onNodeWithText("Jan 2, 1970").assertExists()
+        onNodeWithText("Died").assertExists()
+        onNodeWithText("Mar 4, 2020").assertExists()
+        onAllNodes(hasText("1970-01-02", substring = true) or hasText("2020-03-04", substring = true)).assertCountEquals(0)
         onNodeWithText("Fixture town").assertExists()
-        onNodeWithText("Unique credits").assertExists()
+        onNodeWithText("Credits").assertExists()
         onNodeWithText("2").assertExists()
+        // Known for and the credits table sit in the right column, beside the portrait column, not below it.
+        val bio = onNodeWithText("Biography (English)").fetchSemanticsNode().boundsInRoot
+        val heading = onNodeWithText("Acting credits").fetchSemanticsNode().boundsInRoot
+        val portrait = onNodeWithContentDescription("Portrait of Fixture person").fetchSemanticsNode().boundsInRoot
+        assertEquals(bio.left, heading.left)
+        assertTrue(heading.left > portrait.right)
         assertEquals(listOf("ta-IN", "en-US"), f.api.requests.map { it.language })
     }
 
@@ -53,7 +61,10 @@ class WebPersonUiTest {
         onNodeWithTag("person-desktop").assertDoesNotExist()
         onNodeWithText("Unknown person").assertExists()
         onNodeWithText("No biography available.").assertExists()
-        onAllNodesWithText("Unknown").assertCountEquals(4)
+        // Missing facts are omitted, never shown as invented or placeholder values.
+        onAllNodesWithText("Unknown").assertCountEquals(0)
+        listOf("Known for", "Credits", "Birthday", "Died", "Place of birth").forEach { onNodeWithText(it).assertDoesNotExist() }
+        onNodeWithText("No personal details were returned.").assertExists()
         onNodeWithTag("web-person").performScrollToNode(hasText("No known-for titles"))
         onNodeWithText("No known-for titles").assertExists()
         onNodeWithTag("web-person").performScrollToNode(hasText("No credits available."))
@@ -115,16 +126,16 @@ class WebPersonUiTest {
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             Box(Modifier.requiredWidth(1100.dp).height(720.dp)) { Screen(f) }
         }
-        onNodeWithText("← Back").requestFocus()
-        onNodeWithText("← Back").performKeyInput { pressKey(Key.Tab) }
+        onNodeWithText("Back").requestFocus()
+        onNodeWithText("Back").performKeyInput { pressKey(Key.Tab) }
         onNodeWithTag("person-biography-toggle").assertIsFocused()
         onNodeWithTag("person-biography-toggle").performKeyInput {
             keyDown(Key.ShiftLeft)
             pressKey(Key.Tab)
             keyUp(Key.ShiftLeft)
         }
-        onNodeWithText("← Back").assertIsFocused()
-        onNodeWithText("← Back").performKeyInput { pressKey(Key.Enter) }
+        onNodeWithText("Back").assertIsFocused()
+        onNodeWithText("Back").performKeyInput { pressKey(Key.Enter) }
         assertEquals(1, f.backs)
         assertTrue(f.destinations.isEmpty())
     }
@@ -182,7 +193,7 @@ class WebPersonUiTest {
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             Box(Modifier.width(390.dp).height(720.dp)) { Screen(f, revision) }
         }
-        onNodeWithText("Loading person…").assertExists()
+        onNodeWithContentDescription("Loading person…").assertExists()
         runOnIdle {
             assertEquals(8, f.entry.getInt("person.index"))
             assertEquals(37, f.entry.getInt("person.offset"))
