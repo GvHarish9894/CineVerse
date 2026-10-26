@@ -190,6 +190,28 @@ class SettingsStateHolderTest {
         }
     }
 
+    @Test fun signOutThatReturnsWithoutTheLocalClearReportsFalseOnceAndReleasesTheGuard() = runTest(dispatcher) {
+        auth.sessions.value = ann
+        var calls = 0
+        val stillSignedIn = object : AuthRepository by auth {
+            override suspend fun signOut(onSignedOutLocally: () -> Unit) { calls++ } // e.g. web read still shows a session
+        }
+        val stillHolder = SettingsStateHolder(settings, stillSignedIn)
+        val results = mutableListOf<Boolean>()
+        backgroundScope.launch { stillHolder.signOutResults.collect { results += it } }
+
+        stillHolder.signOut()
+        stillHolder.signOut() // duplicate press while in flight
+        runCurrent()
+        assertEquals(listOf(false), results)
+        assertEquals(1, calls)
+        assertEquals(ann, auth.sessions.value)
+
+        stillHolder.signOut(); runCurrent()
+        assertEquals(listOf(false, false), results, "a normal return releases the duplicate-press guard")
+        assertEquals(2, calls)
+    }
+
     @Test fun aFailedLocalClearReportsFailureAndAllowsAnotherTry() = runTest(dispatcher) {
         auth.sessions.value = ann
         val results = mutableListOf<Boolean>()
