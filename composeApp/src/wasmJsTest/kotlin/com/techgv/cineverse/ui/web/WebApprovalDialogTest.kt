@@ -49,7 +49,7 @@ class WebApprovalDialogTest {
         } finally { f.dispose() }
     }
 
-    @Test fun keyboardTrapEscapeExplicitCancelAndFocusReturnUseCvDialog() = runComposeUiTest {
+    @Test fun keyboardTrapKeepsSixTabCyclesInsideCvDialog() = runComposeUiTest {
         val f = WebApprovalFixture()
         try {
             f.runtime.start()
@@ -75,10 +75,42 @@ class WebApprovalDialogTest {
                 onNodeWithText("Before approval").assertIsNotFocused()
                 onNodeWithText("After approval").assertIsNotFocused()
             }
-            // Escape before an owned start closes locally, then focus returns to the real trigger.
-            onNode(focusedInDialog).performKeyInput { pressKey(Key.Escape) }
+        } finally { f.dispose() }
+    }
+
+    @Test fun escapeBeforeStartClosesLocallyAndReturnsFocus() = runComposeUiTest {
+        val f = WebApprovalFixture()
+        try {
+            f.runtime.start()
+            waitUntil { f.runtime.session.value is WebSessionState.Ready }
+            setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+                val trigger = remember { FocusRequester() }
+                val inputMode = LocalInputModeManager.current
+                LaunchedEffect(Unit) { inputMode.requestInputMode(InputMode.Keyboard) }
+                PillButton("Sign in trigger", f.owner::show, Modifier.focusRequester(trigger))
+                WebApprovalDialog(f.owner, trigger)
+            }
+            onNodeWithText("Sign in trigger").requestFocus()
+            onNodeWithText("Sign in trigger").performKeyInput { pressKey(Key.Enter) }
+            onNodeWithContentDescription("Close").assertIsFocused()
+            onNodeWithContentDescription("Close").performKeyInput { pressKey(Key.Escape) }
             onNodeWithText("Sign in trigger").assertIsFocused()
             assertEquals(0, f.count("/api/auth/cancel"))
+        } finally { f.dispose() }
+    }
+
+    @Test fun escapeAfterStartExplicitlyCancelsAndReturnsFocus() = runComposeUiTest {
+        val f = WebApprovalFixture()
+        try {
+            f.runtime.start()
+            waitUntil { f.runtime.session.value is WebSessionState.Ready }
+            setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+                val trigger = remember { FocusRequester() }
+                val inputMode = LocalInputModeManager.current
+                LaunchedEffect(Unit) { inputMode.requestInputMode(InputMode.Keyboard) }
+                PillButton("Sign in trigger", f.owner::show, Modifier.focusRequester(trigger))
+                WebApprovalDialog(f.owner, trigger)
+            }
             onNodeWithText("Sign in trigger").performClick()
             runOnIdle { f.owner.startApproval() }
             waitUntil { f.owner.state.value.canOpen }
