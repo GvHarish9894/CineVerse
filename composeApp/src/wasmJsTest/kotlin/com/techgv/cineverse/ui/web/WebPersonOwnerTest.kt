@@ -235,6 +235,22 @@ class WebPersonOwnerTest {
         assertEquals(listOf("ta-IN", "en-US"), f.api.requests.map { it.language })
     }
 
+    @Test fun wrongPersonEnglishFallbackIsNeverDisplayedForTheRequestedPerson() = runTest {
+        val f = WebPersonFixture().apply { captured = Settings(language = "ta-IN") }
+        f.api.respond = { id, language ->
+            if (language == "en-US") webPersonDto(99, "Other person's biography") else webPersonDto(id, "")
+        }
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        val state = owner.state.value
+        assertTrue(state.verified)
+        assertEquals(42, state.displayed!!.id)
+        assertEquals("", state.displayed!!.biography)
+        assertFalse(state.displayed!!.biographyInEnglish)
+        assertEquals(listOf(42, 42), f.api.requests.map { it.id })
+        assertEquals(listOf("ta-IN", "en-US"), f.api.requests.map { it.language })
+    }
+
     @Test fun lateEnglishFallbackCannotReplaceNewLanguageAndOptionalFailureKeepsPrimary() = runTest {
         val f = WebPersonFixture().apply { captured = Settings(language = "ta-IN") }
         val english = CompletableDeferred<Unit>()
