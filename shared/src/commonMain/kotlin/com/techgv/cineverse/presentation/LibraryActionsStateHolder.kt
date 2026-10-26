@@ -4,6 +4,7 @@ import com.techgv.cineverse.data.storage.StorageException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryRepository
@@ -32,9 +33,9 @@ data class LibraryWriteOutcome(val title: Title, val write: LibraryWrite, val re
 data class RatePrompt(val title: Title, val initial: Double?, val identity: AuthSession?)
 
 /**
- * [LibraryActions] bound to the identity signed in at click time: each action captures [onIdentity]'s value
- * synchronously and the repository rejects it (Superseded, nothing reported) if that sign-in is gone, so it never
- * retargets. Writes run in [appScope] (they outlive the screen) and end in [onOutcome]; the Rate dialog is
+ * [LibraryActions] defaults capture [onIdentity]'s value synchronously at invocation; explicit overloads keep
+ * the caller's captured identity unchanged. The repository rejects superseded writes without retargeting.
+ * Writes run in [appScope] (they outlive the screen) and end in [onOutcome]; the Rate dialog is
  * [ratePrompt], held back while the Player is up ([setPlayerActive]) and dropped when the identity changes.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -51,6 +52,7 @@ class LibraryActionsStateHolder(
     fun retryStorage() { reads.update { it + 1 } }
     private var identity: AuthSession? = null
     private val prompt = MutableStateFlow<RatePrompt?>(null)
+    private var rateRequest = 0L
     private val playerActive = MutableStateFlow(false)
 
     /** The Rate dialog to display: null while the Player is up (the prompt waits). */
@@ -58,8 +60,9 @@ class LibraryActionsStateHolder(
 
     /** The collected sign-in changed: a dialog of another identity closes without writing. */
     fun onIdentity(c: AuthSession?) {
+        if (identity == c) return
         identity = c
-        if (prompt.value?.identity != c) prompt.value = null
+        closeRate()
     }
 
     fun setPlayerActive(active: Boolean) {
@@ -74,42 +77,53 @@ class LibraryActionsStateHolder(
         }
     }
 
-    override fun toggleWatchlist(title: Title) {
-        val identity = identity
-        write(title, LibraryWrite.ToggleWatchlist, identity) { repository.toggleWatchlist(title, identity) }
+    override fun toggleWatchlist(title: Title) = toggleWatchlist(title, identity)
+
+    /** [expected] is captured intent (null means guest), not proof of an authoritative browser session. */
+    fun toggleWatchlist(title: Title, expected: AuthSession?) {
+        write(title, LibraryWrite.ToggleWatchlist, expected) { repository.toggleWatchlist(title, expected) }
     }
 
-    override fun toggleFavourite(title: Title) {
-        val identity = identity
-        write(title, LibraryWrite.ToggleFavourite, identity) { repository.toggleFavourite(title, identity) }
+    override fun toggleFavourite(title: Title) = toggleFavourite(title, identity)
+
+    /** [expected] is passed unchanged to the repository's session and per-title lock checks. */
+    fun toggleFavourite(title: Title, expected: AuthSession?) {
+        write(title, LibraryWrite.ToggleFavourite, expected) { repository.toggleFavourite(title, expected) }
     }
 
-    override fun openRate(title: Title) {
-        val identity = identity
+    override fun openRate(title: Title) = openRate(title, identity)
+
+    /** Opens only for [expected] while both the repository session and collected identity still match. */
+    fun openRate(title: Title, expected: AuthSession?) {
+        val request = ++rateRequest
         uiScope.launch {
-            val initial = try { repository.currentRating(identity, title.ref) }
-            catch (failure: StorageException) {
-                if (identity == this@LibraryActionsStateHolder.identity) onStorageFailure(failure)
-                return@launch
+            try {
+                if (repository.session.first() != expected || request != rateRequest || expected != identity) return@launch
+                val initial = repository.currentRating(expected, title.ref)
+                if (repository.session.first() == expected && request == rateRequest && expected == identity) {
+                    prompt.value = RatePrompt(title, initial, expected)
+                }
+            } catch (failure: StorageException) {
+                // As before: a real storage failure is reported unless the sign-in changed (a closed dialog still reports).
+                if (expected == identity) onStorageFailure(failure)
             }
-            // The sign-in may have changed while the rating was read.
-            if (identity == this@LibraryActionsStateHolder.identity) prompt.value = RatePrompt(title, initial, identity)
         }
     }
 
     fun submitRating(value: Double) {
         val p = prompt.value ?: return
-        prompt.value = null
+        closeRate()
         write(p.title, LibraryWrite.Rate(value), p.identity) { repository.rate(p.title, value, p.identity) }
     }
 
     fun removeRating() {
         val p = prompt.value ?: return
-        prompt.value = null
+        closeRate()
         write(p.title, LibraryWrite.Unrate, p.identity) { repository.unrate(p.title, p.identity) }
     }
 
     fun closeRate() {
+        rateRequest++
         prompt.value = null
     }
 
