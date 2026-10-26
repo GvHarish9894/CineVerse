@@ -162,7 +162,7 @@ class WebRuntimeUiTest {
             onNodeWithText("My Library").assertIsDisplayed().performClick()
             waitUntil(timeoutMillis = 10_000) { f.canceledReads >= 7 }
             runOnIdle { f.gate!!.complete(Unit) }
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Guest library · saved on this browser; kept separate from account lists").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Saved in this browser · sign in to sync with TMDB").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertDoesNotExist()
             assertEquals("/library?tab=watchlist", history.url)
         } finally { f.close() }
@@ -254,7 +254,7 @@ class WebRuntimeUiTest {
             runOnIdle { f.gate!!.complete(Unit); f.runtime.retryStorage() }
             assertEquals(reads, f.catalogReads)
             assertEquals("/library?tab=watchlist", history.url)
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Guest library · saved on this browser; kept separate from account lists").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Saved in this browser · sign in to sync with TMDB").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertDoesNotExist()
         } finally { f.close() }
     }
@@ -352,7 +352,7 @@ class WebRuntimeUiTest {
             waitUntil(timeoutMillis = 10_000) { f.runtime.storageFailure.value == null }
             assertEquals(reads, f.catalogReads)
             assertEquals("/library?tab=watchlist", history.url)
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Guest library · saved on this browser; kept separate from account lists").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Saved in this browser · sign in to sync with TMDB").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText("This destination is not implemented in this preview. No account changes were made.").assertDoesNotExist()
         } finally { f.close() }
     }

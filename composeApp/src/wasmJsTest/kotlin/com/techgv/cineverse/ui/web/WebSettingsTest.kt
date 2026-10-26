@@ -35,12 +35,20 @@ class WebSettingsTest {
             onNodeWithText("Ambient glow").assertIsOff().assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch)).performClick()
             waitUntil { f.owner.state.value.settings?.glow == true }
             onNodeWithText("Ambient glow").assertIsOn()
+            onNodeWithText("Settings").assertExists()
+            onNodeWithText("Haptic strength").assertExists()
+            onNodeWithText("Saved preference · web taps use a fixed 10 ms").assertExists()
             onNodeWithTag("web-settings").performScrollToNode(hasTestTag("settings-language-ta-IN"))
-            onNodeWithTag("settings-language-ta-IN").assertIsSelected()
+            onNodeWithTag("settings-language-ta-IN").assertIsSelected().assert(hasText("Tamil · ta-IN"))
+            // Latin chip labels only: the bundled fonts cannot draw the native scripts.
+            onNodeWithTag("settings-language-hi-IN").assert(hasText("Hindi · hi-IN"))
+            onNodeWithText("हिन्दी", substring = true).assertDoesNotExist()
+            onNodeWithText("language=ta-IN").assertExists()
             onNodeWithTag("settings-language-es-ES").performScrollTo().performClick()
             waitUntil { f.owner.state.value.settings?.language == "es-ES" }
             onNodeWithTag("settings-language-es-ES").assertIsSelected()
-            onNodeWithText("Content language · language=es-ES").assertExists()
+            onNodeWithText("language=es-ES").assertExists()
+            onNodeWithText("Content language · language=es-ES").assertDoesNotExist()
             onNodeWithTag("settings-region-US").performScrollTo().performClick()
             waitUntil { f.owner.state.value.settings?.region == "US" }
             onNodeWithTag("settings-region-US").assertIsSelected()
@@ -68,11 +76,12 @@ class WebSettingsTest {
             assertEquals(1, retries)
             onNodeWithText("Sign in").assertDoesNotExist()
             runOnIdle { f.session.value = WebSessionState.Ready(null) }
+            onNodeWithText("Guest · preferences are saved in this browser").assertExists()
             onNodeWithText("Sign in").performClick()
             assertEquals(1, f.signIns)
             val account = AuthSession(AccountObjectId("fixture-account"), "Actual account name", 14)
             runOnIdle { f.session.value = WebSessionState.Ready(account) }
-            onNodeWithText("Actual account name").assertExists()
+            onNodeWithText("Signed in as Actual account name").assertExists()
             onNodeWithText("Sign out").performClick()
             onNodeWithText("Import guest library").performScrollTo().performClick()
             assertEquals(listOf(account), f.signOuts)

@@ -15,8 +15,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.domain.Video
@@ -39,10 +41,14 @@ fun WebTrailerDialog(
     onClose: () -> Unit,
     restoreFocus: FocusRequester,
     host: WebTrailerHost,
+    maxWidth: Dp = 1000.dp,
 ) {
     val owner = remember(videos, initial, autoplay, host) { WebTrailerOwner(videos, initial, autoplay, host) }
     val current = owner.current ?: return
     val density = LocalDensity.current.density
+    // Kit `.player` is [maxWidth] (1000) wide; short windows shrink it so the 16:9 slot, caption and More videos strip still fit (never below 560).
+    val windowHeight = (LocalWindowInfo.current.containerSize.height / density).dp
+    val playerWidth = minOf(maxWidth, ((windowHeight - 320.dp) * (16f / 9f) + 72.dp).coerceAtLeast(560.dp))
     val close = { owner.close(); onClose() }
     CvDialog(
         onDismissRequest = close,
@@ -50,6 +56,7 @@ fun WebTrailerDialog(
         kicker = current.type,
         restoreFocus = restoreFocus,
         modifier = Modifier.testTag("web-trailer-dialog"),
+        maxWidth = playerWidth,
     ) {
         Box(
             Modifier.padding(top = 20.dp).fillMaxWidth().aspectRatio(16f / 9f)

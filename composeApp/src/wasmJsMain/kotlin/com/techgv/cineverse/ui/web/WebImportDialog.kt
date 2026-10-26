@@ -61,25 +61,26 @@ fun WebImportDialog(owner: WebAccountOwner, restoreFocus: FocusRequester) {
             if (prompt is ImportPrompt.Unconfirmed) {
                 Text(prompt.titles.joinToString("\n"), style = bodyStyle(15.sp), color = Tokens.Colors.TextPrimary)
             }
-            Text(body, style = bodyStyle(15.sp), color = Tokens.Colors.TextSecondary)
+            Text(body, style = bodyStyle(15.5.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.8f))
             val enabled = !state.importBusy
-            val wide = Modifier.fillMaxWidth()
-            when (prompt) {
-                is ImportPrompt.Ask -> {
-                    PillButton(if (prompt.resume) "Resume" else "Import", owner::importLibrary, wide, enabled = enabled)
-                    if (!prompt.resume) PillButton("Keep separate", owner::keepSeparate, wide, variant = ButtonVariant.Ghost, enabled = enabled)
-                    PillButton("Later", owner::later, wide, variant = ButtonVariant.Ghost)
+            FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (prompt) {
+                    is ImportPrompt.Ask -> {
+                        PillButton(if (prompt.resume) "Resume" else "Import", owner::importLibrary, enabled = enabled)
+                        if (!prompt.resume) PillButton("Keep separate", owner::keepSeparate, variant = ButtonVariant.Ghost, enabled = enabled)
+                        PillButton("Later", owner::later, variant = ButtonVariant.Ghost)
+                    }
+                    ImportPrompt.Running -> PillButton("Later", owner::later, variant = ButtonVariant.Ghost)
+                    is ImportPrompt.Unconfirmed -> {
+                        PillButton("Done", owner::finishImport, enabled = enabled)
+                        PillButton("Retry", owner::retryImport, variant = ButtonVariant.Ghost, enabled = enabled)
+                    }
+                    ImportPrompt.Failed -> {
+                        PillButton("Try again", owner::retryImport, enabled = enabled)
+                        PillButton("Later", owner::later, variant = ButtonVariant.Ghost)
+                    }
+                    null -> PillButton("Close", owner::dismiss, variant = ButtonVariant.Ghost)
                 }
-                ImportPrompt.Running -> PillButton("Later", owner::later, wide, variant = ButtonVariant.Ghost)
-                is ImportPrompt.Unconfirmed -> {
-                    PillButton("Done", owner::finishImport, wide, enabled = enabled)
-                    PillButton("Retry", owner::retryImport, wide, variant = ButtonVariant.Ghost, enabled = enabled)
-                }
-                ImportPrompt.Failed -> {
-                    PillButton("Try again", owner::retryImport, wide, enabled = enabled)
-                    PillButton("Later", owner::later, wide, variant = ButtonVariant.Ghost)
-                }
-                null -> PillButton("Close", owner::dismiss, wide, variant = ButtonVariant.Ghost)
             }
         }
     }

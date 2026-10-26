@@ -57,14 +57,14 @@ fun WebRateDialog(actions: LibraryActionsStateHolder, restoreFocus: FocusRequest
         Text(
             buildAnnotatedString {
                 append(shown?.let(::oneDecimal) ?: "–")
-                withStyle(SpanStyle(fontSize = 18.sp, color = Tokens.Colors.TextSecondary)) { append(" / 10") }
+                withStyle(SpanStyle(fontSize = 20.sp, color = Tokens.Colors.TextPrimary.copy(alpha = 0.55f))) { append(" / 10") }
             },
-            style = displayStyle(44.sp),
-            modifier = Modifier.padding(top = 18.dp).testTag("web-rate-value"),
+            style = displayStyle(46.sp, trackingEm = -0.03f),
+            modifier = Modifier.padding(top = 16.dp).testTag("web-rate-value"),
         )
-        Text(shown?.let(::ratingWord) ?: "Choose a rating", style = bodyStyle(15.sp), color = Tokens.Colors.TextSecondary,
-            modifier = Modifier.testTag("web-rate-word"))
-        FlowRow(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(shown?.let(::ratingWord) ?: "Choose a rating", style = bodyStyle(14.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.7f),
+            modifier = Modifier.padding(top = 4.dp).testTag("web-rate-word"))
+        FlowRow(Modifier.padding(top = 26.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PillButton("Submit rating", { submit() }, enabled = chosen != null)
             if (p.initial != null) PillButton("Remove rating", actions::removeRating, variant = ButtonVariant.Ghost)
         }

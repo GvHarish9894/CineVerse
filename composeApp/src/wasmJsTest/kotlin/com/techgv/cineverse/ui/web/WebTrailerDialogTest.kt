@@ -87,6 +87,8 @@ class WebTrailerDialogTest {
             assertEquals(listOf(src(TRAILER.key, autoplay = 1)), host.srcs)
             val slot = assertNotNull(host.lastSlot)
             assertEquals(16f / 9f, slot.width / slot.height, 0.05f)
+            // Wider than any 560dp dialog's content (560 - 2 × 22 phone padding): the player takes the wider kit `.player` width.
+            assertTrue(slot.width > 516f, "Trailer slot is ${slot.width}dp wide")
         }
         onNodeWithText(TRAILER.key, substring = true).assertDoesNotExist()
         onNodeWithContentDescription("Play").assertDoesNotExist()
@@ -152,7 +154,13 @@ class WebTrailerDialogTest {
         }
     }
 
-    @Test fun keyboardTrapKeepsSixTabCyclesInsideTrailerDialog() = runComposeUiTest {
+    // One full Tab cycle per lifecycle (Close, Teaser, Clip): the 1000dp player costs more per CPU-rastered frame than a
+    // 560dp dialog, so six presses in one 2000 ms Mocha test do not fit; forward + backward keep all six presses asserted.
+    @Test fun keyboardTrapForwardTabCycleReturnsToCloseInsideTrailerDialog() = runComposeUiTest { assertTabCycleStaysInside(shift = false) }
+
+    @Test fun keyboardTrapBackwardShiftTabCycleReturnsToCloseInsideTrailerDialog() = runComposeUiTest { assertTabCycleStaysInside(shift = true) }
+
+    private fun ComposeUiTest.assertTabCycleStaysInside(shift: Boolean) {
         val host = WebTrailerHostFake()
         val open = mutableStateOf(false)
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) { Harness(host, open) }
@@ -160,12 +168,13 @@ class WebTrailerDialogTest {
         onNodeWithText("Play trailer").performKeyInput { pressKey(Key.Enter) }
         onNodeWithContentDescription("Close").assertIsFocused()
         val focusedInDialog = isFocused() and hasAnyAncestor(isDialog())
-        repeat(6) {
-            onNode(focusedInDialog).performKeyInput { pressKey(Key.Tab) }
+        repeat(3) {
+            onNode(focusedInDialog).performKeyInput { if (shift) withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) } else pressKey(Key.Tab) }
             onNode(focusedInDialog).assertExists()
             onNodeWithText("Before trailer").assertIsNotFocused()
             onNodeWithText("After trailer").assertIsNotFocused()
         }
+        onNodeWithContentDescription("Close").assertIsFocused()
         runOnIdle { assertEquals(1, host.creates) }
     }
 

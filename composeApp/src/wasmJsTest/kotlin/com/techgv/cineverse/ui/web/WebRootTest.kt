@@ -4,6 +4,7 @@ package com.techgv.cineverse.ui.web
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsActions
 import com.techgv.cineverse.ui.adaptive.ShellStyle
@@ -154,7 +155,9 @@ class WebRootTest {
     private fun ComposeUiTest.root(f: Fixture, history: FakeHistory) {
         f.runtime.start()
         setContent {
-            WebApp(f.runtime, f.catalog, f.generation, f.repository.settings, f.recent, history, f.repository, f.opener, f.trailerHost) { f.backs++ }
+            // test perf: CPU raster of the wide player; the 1000dp slot is covered by WebTrailerDialogTest
+            WebApp(f.runtime, f.catalog, f.generation, f.repository.settings, f.recent, history, f.repository, f.opener, f.trailerHost,
+                trailerDialogMaxWidth = 560.dp) { f.backs++ }
         }
         waitUntil(timeoutMillis = 10_000) { f.runtime.session.value is WebSessionState.Ready && f.runtime.settingsHolder.state.value?.settings != null }
     }
@@ -185,7 +188,7 @@ class WebRootTest {
             exists("search-input")
             waitUntil(timeoutMillis = 10_000) { "search:x" in f.calls }
             go(history, "/library")
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Guest library · saved on this browser; kept separate from account lists").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Saved in this browser · sign in to sync with TMDB").fetchSemanticsNodes().isNotEmpty() }
             assertEquals("/library?tab=watchlist", history.url)
             go(history, "/settings")
             exists("web-settings")

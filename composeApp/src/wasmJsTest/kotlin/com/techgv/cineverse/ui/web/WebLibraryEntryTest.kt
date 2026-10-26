@@ -50,18 +50,21 @@ class WebLibraryEntryTest {
         nav.close()
     }
 
-    @Test fun loadedCountsAreKnownOnlyForBothLoadedGroupsAndNeverInactiveTotals() {
+    @Test fun tabCountsAreKnownOnlyForBothCompleteFreshGroupsAndNeverInactiveTotals() {
         val one = LibraryGroup(SectionState.Content(listOf(com.techgv.cineverse.data.library.LibraryEntry(webLibraryTitle(MediaType.Movie, 7), null))))
-        assertNull(libraryLoadedCount(LibraryUiState(movies = one)))
-        assertNull(libraryLoadedCount(LibraryUiState(movies = one, tv = LibraryGroup(SectionState.Error(SectionErrorKind.Offline)))))
-        assertEquals(1, libraryLoadedCount(LibraryUiState(movies = one, tv = LibraryGroup(SectionState.Empty))))
+        assertNull(libraryKnownCount(LibraryUiState(movies = one)))
+        assertNull(libraryKnownCount(LibraryUiState(movies = one, tv = LibraryGroup(SectionState.Error(SectionErrorKind.Offline)))))
+        assertEquals(1, libraryKnownCount(LibraryUiState(movies = one, tv = LibraryGroup(SectionState.Empty))))
+        // A loaded first page with more to page, or a stale group, is not a total.
+        assertNull(libraryKnownCount(LibraryUiState(movies = one.copy(hasMore = true), tv = LibraryGroup(SectionState.Empty))))
+        assertNull(libraryKnownCount(LibraryUiState(movies = one, tv = LibraryGroup(SectionState.Empty, refreshError = SectionErrorKind.Offline))))
         assertEquals(WebRoute.Detail("movie", 7), webLibraryTitle(MediaType.Movie, 7).ref.libraryDetailRoute())
         assertEquals(WebRoute.Detail("tv", 82), webLibraryTitle(MediaType.Tv, 82).ref.libraryDetailRoute())
     }
 
     @Test fun guestStorageRetryResubscribesEqualReadRetainsOwnerAndNeverWrites() {
         WebLibraryFixture().use { f -> f.owner().use { owner ->
-            assertEquals(2, libraryLoadedCount(assertNotNull(owner.visibleState())))
+            assertEquals(2, libraryKnownCount(assertNotNull(owner.visibleState())))
             f.failGuest = true; f.guestRevision.value++
             assertEquals(0, f.activeGuest)
             assertNotNull(owner.visibleState())

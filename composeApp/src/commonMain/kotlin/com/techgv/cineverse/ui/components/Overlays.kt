@@ -66,6 +66,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -260,7 +261,7 @@ fun BoxScope.ToastHost(state: ToastState) {
 expect fun cvDialogProperties(): DialogProperties
 
 /**
- * Modal dialog (`.dialog`): ≤ 560dp, radius 28, raised surface, close button, kicker + title + [content].
+ * Modal dialog (`.dialog`): ≤ [maxWidth] (560dp; the web trailer `.player` passes 1000dp), radius 28, raised surface, close button, kicker + title + [content].
  * A platform dialog window, so focus is trapped inside (Tab cycles within) and screen readers treat it as modal.
  * Esc / back / scrim tap dismiss. On close, focus returns to [restoreFocus] (attach it to the trigger).
  * Enter: 350 ms rise + scale .97 → 1 (fade only under reduce motion).
@@ -272,6 +273,7 @@ fun CvDialog(
     modifier: Modifier = Modifier,
     kicker: String? = null,
     restoreFocus: FocusRequester? = null,
+    maxWidth: Dp = 560.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val web = LocalShellStyle.current == ShellStyle.Web
@@ -288,7 +290,7 @@ fun CvDialog(
         Column(
             modifier
                 .padding(20.dp)
-                .widthIn(max = 560.dp)
+                .widthIn(max = maxWidth)
                 .fillMaxWidth()
                 .onPreviewKeyEvent { event ->
                     (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismissRequest() }

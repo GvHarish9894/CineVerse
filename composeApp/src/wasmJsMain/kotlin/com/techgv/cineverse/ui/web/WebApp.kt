@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -71,7 +72,7 @@ private val libraryResultPage: (LibraryUiState, MediaType) -> Int? = { state, me
 fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: GenerationCounter, browseSettings: Flow<Settings>, recent: RecentQueryStore,
            history: WebHistory = remember { BrowserHistory() }, settingsRepository: SettingsRepository? = null,
            approvalOpener: WebApprovalOpener = WebApprovalBrowserOpener, trailerHost: WebTrailerHost = WebTrailerDocumentHost,
-           historyBack: () -> Unit = ::browserHistoryBack) {
+           trailerDialogMaxWidth: Dp = 1000.dp, historyBack: () -> Unit = ::browserHistoryBack) {
     val navigation = remember(history) { WebNavigation(history) }
     DisposableEffect(navigation) { onDispose { navigation.close() } }
     val entry by navigation.entry.collectAsState()
@@ -209,7 +210,7 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                 // One root dialog at a time: trailer, then account (sign-out/import), then rate, then approval.
                 // shortcut: rate/account focus returns to the header logo; Detail/Settings do not expose their trigger requesters.
                 if (shownTrailer != null) key(entry, shownTrailer.third) {
-                    WebTrailerDialog(shownTrailer.second, shownTrailer.third, autoplay = false, onClose = { trailer = null }, restoreFocus = homeFocus, host = trailerHost)
+                    WebTrailerDialog(shownTrailer.second, shownTrailer.third, autoplay = false, onClose = { trailer = null }, restoreFocus = homeFocus, host = trailerHost, maxWidth = trailerDialogMaxWidth)
                 } else if (accountDialog) {
                     WebSignOutDialog(account, homeFocus)
                     WebImportDialog(account, homeFocus) // Hides itself while the sign-out dialog is open.
