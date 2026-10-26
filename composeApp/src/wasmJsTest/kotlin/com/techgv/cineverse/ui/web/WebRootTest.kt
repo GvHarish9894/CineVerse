@@ -366,19 +366,21 @@ class WebRootTest {
         } finally { f.close() }
     }
 
-    @Test fun detailPlayTrailerOpensExactlyOneDialogAndEntryChangeRemovesTheFrame() = runComposeUiTest {
+    // Two lifecycles: the 1000dp player costs more per CPU-rastered frame, so open + two entry changes exceed one 2000 ms Mocha test.
+    @Test fun detailPlayTrailerOpensExactlyOneDialog() = runComposeUiTest {
         val f = Fixture()
         val history = FakeHistory("/movie/1")
         try {
-            root(f, history)
-            exists("web-detail")
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Play trailer").fetchSemanticsNodes().isNotEmpty() }
-            onNodeWithText("Play trailer").performClick()
-            exists("web-trailer-dialog")
-            assertEquals(1, onAllNodesWithTag("web-trailer-dialog").fetchSemanticsNodes().size)
-            waitUntil(timeoutMillis = 10_000) { f.trailerHost.creates == 1 }
-            assertEquals(listOf(WebTrailerHostFake.src(WebTrailerHostFake.TRAILER.key, autoplay = 0)), f.trailerHost.srcs)
+            openDetailTrailer(f, history)
             onNodeWithTag("web-approval-dialog").assertDoesNotExist()
+        } finally { f.close() }
+    }
+
+    @Test fun detailTrailerEntryChangeRemovesTheFrameAndNeverRevives() = runComposeUiTest {
+        val f = Fixture()
+        val history = FakeHistory("/movie/1")
+        try {
+            openDetailTrailer(f, history)
             go(history, "/person/1")
             exists("web-person")
             onNodeWithTag("web-trailer-dialog").assertDoesNotExist()
@@ -390,5 +392,16 @@ class WebRootTest {
             onNodeWithTag("web-trailer-dialog").assertDoesNotExist() // The cleared request never revives on a new entry.
             assertEquals(1, f.trailerHost.creates)
         } finally { f.close() }
+    }
+
+    private fun ComposeUiTest.openDetailTrailer(f: Fixture, history: FakeHistory) {
+        root(f, history)
+        exists("web-detail")
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Play trailer").fetchSemanticsNodes().isNotEmpty() }
+        onNodeWithText("Play trailer").performClick()
+        exists("web-trailer-dialog")
+        assertEquals(1, onAllNodesWithTag("web-trailer-dialog").fetchSemanticsNodes().size)
+        waitUntil(timeoutMillis = 10_000) { f.trailerHost.creates == 1 }
+        assertEquals(listOf(WebTrailerHostFake.src(WebTrailerHostFake.TRAILER.key, autoplay = 0)), f.trailerHost.srcs)
     }
 }
