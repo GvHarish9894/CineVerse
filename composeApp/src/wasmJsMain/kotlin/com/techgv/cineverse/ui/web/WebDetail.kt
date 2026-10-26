@@ -86,13 +86,20 @@ internal fun WebDetailContent(
     playTrailer: (Title, Video) -> Unit,
 ) {
     val validated = remember(entry) { validateWebDetailEntry(entry) }
-    val scroll = remember(entry) { LazyListState(validated.index, validated.offset) }
-    LaunchedEffect(scroll) {
-        snapshotFlow { scroll.firstVisibleItemIndex to scroll.firstVisibleItemScrollOffset }.distinctUntilChanged().collect { (index, offset) ->
+    val scroll = remember(entry) { LazyListState() }
+    var restored by remember(entry) { mutableStateOf(false) }
+    val detail = ((state.section as? SectionState.Content)?.value ?: state.retained)?.takeIf { it.ref == validated.ref }
+    LaunchedEffect(scroll, detail != null) {
+        if (detail == null || restored) return@LaunchedEffect
+        // scrollToItem awaits layout and remeasures real sections, never the temporary Loading/Error list.
+        scroll.scrollToItem(validated.index, validated.offset)
+        restored = true
+    }
+    LaunchedEffect(scroll, restored) {
+        if (restored) snapshotFlow { scroll.firstVisibleItemIndex to scroll.firstVisibleItemScrollOffset }.distinctUntilChanged().collect { (index, offset) ->
             entry.putInt("detail.index", index); entry.putInt("detail.offset", offset)
         }
     }
-    val detail = ((state.section as? SectionState.Content)?.value ?: state.retained)?.takeIf { it.ref == validated.ref }
     val actionable = state.section is SectionState.Content && !state.freshnessUnverified && storage == null && session is WebSessionState.Ready && hasLibrary
     LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-detail"), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item("back") { PillButton("← Back", back, Modifier.padding(horizontal = 16.dp), variant = ButtonVariant.Ghost) }
