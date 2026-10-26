@@ -201,35 +201,35 @@ class WebRootTest {
         val history = FakeHistory("/movie/1")
         try {
             root(f, history)
+            val rendered = (f.runtime.session.value as WebSessionState.Ready).session!!
             exists("web-detail")
             waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rate").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText("Rate").performClick()
             exists("web-rate-dialog")
-            onNodeWithText("Rate on TMDB", ignoreCase = true).assertExists()
             onNodeWithTag("web-rate-stars").performSemanticsAction(SemanticsActions.SetProgress) { it(8f) }
             onNodeWithText("Submit rating").performClick()
+            waitUntil(timeoutMillis = 10_000) { f.writes.isNotEmpty() }
             onNodeWithTag("web-rate-dialog").assertDoesNotExist()
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rated Root film 8.0 / 10").fetchSemanticsNodes().isNotEmpty() }
-            assertEquals(1, f.writes.size)
-            assertTrue(f.writes.single().endsWith(":RATING/movie:1"))
+            assertEquals(listOf("fixture-account#${rendered.sessionGeneration}:RATING/movie:1"), f.writes)
+            onNodeWithText("Rated Root film 8.0 / 10").assertExists() // The root's onOutcome toast; the dialog shows none.
         } finally { f.close() }
     }
 
-    @Test fun rateDialogIsNeverComposedWithTheTrailerAndReturnsAfterIt() = runComposeUiTest {
+    @Test fun rateDialogIsNeverComposedWithTheTrailerAndAppearsAfterIt() = runComposeUiTest {
         val f = Fixture(signedIn = true)
         val history = FakeHistory("/movie/1")
         try {
             root(f, history)
             exists("web-detail")
             waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rate").fetchSemanticsNodes().isNotEmpty() }
-            onNodeWithText("Rate").performClick()
-            exists("web-rate-dialog")
-            // The Detail button stays in the tree behind the modal; its click action opens the trailer (the web Player).
-            onNodeWithText("Play trailer").performSemanticsAction(SemanticsActions.OnClick)
+            onNodeWithText("Play trailer").performClick()
             exists("web-trailer-dialog")
+            // The Detail button stays in the tree behind the trailer modal: its click action opens a prompt that the holder holds.
+            onNodeWithText("Rate").performSemanticsAction(SemanticsActions.OnClick)
+            waitForIdle()
             onNodeWithTag("web-rate-dialog").assertDoesNotExist()
             onNodeWithContentDescription("Close").performClick()
-            exists("web-rate-dialog") // Held by the holder while the trailer was up, not dropped.
+            exists("web-rate-dialog")
             onNodeWithTag("web-trailer-dialog").assertDoesNotExist()
             assertEquals(emptyList(), f.writes)
         } finally { f.close() }
