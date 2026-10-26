@@ -96,6 +96,14 @@ G7 new C2/g7-web-approval-dialog starts from reviewed85053cb, retaining oldG5/G4
 
 G7 excludes sign-out orchestration, account-default offers/import, LibraryActions/rating/player and root bindings: those remain separate seams. Constructor must use typed existing runtime and required opener callbacks, not service location; fake-only tests must not open real tabs or accounts. Source/tests/commit handoff first without broker wait/initial lease. G3 scroll correction is also source-only; G6 gets the single current build lease, reviewers read/search only. All unknown/current-context/account authority gates and native hold remain in force.
 
+## Latest preserved results after reporting interruptions
+
+Footer reviewerfe7dd757 closed P2 atc238398 with no issues, verifying oldclamp2/2 and fixed2/0 actual-grid/offset evidence. Source component remains disconnected; no invented final14/0.
+
+G6 provider7069c061 failed during reporting, AFTER actual gates completed. Parent verified clean4a41403c7e4d4ac87270e89ceeb6e273e50d9203 (one-line explicit throwable-list test fix over sourcee4d67ce), JVM XML48new+7old=55/0/0/0 and executed sharedWasm main/test compile success at that SAMEhead. Initial JVM compile red was test type inference only; no runtime red. Evidence /tmp/cineverse-g6-detail-context-gates-zfcWutsm/, parent exact patch /tmp/cineverse-g6-parent-review-zFyzENK9/detail-context.patch SHA256af72a3be97321fe923c5eef44db4a6291470e74feb0289e71bccb737d8fa05d1. Do NOTreruncompleted55/compile due missingworkerreport; independent source review next, G3adaptationstillseparate.
+
+G3 scroll writer3d29ddb7 failed provider before edits; C5 remains clean443a340 and needs operator retry for ONLY P2correction. Parent checkpoint /tmp/cineverse-detail-failed-checkpoint-XKDvW588/. G7 continues its independent source stage: approved installed house HttpClientEngineBase fake transport instead of absent MockEngine, no dependency change/live fallback; fake CSRF callback/isolated graph only. Its first broker request expired without mutations; latest5ae3e51d approved continuation. Do not repeat successfulreviews/gates or resume native/iOS.
+
 ## Execution and leases
 
 All workers/reviewers `cliproxyapi/gpt-6.1-sol` only; no provider/model/CLI/auth fallback, nested agents, new worktrees, merges/pushes by workers, credentials output/overwrite, profile access, resets/permission changes or live user data operations. Author `GvHarish9894 <hariharangv9894@gmail.com>`. Gradle `--max-workers=2`, no configure-on-demand; filters scoped per task. ANDROID_HOME=$HOME/Library/Android/sdk and DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer are normal build environment only, not device/runtime grants.
