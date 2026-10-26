@@ -201,9 +201,13 @@ class WebLibraryTest {
             moviePage = 2
             current = current.copy(movies = LibraryGroup(SectionState.Content((1..40).map { LibraryEntry(webLibraryTitle(MediaType.Movie, it), null) }), hasMore = true))
         }
-        waitUntil { entry.getInt("library.movie.index") == 5 && entry.getInt("library.movie.page") == 2 }
+        // Pages and position are written only after the restore, so wait for the TV page (absent from the saved entry).
+        waitUntil { entry.getInt("library.tv.page") == 1 }
+        waitForIdle()
+        assertEquals(5, entry.getInt("library.movie.index"))
+        assertEquals(12, entry.getInt("library.movie.offset"))
+        assertEquals(2, entry.getInt("library.movie.page"))
         assertEquals(1, more)
-        assertEquals(1, entry.getInt("library.tv.page"))
         // One page scroll: the TV position keys are never written.
         assertNull(entry.getString("library.tv.index"))
         assertNull(entry.getString("library.tv.offset"))
