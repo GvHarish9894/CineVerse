@@ -78,7 +78,7 @@ internal fun WebBrowseContent(entry: WebEntry, state: ProductBrowseUiState, navi
     LaunchedEffect(content?.page, restored) { if (restored && content != null) entry.putInt("browse.page", content.page) }
     val people = route == null
     val palette = ArtPalette(Tokens.Colors.Accent, Tokens.Colors.Secondary)
-    val filters: (@Composable ColumnScope.() -> Unit)? = if (route == null) null else ({ BrowseFilters(route, state, navigate, retryGenres) })
+    val filters: (@Composable ColumnScope.(wide: Boolean) -> Unit)? = if (route == null) null else ({ BrowseFilters(route, state, navigate, retryGenres) })
     WebAsideGrid(
         scroll, GridCells.Adaptive(if (people) 150.dp else 170.dp), Modifier.testTag("web-browse"),
         horizontalSpacing = if (people) 20.dp else 22.dp, verticalSpacing = if (people) 26.dp else 34.dp,
@@ -215,7 +215,7 @@ internal fun WebAsideGrid(
     horizontalSpacing: Dp,
     verticalSpacing: Dp,
     header: (@Composable ColumnScope.() -> Unit)? = null,
-    aside: (@Composable ColumnScope.() -> Unit)? = null,
+    aside: (@Composable ColumnScope.(wide: Boolean) -> Unit)? = null,
     content: LazyGridScope.() -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -235,14 +235,14 @@ internal fun WebAsideGrid(
                     .scrollable(state, Orientation.Vertical, reverseDirection = true)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) { if (aside != null) aside() }
+            ) { if (aside != null) aside(true) }
         }
         LazyVerticalGrid(columns, modifier.fillMaxSize(), state, PaddingValues(start = start, end = gutter),
             horizontalArrangement = Arrangement.spacedBy(horizontalSpacing), verticalArrangement = Arrangement.spacedBy(verticalSpacing)) {
             if (header != null || (aside != null && !wide)) item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
                 WebPage(bleed) {
                     if (header != null) header()
-                    if (aside != null && !wide) Column(Modifier.padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { aside() }
+                    if (aside != null && !wide) Column(Modifier.padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { aside(false) }
                 }
             }
             content()

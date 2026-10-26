@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
@@ -25,14 +26,19 @@ class WebSearchContentTest {
         WebSearchContent(entry, state, state.query, false, {}, {}, {}, {}, {}, more, retry, {}, null, navigate)
     }
 
+    /** A wide facet row's texts: label, then the count badge only when the count is known. */
+    private fun ComposeUiTest.facet(value: String) = onNodeWithTag("search-facet-$value").fetchSemanticsNode().config[SemanticsProperties.Text].map { it.text }
+
     @Test fun titleRowsShowNrWithoutVotesAndPreserveActualRatedScore() = runComposeUiTest {
         val nav = WebNavigation(FakeHistory("/search?q=film&facet=movie"))
         val unrated = title.copy(ref = MediaRef(MediaType.Movie, 8), voteAverage = 0.0, voteCount = 0)
         val state = ProductSearchUiState("film", SearchFacet.Movie,
             SectionState.Content(PagedItems(listOf(Hero.OfTitle(title), Hero.OfTitle(unrated)), 1, false)))
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) { Content(nav.entry.value, state) }
-        onNodeWithText("movie · 2026-01-01 · ★ 8.1").assertExists()
-        onNodeWithText("movie · 2026-01-01 · NR").assertExists()
+        onNodeWithText("Movie · Jan 1, 2026 · ★ 8.1").assertExists()
+        onNodeWithText("Movie · Jan 1, 2026 · NR").assertExists()
+        onNodeWithText("2026-01-01", substring = true).assertDoesNotExist()
+        onNodeWithTag("search-count").assert(hasText("2 results for “film”"))
         onNodeWithText("★ 0.0", substring = true).assertDoesNotExist()
         nav.close()
     }
@@ -44,12 +50,16 @@ class WebSearchContentTest {
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             Box(Modifier.width(390.dp)) { Content(nav.entry.value, state, navigate = { destination = it }) }
         }
-        onNodeWithText("Movies · unknown").assertExists()
-        onNodeWithText("Waiting for saved preferences…").assertExists()
-        onNodeWithText("No results").assertDoesNotExist()
+        // Unknown counts are just the label; not-yet-read results are loading, never an empty success.
+        onNodeWithText("Movies").assertExists()
+        onAllNodesWithTag("search-loading").assertCountEquals(3)
+        onNodeWithText("No matches").assertDoesNotExist()
+        onNodeWithTag("search-count").assertDoesNotExist()
         runOnIdle { state = state.copy(settingsKnown = true, results = SectionState.Content(PagedItems(listOf(Hero.OfTitle(title)), 1, false))) }
-        onNodeWithText("Movies · 1 loaded").assertExists()
-        onNodeWithText("All · unknown").assertExists()
+        onNodeWithText("Movies · 1").assertExists()
+        onNodeWithText("All").assertExists()
+        onNodeWithTag("search-count").assert(hasText("1 result for “film”"))
+        onNodeWithText("loaded", substring = true).assertDoesNotExist()
         onNodeWithTag("search-movie:7").performClick()
         assertEquals(WebRoute.Detail("movie", 7), destination)
         nav.close()
@@ -92,9 +102,9 @@ class WebSearchContentTest {
         onNodeWithText("Retry").performClick()
         assertEquals(1, retries); assertEquals(0, more)
         runOnIdle { state = state.copy(results = SectionState.Empty) }
-        onNodeWithText("All · 0 loaded").assertExists()
-        onNodeWithText("Movies · unknown").assertExists()
-        onNodeWithText("No results").assertExists()
+        assertEquals(listOf("All", "0"), facet("all"))
+        assertEquals(listOf("Movies"), facet("movie"))
+        onNodeWithText("No matches").assertExists()
         onNodeWithText("Refresh results").performClick()
         assertEquals(2, retries); assertEquals(0, more)
         nav.close()

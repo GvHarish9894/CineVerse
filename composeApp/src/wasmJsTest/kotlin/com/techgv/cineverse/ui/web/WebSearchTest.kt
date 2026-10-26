@@ -25,6 +25,8 @@ import kotlin.test.*
 
 class WebSearchTest {
     private fun SemanticsNodeInteraction.assertInput(value: String) = assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString(value)))
+    /** A wide facet row's texts: label, then the count badge only when the count is known. */
+    private fun ComposeUiTest.facet(value: String) = onNodeWithTag("search-facet-$value").fetchSemanticsNode().config[SemanticsProperties.Text].map { it.text }
 
     private fun ready(writes: Boolean = false) = WebRuntimeUiTest.Fixture(writes).apply {
         failSession = false; failSettings = false; withTitles = true
@@ -140,8 +142,8 @@ class WebSearchTest {
             f.runtime.start()
             setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             onNodeWithTag("search-movie:7").assertExists()
-            onNodeWithText("Movies · 1 loaded").assertExists()
-            onNodeWithText("People · unknown").assertExists()
+            assertEquals(listOf("Movies", "1"), facet("movie"))
+            assertEquals(listOf("People"), facet("person"))
             val field = onNodeWithTag("search-input")
             field.performClick().performTextInputSelection(TextRange(2))
             field.performTextInput("X")
@@ -236,15 +238,16 @@ class WebSearchTest {
         try {
             f.runtime.start()
             setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
-            onNodeWithText("Trending titles this week").assertExists()
-            onNodeWithText("Title suggestions from TMDB, not trending search queries.").assertExists()
-            onNodeWithText("All · unknown").assertExists()
+            onNodeWithText("Trending this week").assertExists()
+            // Trending titles, not trending search queries.
+            onNodeWithText("Trending searches", substring = true).assertDoesNotExist()
+            assertEquals(listOf("All"), facet("all"))
             assertTrue(f.reads.any { it.path == "/api/tmdb/trending/all/week" })
             assertEquals(0, f.edits)
             onNodeWithText("saved film").performClick()
             waitUntil { f.edits == 1 }
             assertEquals("/search?q=saved%20film", history.url)
-            onNodeWithText("Clear", substring = false).performClick()
+            onNodeWithContentDescription("Clear search").performClick()
             onNodeWithText("Clear recent searches").performClick()
             waitUntil { f.edits == 2 && f.recentValue == null }
             onNodeWithText("No saved recent searches.").assertExists()
@@ -291,9 +294,9 @@ class WebSearchTest {
             onNodeWithTag("search-input").assertInput("x\u0000y")
             onNodeWithTag("header-search-input").performImeAction()
             assertEquals("/search?q=valid", history.url)
-            onNodeWithText("Clear", substring = false).performClick()
+            onNodeWithContentDescription("Clear search").performClick()
             assertEquals("/search?q=", history.url)
-            onNodeWithText("Trending titles this week").assertExists()
+            onNodeWithText("Trending this week").assertExists()
             onNodeWithTag("search-input").performTextReplacement("bad\u0000draft")
             onNodeWithText("My Library").performClick()
             runOnIdle { history.back() }
@@ -330,7 +333,7 @@ class WebSearchTest {
             runOnIdle { f.failWrite = true }
             onNodeWithTag("search-input").performImeAction()
             waitUntil { f.edits == 1 }
-            onNodeWithText("Recent-search action failed.", substring = true).assertExists()
+            onNodeWithText("Recent searches could not be updated.", substring = true).assertExists()
             runOnIdle { f.failSettings = true; f.storageRevision.value++ }
             waitUntil { f.activeSettingsReaders == 0 }
             onNodeWithTag("search-settings-recovery").assertExists()
@@ -359,7 +362,7 @@ class WebSearchTest {
             f.runtime.start()
             setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
             onNodeWithTag("search-recent-recovery").assertExists()
-            onNodeWithText("Recent searches are unknown until saved data is read.").assertExists()
+            onNodeWithText("Recent searches").assertExists()
             onNodeWithText("No saved recent searches.").assertDoesNotExist()
             onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("search-recent-recovery"))).performClick()
             assertEquals(0, f.edits)
@@ -386,7 +389,7 @@ class WebSearchTest {
             runOnIdle { f.failNextPage = false }
             onNodeWithText("Retry").performClick()
             onNodeWithTag("search-movie:8").assertExists()
-            onNodeWithText("Movies · 2 loaded").assertExists()
+            assertEquals(listOf("Movies", "2"), facet("movie"))
             waitUntil { history.saved.contains("\"search.page\":\"2\"") }
             onNodeWithTag("search-movie:8").performClick()
             runOnIdle { history.back() }

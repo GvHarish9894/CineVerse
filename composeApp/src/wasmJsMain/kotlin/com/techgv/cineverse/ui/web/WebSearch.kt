@@ -1,23 +1,25 @@
 package com.techgv.cineverse.ui.web
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,6 +32,8 @@ import com.techgv.cineverse.domain.*
 import com.techgv.cineverse.presentation.*
 import com.techgv.cineverse.ui.components.*
 import com.techgv.cineverse.ui.design.Tokens
+import com.techgv.cineverse.ui.haptics.HapticKind
+import com.techgv.cineverse.ui.theme.bodyStyle
 import com.techgv.cineverse.ui.theme.displayStyle
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.CoroutineScope
@@ -68,16 +72,6 @@ internal class WebSearchOwner(
 }
 
 @Composable
-internal fun WebSearchEditor(query: String, change: (String) -> Unit, submit: () -> Unit, modifier: Modifier = Modifier, invalid: Boolean = false, enabled: Boolean = true) {
-    var editor by remember { mutableStateOf(TextFieldValue(query, TextRange(query.length))) }
-    // External URL/other-editor updates replace text, not same-text selection or IME composition.
-    LaunchedEffect(query) { if (editor.text != query) editor = TextFieldValue(query, TextRange(query.length)) }
-    OutlinedTextField(editor, { if (enabled) { editor = it; change(it.text) } }, modifier, enabled = enabled, singleLine = true,
-        label = { Text("Search movies, TV and people") }, isError = invalid,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { if (enabled) submit() }))
-}
-
-@Composable
 internal fun WebSearch(owner: WebSearchOwner, storage: BrowserStorageFailure?, retryStorage: () -> Unit,
                        navigate: (WebRoute, Boolean) -> Unit, focused: (Boolean) -> Unit) {
     val state by owner.holder.uiState.collectAsState()
@@ -91,77 +85,86 @@ internal fun WebSearchContent(entry: WebEntry, state: ProductSearchUiState, quer
                               change: (String) -> Unit, submit: () -> Unit, choose: (String) -> Unit, facet: (SearchFacet) -> Unit,
                               clearRecent: () -> Unit, loadMore: () -> Unit, retry: () -> Unit, retryStorage: () -> Unit,
                               storage: BrowserStorageFailure?, navigate: (WebRoute) -> Unit, focused: (Boolean) -> Unit = {}) {
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(Modifier.widthIn(max = 1200.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Search", style = displayStyle(48.sp), modifier = Modifier.semantics { heading() })
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                WebSearchEditor(query, change, submit, Modifier.weight(1f).heightIn(min = 60.dp).testTag("search-input").onFocusChanged { focused(it.isFocused) }, invalidUrl || state.inputError != null)
-                PillButton("Clear", { change("") }, variant = ButtonVariant.Ghost)
-                PillButton("Search", submit, enabled = !invalidUrl && state.inputError == null && query.isNotBlank())
+    Column(Modifier.fillMaxSize()) {
+        // The field stays outside the lazy results so typing never loses focus to item disposal.
+        WebPage {
+            WebPageTitle("Search")
+            Box(Modifier.padding(top = 22.dp).widthIn(max = 820.dp).fillMaxWidth()) {
+                WebSearchField(query, change, submit, Modifier.fillMaxWidth().testTag("search-input").onFocusChanged { focused(it.isFocused) },
+                    invalid = invalidUrl || state.inputError != null, large = true)
+                if (query.isNotEmpty()) RoundIconButton(CvIcons.Close, "Clear search", { change("") }, Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
+                    diameter = 32.dp, container = Color.White.copy(alpha = 0.10f))
             }
-            if (invalidUrl) Text(SEARCH_URL_ERROR, color = MaterialTheme.colorScheme.error)
-            else if (state.inputError != null) Text("Search is limited to 200 characters after trimming. Edit or clear your input; nothing was truncated.", color = MaterialTheme.colorScheme.error)
-            if (storage != null) WebStorageNotice(storage, retryStorage, Modifier.testTag("search-storage-recovery"))
-            if (state.settingsError != null) ErrorState("Saved preferences could not be observed. Last loaded values are retained.", retryStorage, Modifier.testTag("search-settings-recovery"))
-            if (state.recentReadError != null) ErrorState("Recent searches could not be read. Saved data has not been reset.", retryStorage, Modifier.testTag("search-recent-recovery"))
-            when (state.recentMutation) {
-                RecentMutationStatus.Pending -> Text("Saving recent-search action…")
-                RecentMutationStatus.Failed -> Text("Recent-search action failed. It will not be replayed; retry reads or explicitly choose the action again.")
-                RecentMutationStatus.Succeeded -> Text("Recent-search action saved.")
-                RecentMutationStatus.Idle -> Unit
-            }
-        }
-        if (!invalidUrl && state.inputError == null) BoxWithConstraints(Modifier.widthIn(max = 1200.dp).fillMaxWidth().weight(1f)) {
-            val wide = maxWidth > 860.dp
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                if (wide) Column(Modifier.width(200.dp)) { SearchFacets(state, facet) }
-                Column(Modifier.weight(1f)) {
-                    if (!wide) SearchFacets(state, facet)
-                    if (state.showingSuggestions) {
-                        Text("Recent searches", style = MaterialTheme.typography.titleMedium)
-                        val recentQueries = state.recentQueries
-                        when {
-                            recentQueries == null -> Text("Recent searches are unknown until saved data is read.")
-                            recentQueries.isEmpty() -> Text("No saved recent searches.")
-                            else -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                recentQueries.forEach { Chip(it, false, { choose(it) }) }
-                            }
-                        }
-                        PillButton("Clear recent searches", clearRecent, small = true, variant = ButtonVariant.Ghost)
-                        Text("Trending titles this week", style = MaterialTheme.typography.titleMedium)
-                        Text("Title suggestions from TMDB, not trending search queries.")
-                    }
-                    SearchResults(entry, state, loadMore, retry, navigate)
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (invalidUrl) Text(SEARCH_URL_ERROR, color = MaterialTheme.colorScheme.error)
+                else if (state.inputError != null) Text("Search is limited to 200 characters after trimming. Edit or clear your input; nothing was truncated.", color = MaterialTheme.colorScheme.error)
+                if (storage != null) WebStorageNotice(storage, retryStorage, Modifier.testTag("search-storage-recovery"))
+                if (state.settingsError != null) ErrorState("Saved preferences could not be observed. Last loaded values are retained.", retryStorage, Modifier.testTag("search-settings-recovery"))
+                if (state.recentReadError != null) ErrorState("Recent searches could not be read. Saved data has not been reset.", retryStorage, Modifier.testTag("search-recent-recovery"))
+                when (state.recentMutation) {
+                    RecentMutationStatus.Pending -> Text("Saving recent searches…", style = bodyStyle(14.sp), color = Muted)
+                    RecentMutationStatus.Failed -> Text("Recent searches could not be updated. Nothing is retried automatically; choose the search or Clear again.", style = bodyStyle(14.sp))
+                    RecentMutationStatus.Succeeded, RecentMutationStatus.Idle -> Unit
                 }
             }
+        }
+        if (!invalidUrl && state.inputError == null) Box(Modifier.weight(1f).padding(top = 12.dp)) {
+            SearchResults(entry, state, choose, clearRecent, facet, loadMore, retry, navigate)
         } else Spacer(Modifier.weight(1f))
     }
 }
 
+private val Muted = Tokens.Colors.TextPrimary.copy(alpha = 0.65f)
+
+/** The badge for [facet]: loaded results of the active facet ("20", or "20+" while more pages exist); null when unknown. */
+private fun ProductSearchUiState.facetCount(facet: SearchFacet): String? = loadedCount(facet)?.let { n ->
+    if ((results as? SectionState.Content)?.value?.hasMore == true) "$n+" else "$n"
+}
+
 @Composable
-private fun SearchFacets(state: ProductSearchUiState, select: (SearchFacet) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SearchFacet.entries.forEach { facet ->
-            val label = when (facet) { SearchFacet.Multi -> "All"; SearchFacet.Movie -> "Movies"; SearchFacet.Tv -> "TV shows"; SearchFacet.Person -> "People" }
-            val count = state.loadedCount(facet)?.let { "$it loaded" } ?: "unknown"
-            Chip("$label · $count", facet == state.facet, { select(facet) }, Modifier.testTag("search-facet-${facet.webValue()}"))
+private fun SearchFacets(state: ProductSearchUiState, wide: Boolean, select: (SearchFacet) -> Unit) {
+    val facets = SearchFacet.entries.map { facet ->
+        facet to when (facet) { SearchFacet.Multi -> "All"; SearchFacet.Movie -> "Movies"; SearchFacet.Tv -> "TV shows"; SearchFacet.Person -> "People" }
+    }
+    if (!wide) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        facets.forEach { (facet, label) ->
+            Chip(state.facetCount(facet)?.let { "$label · $it" } ?: label, facet == state.facet, { select(facet) }, Modifier.testTag("search-facet-${facet.webValue()}"))
+        }
+    } else Panel(Modifier.fillMaxWidth(), title = "Search results") {
+        facets.forEach { (facet, label) ->
+            val selected = facet == state.facet
+            val shape = RoundedCornerShape(12.dp)
+            Row(
+                Modifier.fillMaxWidth().testTag("search-facet-${facet.webValue()}")
+                    .cvClickable({ select(facet) }, role = Role.Tab, haptic = HapticKind.Select, focusShape = shape, pressedScale = 1f)
+                    .semantics { this.selected = selected }
+                    .clip(shape).background(if (selected) Color.White.copy(alpha = 0.12f) else Color.Transparent)
+                    .heightIn(min = 44.dp).padding(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, style = bodyStyle(15.sp, FontWeight.SemiBold))
+                state.facetCount(facet)?.let {
+                    Text(it, style = bodyStyle(12.5.sp, FontWeight.Bold), modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 9.dp, vertical = 2.dp))
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SearchResults(entry: WebEntry, state: ProductSearchUiState, loadMore: () -> Unit, retry: () -> Unit, navigate: (WebRoute) -> Unit) {
+private fun SearchResults(entry: WebEntry, state: ProductSearchUiState, choose: (String) -> Unit, clearRecent: () -> Unit, facet: (SearchFacet) -> Unit,
+                          loadMore: () -> Unit, retry: () -> Unit, navigate: (WebRoute) -> Unit) {
     val source = state.normalizedQuery to state.facet
     val targetPage = remember(entry, source) { entry.getInt("search.page") ?: 1 }
     val targetIndex = remember(entry, source) { entry.getInt("search.index") ?: 0 }
     val targetOffset = remember(entry, source) { entry.getInt("search.offset") ?: 0 }
-    val scroll = remember(entry, source) { LazyListState() }
+    val scroll = remember(entry, source) { LazyGridState() }
     var restored by remember(entry, source) { mutableStateOf(false) }
     val content = (state.results as? SectionState.Content)?.value
     LaunchedEffect(content, restored) {
         if (restored || content == null || content.loadingMore || content.moreError != null) return@LaunchedEffect
         if (content.page < targetPage && content.hasMore) loadMore()
-        else { scroll.scrollToItem(targetIndex.coerceAtMost(content.items.size), targetOffset); restored = true }
+        else { scroll.scrollToItem(targetIndex.coerceAtMost(content.items.size + 2), targetOffset); restored = true }
     }
     LaunchedEffect(scroll, restored) {
         if (restored) snapshotFlow { scroll.firstVisibleItemIndex to scroll.firstVisibleItemScrollOffset }.distinctUntilChanged().collect { (index, offset) ->
@@ -169,38 +172,84 @@ private fun SearchResults(entry: WebEntry, state: ProductSearchUiState, loadMore
         }
     }
     LaunchedEffect(content?.page, restored) { if (restored && content != null) entry.putInt("search.page", content.page) }
-    LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("search-results"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val full: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
+    WebAsideGrid(scroll, GridCells.Fixed(1), Modifier.testTag("search-results"), horizontalSpacing = 0.dp, verticalSpacing = 14.dp,
+        aside = { wide -> SearchFacets(state, wide, facet) }) {
+        if (state.showingSuggestions) item(key = "recent", span = full) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Recent searches", style = bodyStyle(16.sp, FontWeight.SemiBold))
+                val recentQueries = state.recentQueries
+                // Null is not yet read (or failed, shown above): never presented as an empty history.
+                if (recentQueries?.isEmpty() == true) Text("No saved recent searches.", style = bodyStyle(14.sp), color = Muted)
+                else if (recentQueries != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    recentQueries.forEach { Chip(it, false, { choose(it) }) }
+                }
+                if (recentQueries?.isEmpty() != true) PillButton("Clear recent searches", clearRecent, small = true, variant = ButtonVariant.Ghost)
+            }
+        }
+        val count = when {
+            state.showingSuggestions -> "Trending this week"
+            content != null -> "${content.items.size}${if (content.hasMore) "+" else ""} ${if (content.items.size == 1 && !content.hasMore) "result" else "results"} for “${state.normalizedQuery}”"
+            else -> null
+        }
+        if (count != null) item(key = "count", span = full) {
+            Text(count, style = bodyStyle(14.sp), color = Muted, modifier = Modifier.padding(top = if (state.showingSuggestions) 12.dp else 0.dp).testTag("search-count"))
+        }
         when (val result = state.results) {
-            null -> item { Text("Waiting for saved preferences…") }
-            SectionState.Loading -> item { Text("Loading results…") }
-            SectionState.Empty -> item { EmptyState("No results", "No matches were returned for this source.") { PillButton("Refresh results", retry) } }
-            is SectionState.Error -> item { SearchError(result.kind, retry) }
+            null, SectionState.Loading -> items(3, key = { "skeleton-$it" }) { SearchRowSkeleton() }
+            SectionState.Empty -> item(key = "empty", span = full) {
+                EmptyState("No matches", "There are no movies, shows or people that match your search. Try a shorter word.") { PillButton("Refresh results", retry, variant = ButtonVariant.Ghost) }
+            }
+            is SectionState.Error -> item(key = "error", span = full) { SearchError(result.kind, retry) }
             is SectionState.Content -> {
                 items(result.value.items, key = { it.key }) { hero -> SearchResultRow(hero) { navigate(hero.route()) } }
-                item {
-                    Column {
+                item(key = "more", span = full) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         result.value.moreError?.let { SearchError(it, retry, true) }
-                        if (result.value.loadingMore) Text("Loading more results…")
-                        else if (result.value.hasMore && result.value.moreError == null) PillButton("Load more", loadMore)
+                        if (result.value.loadingMore) Text("Loading more…", style = bodyStyle(14.sp), color = Muted)
+                        else if (result.value.hasMore && result.value.moreError == null) PillButton("Load more", loadMore, variant = ButtonVariant.Ghost)
                     }
                 }
             }
         }
-        item { Footer() }
     }
 }
 
 @Composable
+private fun SearchRowSkeleton() {
+    Row(Modifier.fillMaxWidth().testTag("search-loading").padding(12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Box(Modifier.width(86.dp).aspectRatio(2f / 3f).shimmer(RoundedCornerShape(12.dp)))
+        SkeletonLines(3, Modifier.weight(1f).padding(top = 4.dp))
+    }
+}
+
+/** `.sres`: 86dp poster (or round portrait with initials), title, "Movie · Mar 1, 2022 · ★ 7.7", two-line overview. */
+@Composable
 private fun SearchResultRow(hero: Hero, open: () -> Unit) {
     val person = (hero as? Hero.OfPerson)?.person
     val title = (hero as? Hero.OfTitle)?.title
-    Row(Modifier.fillMaxWidth().testTag("search-${hero.key}").cvClickable(open, focusShape = RoundedCornerShape(12.dp)).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        FilledArt(webImage(person?.profilePath ?: title?.posterPath, "w185"), ArtPalette(Tokens.Colors.Accent, Tokens.Colors.Secondary), (if (person != null) ArtStyle.Person else ArtStyle.Poster),
-            RoundedCornerShape(if (person != null) 50.dp else 8.dp), Modifier.width(86.dp).height(112.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(person?.name ?: title!!.title, style = MaterialTheme.typography.titleLarge)
-            Text(if (person != null) "Person · ${person.knownForDepartment.orEmpty()}" else "${title!!.mediaType} · ${title.releaseDate.orEmpty()} · ${if (title.voteCount > 0) "★ ${oneDecimal(title.voteAverage)}" else "NR"}")
-            Text(person?.knownFor?.joinToString { it.title } ?: title!!.overview, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    val name = person?.name ?: title!!.title
+    val meta = if (person != null) listOfNotNull("Person", person.knownForDepartment?.takeIf { it.isNotBlank() })
+        else listOfNotNull(if (title!!.mediaType == MediaType.Tv) "TV series" else "Movie", formatDate(title.releaseDate) ?: yearOf(title.releaseDate),
+            if (title.voteCount > 0) "★ ${oneDecimal(title.voteAverage)}" else "NR")
+    val overview = if (person != null) person.knownFor.take(3).joinToString { it.title }.takeIf { it.isNotEmpty() }?.let { "Known for $it" } else title!!.overview.takeIf { it.isNotBlank() }
+    val shape = RoundedCornerShape(18.dp)
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Row(
+        Modifier.fillMaxWidth().testTag("search-${hero.key}").cvClickable(open, onClickLabel = name, focusShape = shape, pressedScale = 1f, interactionSource = source)
+            .clip(shape).background(Color.White.copy(alpha = if (hovered) 0.08f else 0.04f)).border(1.dp, Color.White.copy(alpha = 0.06f), shape).padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        val palette = ArtPalette(Tokens.Colors.Accent, Tokens.Colors.Secondary)
+        if (person != null) PaletteArt(webImage(person.profilePath, "w185"), palette, ArtStyle.Person, Modifier.size(86.dp).clip(CircleShape)) {
+            Text(initialsOf(person.name), Modifier.align(Alignment.Center), style = displayStyle(26.sp), color = Color.White)
+        } else PaletteArt(webImage(title!!.posterPath, "w185"), palette, ArtStyle.Poster, Modifier.width(86.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)))
+        Column(Modifier.weight(1f).padding(top = 4.dp)) {
+            Text(name, style = bodyStyle(18.sp, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(meta.joinToString(" · "), Modifier.padding(top = 2.dp), style = bodyStyle(13.5.sp), color = Muted)
+            if (overview != null) Text(overview, Modifier.padding(top = 8.dp), style = bodyStyle(14.5.sp).copy(lineHeight = 22.sp),
+                color = Tokens.Colors.TextPrimary.copy(alpha = 0.82f), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
