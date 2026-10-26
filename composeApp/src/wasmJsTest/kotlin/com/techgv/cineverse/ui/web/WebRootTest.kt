@@ -185,7 +185,7 @@ class WebRootTest {
             exists("search-input")
             waitUntil(timeoutMillis = 10_000) { "search:x" in f.calls }
             go(history, "/library")
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Guest library · saved on this browser; kept separate from account lists").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Saved in this browser · sign in to sync with TMDB").fetchSemanticsNodes().isNotEmpty() }
             assertEquals("/library?tab=watchlist", history.url)
             go(history, "/settings")
             exists("web-settings")
