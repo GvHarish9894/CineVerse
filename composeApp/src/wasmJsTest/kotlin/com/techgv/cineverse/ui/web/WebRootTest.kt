@@ -4,6 +4,7 @@ package com.techgv.cineverse.ui.web
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsActions
 import com.techgv.cineverse.ui.adaptive.ShellStyle
@@ -154,7 +155,9 @@ class WebRootTest {
     private fun ComposeUiTest.root(f: Fixture, history: FakeHistory) {
         f.runtime.start()
         setContent {
-            WebApp(f.runtime, f.catalog, f.generation, f.repository.settings, f.recent, history, f.repository, f.opener, f.trailerHost) { f.backs++ }
+            // test perf: CPU raster of the wide player; the 1000dp slot is covered by WebTrailerDialogTest
+            WebApp(f.runtime, f.catalog, f.generation, f.repository.settings, f.recent, history, f.repository, f.opener, f.trailerHost,
+                trailerDialogMaxWidth = 560.dp) { f.backs++ }
         }
         waitUntil(timeoutMillis = 10_000) { f.runtime.session.value is WebSessionState.Ready && f.runtime.settingsHolder.state.value?.settings != null }
     }
@@ -366,21 +369,19 @@ class WebRootTest {
         } finally { f.close() }
     }
 
-    // Two lifecycles: the 1000dp player costs more per CPU-rastered frame, so open + two entry changes exceed one 2000 ms Mocha test.
-    @Test fun detailPlayTrailerOpensExactlyOneDialog() = runComposeUiTest {
+    @Test fun detailPlayTrailerOpensExactlyOneDialogAndEntryChangeRemovesTheFrame() = runComposeUiTest {
         val f = Fixture()
         val history = FakeHistory("/movie/1")
         try {
-            openDetailTrailer(f, history)
+            root(f, history)
+            exists("web-detail")
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Play trailer").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Play trailer").performClick()
+            exists("web-trailer-dialog")
+            assertEquals(1, onAllNodesWithTag("web-trailer-dialog").fetchSemanticsNodes().size)
+            waitUntil(timeoutMillis = 10_000) { f.trailerHost.creates == 1 }
+            assertEquals(listOf(WebTrailerHostFake.src(WebTrailerHostFake.TRAILER.key, autoplay = 0)), f.trailerHost.srcs)
             onNodeWithTag("web-approval-dialog").assertDoesNotExist()
-        } finally { f.close() }
-    }
-
-    @Test fun detailTrailerEntryChangeRemovesTheFrameAndNeverRevives() = runComposeUiTest {
-        val f = Fixture()
-        val history = FakeHistory("/movie/1")
-        try {
-            openDetailTrailer(f, history)
             go(history, "/person/1")
             exists("web-person")
             onNodeWithTag("web-trailer-dialog").assertDoesNotExist()
@@ -392,16 +393,5 @@ class WebRootTest {
             onNodeWithTag("web-trailer-dialog").assertDoesNotExist() // The cleared request never revives on a new entry.
             assertEquals(1, f.trailerHost.creates)
         } finally { f.close() }
-    }
-
-    private fun ComposeUiTest.openDetailTrailer(f: Fixture, history: FakeHistory) {
-        root(f, history)
-        exists("web-detail")
-        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Play trailer").fetchSemanticsNodes().isNotEmpty() }
-        onNodeWithText("Play trailer").performClick()
-        exists("web-trailer-dialog")
-        assertEquals(1, onAllNodesWithTag("web-trailer-dialog").fetchSemanticsNodes().size)
-        waitUntil(timeoutMillis = 10_000) { f.trailerHost.creates == 1 }
-        assertEquals(listOf(WebTrailerHostFake.src(WebTrailerHostFake.TRAILER.key, autoplay = 0)), f.trailerHost.srcs)
     }
 }
