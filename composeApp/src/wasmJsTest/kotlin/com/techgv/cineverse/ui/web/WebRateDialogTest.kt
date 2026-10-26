@@ -24,7 +24,6 @@ import com.techgv.cineverse.ui.web.WebRateFixture.Companion.OTHER
 import kotlin.test.*
 
 class WebRateDialogTest {
-    private val diagStart = kotlin.time.TimeSource.Monotonic.markNow()
     private val reduced = AppearanceSettings(reduceMotion = true)
     private val movieRating = "rate-account-a:rating/${MOVIE.ref.key}"
 
@@ -146,31 +145,17 @@ class WebRateDialogTest {
     @Test fun removeAppearsOnlyForAnExistingRatingAndClearsItForThePromptIdentity() = runComposeUiTest {
         val f = WebRateFixture()
         try {
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 1")
+            // Existing rating written through the holder before composing: one dialog lifecycle fits mocha's 2s budget.
+            // Remove's absence without a rating is asserted in opensOnlyForAHolderPromptAndShowsTitleButNoIdentity.
+            f.actions.openRate(MOVIE)
+            f.actions.submitRating(6.0)
             show(f)
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 2")
             runOnIdle { f.actions.openRate(MOVIE) }
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 3")
-            onNodeWithText("Remove rating").assertDoesNotExist()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 4")
-            onNodeWithTag("web-rate-stars").requestFocus()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 5")
-            onNodeWithTag("web-rate-stars").performKeyInput { repeat(12) { pressKey(Key.DirectionRight) }; pressKey(Key.Enter) }
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 6")
-            onNodeWithTag("web-rate-dialog").assertDoesNotExist()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 7")
-            runOnIdle { f.actions.openRate(MOVIE) }
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 8")
             assertValue("6.0", "Good")
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 9")
             onNodeWithText("Submit rating").assertIsEnabled()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 10")
             onNodeWithText("Remove rating").performClick()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 11")
             onNodeWithTag("web-rate-dialog").assertDoesNotExist()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 12")
             assertEquals(listOf("$movieRating=6.0", "$movieRating=null"), f.writes)
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} removeAppears step 13")
             assertEquals(LibraryWrite.Unrate, f.outcomes.last().write)
         } finally { f.dispose() }
     }
@@ -189,41 +174,35 @@ class WebRateDialogTest {
         } finally { f.dispose() }
     }
 
-    @Test fun closeAndEscapeWriteNothingAndReturnFocusToTheTrigger() = runComposeUiTest {
+    @Test fun escapeWritesNothingAndReturnsFocusToTheTrigger() = runComposeUiTest {
         val f = WebRateFixture()
         try {
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 1")
             showWithTrigger(f)
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 2")
             onNodeWithText("Rate trigger").requestFocus()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 3")
             onNodeWithText("Rate trigger").performKeyInput { pressKey(Key.Enter) }
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 4")
             onNodeWithContentDescription("Close").assertIsFocused()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 5")
             onNodeWithTag("web-rate-stars").performMouseInput { click(segment(16)) }
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 6")
             onNodeWithContentDescription("Close").requestFocus()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 7")
             onNodeWithContentDescription("Close").performKeyInput { pressKey(Key.Escape) }
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 8")
             onNodeWithTag("web-rate-dialog").assertDoesNotExist()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 9")
             onNodeWithText("Rate trigger").assertIsFocused()
-
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 10")
-            onNodeWithText("Rate trigger").performKeyInput { pressKey(Key.Enter) }
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 11")
-            onNodeWithTag("web-rate-dialog").assertExists()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 12")
-            onNodeWithContentDescription("Close").performClick()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 13")
-            onNodeWithTag("web-rate-dialog").assertDoesNotExist()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 14")
-            onNodeWithText("Rate trigger").assertIsFocused()
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 15")
             assertTrue(f.writes.isEmpty())
-            println("RATE-DIAG ${kotlin.time.TimeSource.Monotonic.markNow().let { it - diagStart }} closeAndEscape step 16")
+            assertTrue(f.outcomes.isEmpty())
+        } finally { f.dispose() }
+    }
+
+    @Test fun closeButtonWritesNothingAndReturnsFocusToTheTrigger() = runComposeUiTest {
+        val f = WebRateFixture()
+        try {
+            showWithTrigger(f)
+            onNodeWithText("Rate trigger").requestFocus()
+            onNodeWithText("Rate trigger").performKeyInput { pressKey(Key.Enter) }
+            onNodeWithTag("web-rate-dialog").assertExists()
+            onNodeWithTag("web-rate-stars").performMouseInput { click(segment(16)) }
+            onNodeWithContentDescription("Close").performClick()
+            onNodeWithTag("web-rate-dialog").assertDoesNotExist()
+            onNodeWithText("Rate trigger").assertIsFocused()
+            assertTrue(f.writes.isEmpty())
             assertTrue(f.outcomes.isEmpty())
         } finally { f.dispose() }
     }
