@@ -1,5 +1,6 @@
 package com.techgv.cineverse.ui.web
 
+import com.techgv.cineverse.data.library.LibraryStateSnapshot
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.storage.BrowserStorageFailure
 import com.techgv.cineverse.data.storage.StorageException
@@ -36,6 +37,13 @@ internal fun validateWebDetailEntry(entry: WebEntry): WebDetailEntry {
     return WebDetailEntry(MediaRef(media, route.id), scalar("detail.index"), scalar("detail.offset"))
 }
 
+/**
+ * A producer snapshot is actionable only when its source identity equals the rendered Ready session (full equality;
+ * known null origin is guest data, so only a rendered guest). Anything else is Unknown; the snapshot is never relabelled.
+ */
+internal fun LibraryStateSnapshot.webDetailAccount(rendered: WebSessionState.Ready?): LibraryState =
+    if (rendered != null && sourceIdentityKnown && sourceIdentity == rendered.session) state else LibraryState.Unknown
+
 internal data class WebDetailReadState(
     val section: SectionState<Detail> = SectionState.Loading,
     val retained: Detail? = null,
@@ -57,8 +65,8 @@ internal fun DetailUiState.completedWebDetail(ref: MediaRef, appGeneration: Long
 /**
  * Entry-owned raw reader and catalog holder. The root MUST forward actual app/context invalidations to
  * [contextChanged]; GenerationCounter is only a snapshot. Clicks recheck it even before the event is delivered.
- * LibraryState has no captured private-source identity: root/account binding still needs separate certification;
- * Known/Ready and catalog completion must never be presented as that certification.
+ * Account state comes from the root's [accountState] producer snapshots (source identity on the same payload), masked
+ * by [webDetailAccount]; writes and Rate use the explicit expected-session overloads with the rendered session.
  */
 internal class WebDetailOwner(
     entry: WebEntry,
@@ -69,7 +77,8 @@ internal class WebDetailOwner(
     private val storage: StateFlow<BrowserStorageFailure?>,
     private val retryRuntimeReads: () -> Unit,
     private val reportStorageFailure: (StorageException) -> Unit,
-    private val library: LibraryActions?,
+    private val library: LibraryActionsStateHolder?,
+    accountState: (MediaRef) -> Flow<LibraryStateSnapshot>,
     parentScope: CoroutineScope,
 ) {
     val validated = validateWebDetailEntry(entry) // Before scope, holder, subscriptions or fetch.
@@ -82,6 +91,9 @@ internal class WebDetailOwner(
     private var readsAllowed = storage.value == null
     private var storageBlocked = storage.value != null
     private var settingsFailed = false
+    private val accountReads = MutableStateFlow(0L)
+    private val mutableAccount = MutableStateFlow(LibraryStateSnapshot(LibraryState.Unknown))
+    val account = mutableAccount.asStateFlow()
     // No replay/default: an already blocked or exited entry must not start the holder's immediate reader.
     private val rawSettings = flow {
         if (active() && readsAllowed && storage.value == null) settings.collect { actual ->
@@ -110,6 +122,15 @@ internal class WebDetailOwner(
                     storageBlocked = false
                     contextChanged()
                 }
+            }
+        }
+        scope.launch {
+            accountReads.collectLatest { read ->
+                accountState(validated.ref).catch { failure ->
+                    if (failure !is StorageException) throw failure
+                    if (active()) reportStorageFailure(failure)
+                    emit(LibraryStateSnapshot(LibraryState.Unknown))
+                }.collect { if (active() && read == accountReads.value) mutableAccount.value = it }
             }
         }
     }
@@ -157,6 +178,7 @@ internal class WebDetailOwner(
         retryRuntimeReads() // Restart real upstream/runtime too; never replay a mutation.
         if (!current(token) || storage.value != null) return
         storageBlocked = false // Avoid a duplicate restart from a queued runtime-clear notification.
+        accountReads.value++ // Explicit retry only: a failed account read is never replayed automatically.
         restartReader(token)
     }
 
@@ -173,14 +195,15 @@ internal class WebDetailOwner(
 
     fun act(kind: LibraryKind, renderedContext: DetailReadContext?, renderedSession: WebSessionState.Ready?) {
         if (!active() || !readsAllowed || storage.value != null || renderedSession == null || session.value != renderedSession) return
-        val snapshot = holder.state.value
-        val completed = snapshot.completedWebDetail(validated.ref, generation.current) ?: return
-        if (completed.context != renderedContext || !holder.accountState.value.canToggle(kind, library != null)) return
         val actions = library ?: return
+        val completed = holder.state.value.completedWebDetail(validated.ref, generation.current) ?: return
+        if (completed.context != renderedContext || !account.value.webDetailAccount(renderedSession).canToggle(kind)) return
+        val title = completed.detail.toTitle()
+        val expected = renderedSession.session
         when (kind) {
-            LibraryKind.WATCHLIST -> actions.toggleWatchlist(completed.detail.toTitle())
-            LibraryKind.FAVOURITE -> actions.toggleFavourite(completed.detail.toTitle())
-            LibraryKind.RATING -> actions.openRate(completed.detail.toTitle())
+            LibraryKind.WATCHLIST -> actions.toggleWatchlist(title, expected)
+            LibraryKind.FAVOURITE -> actions.toggleFavourite(title, expected)
+            LibraryKind.RATING -> actions.openRate(title, expected)
         }
     }
 
