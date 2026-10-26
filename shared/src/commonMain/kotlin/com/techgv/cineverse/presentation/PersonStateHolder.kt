@@ -82,8 +82,8 @@ class PersonStateHolder(
         if (!current()) return
         _person.value = SectionState.Content(person)
         if (language == ENGLISH || person.biography.isNotBlank()) return
-        // D7: one cached en-US fetch fills a blank biography; its failure changes nothing.
-        val english = optional { catalog.person(personId, ENGLISH).biography } ?: return
+        // D7: one cached en-US fetch fills a blank biography; its failure or a different person's response changes nothing.
+        val english = optional { catalog.person(personId, ENGLISH) }?.takeIf { it.id == personId }?.biography ?: return
         if (current()) _person.value = SectionState.Content(person.withEnglishBiography(english))
     }
 

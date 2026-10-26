@@ -3,6 +3,8 @@ package com.techgv.cineverse.presentation
 import androidx.lifecycle.SavedStateHandle
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.tmdb.PersonDetailDto
+import com.techgv.cineverse.data.tmdb.TmdbError
+import com.techgv.cineverse.data.tmdb.TmdbException
 import com.techgv.cineverse.data.tmdb.UnusedTmdbApi
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.CompletableDeferred
@@ -29,11 +31,15 @@ class PersonStateHolderTest {
     private val generation = GenerationCounter()
     private val calls = mutableListOf<String>()
     private var personGate: CompletableDeferred<Unit>? = null
+    private var englishId: Int? = null // null: the en-US response echoes the requested id
+    private var englishFailure: TmdbException? = null
     private val api = object : UnusedTmdbApi() {
         override suspend fun person(id: Int, language: String, append: String): PersonDetailDto {
             calls += language
             personGate?.await()
-            return PersonDetailDto(id, name = "P", biography = if (language == "en-US") "English bio" else "")
+            if (language != "en-US") return PersonDetailDto(id, name = "P", biography = "")
+            englishFailure?.let { throw it }
+            return PersonDetailDto(englishId ?: id, name = "P", biography = "English bio")
         }
     }
     private val repo = catalog(api, generation, settings)
@@ -42,8 +48,8 @@ class PersonStateHolderTest {
 
     @AfterTest fun tearDown() = Dispatchers.resetMain()
 
-    private fun holder(handle: SavedStateHandle = SavedStateHandle()) =
-        PersonStateHolder(1, repo, settings, generation, SavedStateHandleStateSaver(handle))
+    private fun holder(handle: SavedStateHandle = SavedStateHandle(), personId: Int = 1) =
+        PersonStateHolder(personId, repo, settings, generation, SavedStateHandleStateSaver(handle))
 
     @Test fun blankLocalizedBiographyIsFilledOnceFromEnglishAndLabelled() = runTest(dispatcher) {
         val holder = holder()
@@ -51,6 +57,28 @@ class PersonStateHolderTest {
         val person = (holder.person.value as SectionState.Content).value
         assertEquals("English bio", person.biography)
         assertTrue(person.biographyInEnglish)
+        assertEquals(listOf("ta-IN", "en-US"), calls)
+    }
+
+    @Test fun wrongPersonEnglishResponseNeverFillsTheRequestedPersonBiography() = runTest(dispatcher) {
+        englishId = 99
+        val holder = holder(personId = 42)
+        advanceUntilIdle()
+        val person = (holder.person.value as SectionState.Content).value
+        assertEquals(42, person.id)
+        assertEquals("", person.biography)
+        assertFalse(person.biographyInEnglish)
+        assertEquals(listOf("ta-IN", "en-US"), calls)
+    }
+
+    @Test fun englishFallbackFailureKeepsTheLocalizedPrimary() = runTest(dispatcher) {
+        englishFailure = TmdbException(TmdbError.Network)
+        val holder = holder(personId = 42)
+        advanceUntilIdle()
+        val person = (holder.person.value as SectionState.Content).value
+        assertEquals(42, person.id)
+        assertEquals("", person.biography)
+        assertFalse(person.biographyInEnglish)
         assertEquals(listOf("ta-IN", "en-US"), calls)
     }
 
