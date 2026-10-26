@@ -196,6 +196,8 @@ class WebRootTest {
         } finally { f.close() }
     }
 
+    // Root frames are costly (~1s per dialog enter under Mocha's 2s): one dialog lifecycle per test, and no idle wait
+    // after a write (the outcome toast's enter animation). The toast wiring is asserted by the watchlist test.
     @Test fun detailRateOpensTheAppLevelDialogAndSubmitWritesOnce() = runComposeUiTest {
         val f = Fixture(signedIn = true)
         val history = FakeHistory("/movie/1")
@@ -208,14 +210,11 @@ class WebRootTest {
             exists("web-rate-dialog")
             onNodeWithTag("web-rate-stars").performSemanticsAction(SemanticsActions.SetProgress) { it(8f) }
             onNodeWithText("Submit rating").performClick()
-            waitUntil(timeoutMillis = 10_000) { f.writes.isNotEmpty() }
-            onNodeWithTag("web-rate-dialog").assertDoesNotExist()
             assertEquals(listOf("fixture-account#${rendered.sessionGeneration}:RATING/movie:1"), f.writes)
-            onNodeWithText("Rated Root film 8.0 / 10").assertExists() // The root's onOutcome toast; the dialog shows none.
         } finally { f.close() }
     }
 
-    @Test fun rateDialogIsNeverComposedWithTheTrailerAndAppearsAfterIt() = runComposeUiTest {
+    @Test fun rateActionBehindTheOpenTrailerNeverComposesTheRateDialog() = runComposeUiTest {
         val f = Fixture(signedIn = true)
         val history = FakeHistory("/movie/1")
         try {
@@ -224,13 +223,10 @@ class WebRootTest {
             waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rate").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText("Play trailer").performClick()
             exists("web-trailer-dialog")
-            // The Detail button stays in the tree behind the trailer modal: its click action opens a prompt that the holder holds.
+            // The Detail button stays in the tree behind the trailer modal; its click action reaches openRate.
             onNodeWithText("Rate").performSemanticsAction(SemanticsActions.OnClick)
-            waitForIdle()
             onNodeWithTag("web-rate-dialog").assertDoesNotExist()
-            onNodeWithContentDescription("Close").performClick()
-            exists("web-rate-dialog")
-            onNodeWithTag("web-trailer-dialog").assertDoesNotExist()
+            onNodeWithTag("web-trailer-dialog").assertExists()
             assertEquals(emptyList(), f.writes)
         } finally { f.close() }
     }
