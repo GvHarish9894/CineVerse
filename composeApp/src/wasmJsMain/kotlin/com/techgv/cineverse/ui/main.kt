@@ -22,7 +22,7 @@ fun main() {
     val generation = application.graph.koin.get<GenerationCounter>()
     val repository = application.graph.koin.get<SettingsRepository>()
     val recent = RecentQueryStore(application.graph.koin.get<SettingsStore>())
-    ComposeViewport(document.body!!) { WebApp(application.runtime, catalog, generation, repository.settings, recent, settingsRepository = repository) }
+    ComposeViewport(document.getElementById("cineverse-root")!!) { WebApp(application.runtime, catalog, generation, repository.settings, recent, settingsRepository = repository) }
 }
 
 // A bfcache page retains its live graph and catches up via C3 visibility/focus signals when restored.
