@@ -29,7 +29,7 @@ enum class SeasonNotice { SeasonNotAvailable }
 data class SeasonScreenState(
     /** The TV detail this screen loads itself (cache hit from Detail, network after process death). */
     val show: SectionState<Detail> = SectionState.Loading,
-    /** Selected season number; null while the show loads or when it has no seasons. */
+    /** Selected season number; null while the show loads or when no season is selected. */
     val selected: Int? = null,
     /** Episodes of [selected]. */
     val episodes: SectionState<Season> = SectionState.Loading,
@@ -40,9 +40,10 @@ data class SeasonScreenState(
 
 /**
  * §7.6 Season [seasonNumber] of [seriesId]: loads the TV detail itself (never Detail's memory), keeps the selected
- * season (saved; a season that no longer exists selects the first and raises [SeasonNotice.SeasonNotAvailable]) and
- * loads its episodes, a newer selection cancelling the previous load. Show and episodes are independent generation
- * scopes. [scope]: see [HomeStateHolder].
+ * season (saved; by default a season that no longer exists selects the first and raises [SeasonNotice.SeasonNotAvailable])
+ * and loads its episodes, a newer selection cancelling the previous load. With [fallbackToFirstSeason] false, an
+ * unavailable season stays unselected without rewriting the saved selection. Show and episodes are independent
+ * generation scopes. [scope]: see [HomeStateHolder].
  */
 class SeasonStateHolder(
     val seriesId: Int,
@@ -120,9 +121,14 @@ class SeasonStateHolder(
         }
         if (!current()) return
         val wanted = saver.getInt(SELECTED) ?: seasonNumber
-        val selected = show.seasons.firstOrNull { it.seasonNumber == wanted }?.seasonNumber ?: show.seasons.firstOrNull()?.seasonNumber
-        val missing = show.seasons.isNotEmpty() && selected != wanted
-        saver.putInt(SELECTED, selected)
+        val selected = show.seasons.firstOrNull { it.seasonNumber == wanted }?.seasonNumber
+            ?: if (fallbackToFirstSeason) show.seasons.firstOrNull()?.seasonNumber else null
+        val missing = selected != wanted && (!fallbackToFirstSeason || show.seasons.isNotEmpty())
+        if (fallbackToFirstSeason || selected != null) saver.putInt(SELECTED, selected)
+        if (!fallbackToFirstSeason && selected == null) {
+            episodesGeneration.bump()
+            episodesJob?.cancel()
+        }
         _state.update {
             it.copy(
                 show = SectionState.Content(show),
