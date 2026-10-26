@@ -36,33 +36,64 @@ class BrowserSettingsStore(
         if (ownsDatabase) database.close()
         if (ownsChanges) changes.close()
     }
-    override val data: Flow<SettingsValues> = this.changes.changes
-        .map { it.settings to it.revalidate }.distinctUntilChanged()
-        .map { JsonValues(snapshot()) }.distinctUntilChanged()
+    /** Stable borrowed preference view; shares this store's database, bus, prefix and lifetime. */
+    val preferenceStore: SettingsStore = object : SettingsStore {
+        override val data = snapshots(strict = true)
+        override suspend fun edit(transform: (MutableSettingsValues) -> Unit) = this@BrowserSettingsStore.edit(strict = true, transform)
+    }
 
-    override suspend fun edit(transform: (MutableSettingsValues) -> Unit) {
+    override val data: Flow<SettingsValues> = snapshots(strict = false)
+
+    private fun snapshots(strict: Boolean): Flow<SettingsValues> = this.changes.changes
+        .map { it.settings to it.revalidate }.distinctUntilChanged()
+        .map { JsonValues(snapshot(strict)) }.distinctUntilChanged()
+
+    override suspend fun edit(transform: (MutableSettingsValues) -> Unit) = edit(strict = false, transform)
+
+    private suspend fun edit(strict: Boolean, transform: (MutableSettingsValues) -> Unit) {
         database.edit("settings", keyPrefix, onCommitted = { changes.publish(BrowserChangeTopic.Settings) }) { stored ->
-            val values = MutableJsonValues(read(stored).toMutableMap())
+            val values = MutableJsonValues(read(stored, strict).toMutableMap())
             transform(values)
+            validate(values.map, strict)
             Json.encodeToString(values.map)
         }
     }
 
-    private suspend fun snapshot(): Map<String, JsonElement> {
-        database.read("settings", keyPrefix)?.let { return read(it) }
+    private suspend fun snapshot(strict: Boolean): Map<String, JsonElement> {
+        database.read("settings", keyPrefix)?.let { return read(it, strict) }
+        if (strict) read(null, strict) // Reject invalid legacy data before any migration write.
         // Recheck inside the write transaction: another tab may already have migrated/edited.
-        database.edit("settings", keyPrefix) { stored -> Json.encodeToString(read(stored)) }
-        return read(database.read("settings", keyPrefix)!!)
+        database.edit("settings", keyPrefix) { stored -> Json.encodeToString(read(stored, strict)) }
+        return read(database.read("settings", keyPrefix)!!, strict)
     }
 
-    private fun read(stored: String?): Map<String, JsonElement> {
+    private fun read(stored: String?, strict: Boolean): Map<String, JsonElement> {
         val values: Map<String, JsonElement> = if (stored != null) decodeStorage(stored) else {
             val legacy = decodeStorage<LegacySnapshot>(legacySnapshot(keyPrefix))
             legacy.error?.let { throw storageFailure(it) }
             decodeStorage(legacy.value!!)
         }
-        if (values.values.any { !valid(it) }) throw BrowserStorageException(BrowserStorageFailure.Corrupt)
+        validate(values, strict)
         return values
+    }
+
+    private fun validate(values: Map<String, JsonElement>, strict: Boolean) {
+        values.forEach { (key, value) ->
+            val preference = validPreference(key, value)
+            if ((preference == null && !valid(value)) || (strict && preference == false)) {
+                throw BrowserStorageException(BrowserStorageFailure.Corrupt)
+            }
+        }
+    }
+
+    // Null classifies non-preference keys; generic callers preserve bad preference elements unchanged.
+    private fun validPreference(key: String, value: JsonElement): Boolean? = when (key) {
+        "haptics", "sounds", "glow", "motion", "include_adult" ->
+            value is JsonPrimitive && !value.isString && value.booleanOrNull != null
+        "strength" -> value is JsonPrimitive && value.isString && HapticStrength.entries.any { it.name == value.content }
+        "language" -> value is JsonPrimitive && value.isString && value.content in Settings.LANGUAGES
+        "region" -> value is JsonPrimitive && value.isString && value.content in Settings.REGIONS
+        else -> null
     }
 
     @Serializable

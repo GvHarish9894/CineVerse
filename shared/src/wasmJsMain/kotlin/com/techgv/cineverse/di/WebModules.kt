@@ -30,7 +30,8 @@ class WebConfig(val proxyBaseUrl: String) {
 
 /** Fresh modules and graph-owned objects on every call, including isolated test graphs. */
 fun sharedModules(config: WebConfig): List<Module> = listOf(
-    module { single { config } }, coreModule(), libraryModule { get<ImportOperationGuard>() }, platformModule(),
+    module { single { config } }, coreModule { get<BrowserSettingsStore>().preferenceStore },
+    libraryModule { get<ImportOperationGuard>() }, platformModule(),
 )
 
 actual fun platformModule(): Module = module {
@@ -41,7 +42,7 @@ actual fun platformModule(): Module = module {
         val lock = get<BrowserImportLock>()
         ImportOperationGuard { operation -> lock.withLock(operation) }
     }
-    single<SettingsStore> { BrowserSettingsStore(database = get(), changes = get()) }
+    single { BrowserSettingsStore(database = get(), changes = get()) } bind SettingsStore::class
     single<GuestLibraryStore> { BrowserGuestLibraryStore(get(), get()) }
     single { BrowserImportStore(get()) } binds arrayOf(ImportLedgerStore::class, ImportOfferStore::class)
     single<Transport.Proxy> {

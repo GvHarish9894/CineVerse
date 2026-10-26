@@ -7,6 +7,7 @@ import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.*
 import com.techgv.cineverse.data.settings.*
+import com.techgv.cineverse.data.search.RecentQueryStore
 import com.techgv.cineverse.data.storage.*
 import com.techgv.cineverse.data.tmdb.*
 import com.techgv.cineverse.data.web.*
@@ -18,6 +19,7 @@ import io.ktor.client.engine.mock.*
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.*
 import kotlinx.browser.document
+import kotlinx.browser.localStorage
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.test.runTest
@@ -79,7 +81,8 @@ class WebSharedModulesTest {
             single { database }
             single { bus }
             single<HttpClient> { client }
-            single<SettingsStore> { BrowserSettingsStore(prefix, database, bus) }
+            single { BrowserSettingsStore(prefix, database, bus) }
+            single<SettingsStore> { get<BrowserSettingsStore>() }
             single<GuestLibraryStore> { guestStore(BrowserGuestLibraryStore(database, bus)) }
         }) }
         val koin get() = app.koin
@@ -95,7 +98,11 @@ class WebSharedModulesTest {
         suspend fun close(delete: Boolean = true) {
             uiScope.coroutineContext.job.cancelAndJoin()
             runtime.close(); app.close()
-            if (delete) deleteDatabase(name).await()
+            if (delete) {
+                deleteDatabase(name).await()
+                (0 until localStorage.length).mapNotNull { localStorage.key(it) }
+                    .filter { it.startsWith(prefix) || it == "__$channel.revision" }.forEach(localStorage::removeItem)
+            }
             document.cookie = "cv_csrf=; Max-Age=0; Path=/"
         }
     }
@@ -112,6 +119,10 @@ class WebSharedModulesTest {
             assertTrue(resolved.containsAll(listOf(WebRuntime::class, LibraryImporter::class, BrowserImportStore::class,
                 CatalogRepository::class, TmdbCache::class, WebAuthRepository::class, HttpClient::class)))
             assertTrue(resolved.none { it.simpleName.orEmpty().contains("Credential") || it.simpleName.orEmpty().contains("Room") })
+            assertSame(a.koin.get<BrowserSettingsStore>(), a.koin.get<SettingsStore>())
+            assertSame(a.settings, a.koin.get<SettingsRepository>())
+            assertSame(a.koin.get<BrowserSettingsStore>().preferenceStore, a.koin.get<BrowserSettingsStore>().preferenceStore)
+            assertNotSame(a.koin.get<SettingsStore>(), a.koin.get<BrowserSettingsStore>().preferenceStore)
             assertSame(a.runtime.settingsHolder, a.koin.get<SettingsStateHolder>())
             assertSame(a.runtime.importController, a.koin.get<ImportLibraryStateHolder>())
             assertSame(a.koin.get<BrowserImportStore>(), a.koin.get<ImportLedgerStore>())
@@ -136,6 +147,83 @@ class WebSharedModulesTest {
             assertEquals("US", b.settings.current().region)
         } finally { a.close(delete = false); b.close() }
     }
+
+    @Test fun strictGraphRepositoryRejectsBadPreferencesWhileGenericRecentsAndSignOutRemainAvailable() = runTest { fixture { f ->
+        f.start()
+        val generic = f.koin.get<SettingsStore>()
+        val recents = RecentQueryStore(generic)
+        generic.edit { it.setString("strength", "private-payload"); it.setString("unknown", "kept") }
+        f.runtime.storageFailure.first { it == BrowserStorageFailure.Corrupt }
+        assertEquals(BrowserStorageFailure.Corrupt, assertFailsWith<BrowserStorageException> { f.settings.current() }.failure)
+        val before = f.calls.size
+        assertFailsWith<BrowserStorageException> { f.koin.get<CatalogRepository>().genres(MediaType.Movie) }
+        assertFailsWith<BrowserStorageException> {
+            f.koin.get<AccountLibrarySource>().page(f.identity!!, LibraryKind.WATCHLIST, MediaType.Movie, 1)
+        }
+        assertEquals(before, f.calls.size, "both consumers must reject through the strict repository before dispatch")
+        val raw = f.database.read("settings", f.prefix)
+        assertFailsWith<BrowserStorageException> { f.settings.offerAccountDefaults(AccountDefaults("a", "ta-IN", "US", false)) }
+        assertEquals(raw, f.database.read("settings", f.prefix))
+        assertEquals(emptyList(), recents.observe().first())
+        recents.record("owned history")
+        assertEquals(listOf("owned history"), recents.observe().first())
+        recents.clear()
+        assertEquals("private-payload", generic.data.first().string("strength"))
+        assertEquals("kept", generic.data.first().string("unknown"))
+        f.postCheck = { f.identity = null } // The fake server must report guest after accepting logout.
+        val signedOut = async(start = CoroutineStart.UNDISPATCHED) { f.runtime.settingsHolder.signOutResults.first() }
+        f.runtime.settingsHolder.signOut()
+        assertTrue(signedOut.await())
+        until { f.count("/api/auth/logout") == 1 }
+        until { f.auth.session.value == null }
+        assertEquals("private-payload", generic.data.first().string("strength"))
+    } }
+
+    @Test fun peerCorruptionEqualValuedRepairAndExplicitRetryRecoverSameReadersWithoutMutationReplay() = runTest { fixture { f ->
+        f.identity = null; f.start()
+        f.settings.update { it.copy(language = "ml-IN", region = "GB") }
+        val observer = f.scope.launch { f.runtime.settingsHolder.state.collect() }
+        until { f.runtime.settingsHolder.state.value?.settings?.language == "ml-IN" }
+        val holder = f.runtime.settingsHolder
+        val real = holder.state.value
+        val validRaw = f.database.read("settings", f.prefix)!!
+        val ready = CompletableDeferred<Unit>()
+        val reader = async {
+            assertFailsWith<BrowserStorageException> {
+                f.settings.settings.collect { ready.complete(Unit) }
+            }
+        }
+        ready.await()
+        val peer = realm()
+        try {
+            val bad = "{\"motion\":null,\"language\":\"ml-IN\",\"region\":\"GB\"}"
+            peerWrite(peer, f.name, "settings", f.prefix, bad, f.channel, "Settings").await()
+            reader.await()
+            f.runtime.storageFailure.first { it == BrowserStorageFailure.Corrupt }
+            assertEquals(real, holder.state.value)
+            var transformed = false
+            assertFailsWith<BrowserStorageException> { f.settings.update { transformed = true; it.copy(includeAdult = true) } }
+            assertFalse(transformed)
+            holder.toggle(Toggle.Adult)
+            tick().await(); tick().await()
+            assertEquals(bad, f.database.read("settings", f.prefix))
+            peerWrite(peer, f.name, "settings", f.prefix, validRaw, f.channel, "Settings").await()
+            tick().await(); tick().await()
+            assertEquals(BrowserStorageFailure.Corrupt, f.runtime.storageFailure.value)
+            assertEquals(real, holder.state.value)
+            f.runtime.retryStorage()
+            f.runtime.storageFailure.first { it == null }
+            assertSame(holder, f.runtime.settingsHolder)
+            assertEquals(real, holder.state.value)
+            assertFalse(f.settings.current().includeAdult)
+            // A later real update proves the equal-valued repair restarted both holder and runtime readers.
+            val generation = f.koin.get<GenerationCounter>().current
+            f.settings.update { it.copy(language = "ta-IN") }
+            until { holder.state.value?.settings?.language == "ta-IN" && f.koin.get<GenerationCounter>().current > generation }
+            assertFalse(holder.state.value!!.settings.includeAdult)
+            assertEquals(0, f.calls.count { it.method != HttpMethod.Get })
+        } finally { removeRealm(peer); observer.cancelAndJoin() }
+    } }
 
     @Test fun fixedSameOriginConfigRejectsPretendBaseUrls() {
         assertEquals("/api", WebConfig("/api").proxyBaseUrl)
