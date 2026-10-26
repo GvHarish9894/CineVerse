@@ -387,6 +387,21 @@ class CapturedLibraryActionsTest {
         assertTrue(f.requests.isEmpty())
     }
 
+    @Test fun guestPersistenceFailureIsReportedAndNeverReplayedOnRecovery() = runTest {
+        val f = Fixture(this, null)
+        f.failGuestWrites = true
+        f.holder.toggleFavourite(movie, null)
+        runCurrent()
+        assertEquals(1, f.failures.size)
+        assertEquals(LibraryWriteResult.Failed(null), f.outcomes.single().result)
+        f.failGuestWrites = false
+        f.holder.retryStorage()
+        runCurrent()
+        assertTrue(f.rows.all().isEmpty())
+        assertEquals(1, f.outcomes.size)
+        assertTrue(f.requests.isEmpty())
+    }
+
     @Test fun lateSupersededStorageFailureIsNotReportedOrReplayed() = runTest {
         val f = Fixture(this, null)
         val gate = CompletableDeferred<Unit>()
@@ -450,6 +465,7 @@ class CapturedLibraryActionsTest {
         var beforeSessionRead: suspend () -> Unit = {}
         var guestReads = 0
         var failGuestReads = false
+        var failGuestWrites = false
         var writeFailure: WebProxyException? = null
         var landThenFail = false
         private val guest = object : GuestLibraryStore by rows {
@@ -458,6 +474,10 @@ class CapturedLibraryActionsTest {
                 beforeGuestRead()
                 if (failGuestReads) throw StorageException("test storage unavailable")
                 emitAll(rows.observeTitle(ref))
+            }
+            override suspend fun upsert(row: GuestLibraryRow) {
+                if (failGuestWrites) throw StorageException("test persistence unavailable")
+                rows.upsert(row)
             }
         }
         private val source = object : AccountLibrarySource by account {
