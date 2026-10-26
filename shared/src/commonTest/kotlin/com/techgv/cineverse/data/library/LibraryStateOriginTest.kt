@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -86,6 +87,12 @@ class LibraryStateOriginTest {
         assertEquals(expectedState, state)
     }
 
+    private fun Throwable.assertStorageFailure(expected: StorageException) {
+        assertIs<StorageException>(this)
+        // JVM coroutine stack-trace recovery may copy the exception, retaining the original as its cause.
+        assertSame(expected, generateSequence(this) { it.cause }.last())
+    }
+
     @Test fun manuallyConstructedSnapshotsDoNotInventSourceProof() {
         for (state in listOf(LibraryState.Unknown, empty, aFlags)) {
             val snapshot = LibraryStateSnapshot(state)
@@ -129,7 +136,7 @@ class LibraryStateOriginTest {
             repository.stateWithOrigin(movie.ref).catch { failures += it }.collect { history += it }
         }
         runCurrent()
-        assertSame(failure, failures.single())
+        failures.single().assertStorageFailure(failure)
         assertTrue(history.isEmpty(), "no empty guest success or proof on storage failure")
         store.failure = null
         runCurrent()
@@ -147,7 +154,7 @@ class LibraryStateOriginTest {
         val states = mutableListOf<LibraryState>()
         backgroundScope.launch { repository.state(movie.ref).catch { failures += it }.collect { states += it } }
         runCurrent()
-        assertSame(failure, failures.single())
+        failures.single().assertStorageFailure(failure)
         assertTrue(states.isEmpty())
     }
 
@@ -174,7 +181,7 @@ class LibraryStateOriginTest {
             repository.stateWithOrigin(movie.ref).catch { failures += it }.collect { history += it }
         }
         runCurrent()
-        assertSame(failure, failures.single())
+        failures.single().assertStorageFailure(failure)
         assertTrue(history.all { !it.state.known })
         account.read = { _, _ -> aFlags }
         runCurrent()
@@ -191,7 +198,7 @@ class LibraryStateOriginTest {
         val history = mutableListOf<LibraryStateSnapshot>()
         backgroundScope.launch { repo.stateWithOrigin(movie.ref).catch { failures += it }.collect { history += it } }
         runCurrent()
-        assertSame(failure, failures.single())
+        failures.single().assertStorageFailure(failure)
         assertTrue(history.isEmpty())
         assertEquals(0, store.subscriptions)
         assertTrue(account.reads.isEmpty())
