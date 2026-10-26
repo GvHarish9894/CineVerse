@@ -53,27 +53,35 @@ class WebApprovalOwner(
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             runtime.session.collect { session ->
-                mutable.value = mutable.value.copy(session = session)
+                if (!active()) return@collect
                 if (session is WebSessionState.Ready && session.session != null) hide()
-                else publish()
+                else {
+                    mutable.value = mutable.value.copy(session = session)
+                    publish()
+                }
             }
         }
     }
 
     fun show() {
-        if (disposed || busy || visible || signedIn()) return
+        if (!active() || busy || visible || signedIn()) return
         visible = true
         publish(WebApprovalPhase.Ready, null)
     }
 
     fun startApproval() {
-        if (disposed || !visible || busy || mayHaveAttempt || !guest()) return
+        if (!active() || !visible || busy || mayHaveAttempt || !guest()) return
         busy = true
-        mayHaveAttempt = true // Even a lost POST response can have created a browser attempt.
         val ticket = ++revision
         publish(WebApprovalPhase.Starting, null)
         scope.launch {
             try {
+                if (!current(ticket)) return@launch
+                if (!guest()) {
+                    publish(WebApprovalPhase.Ready, null)
+                    return@launch
+                }
+                mayHaveAttempt = true // Even a lost POST response can have created a browser attempt.
                 val result = runtime.startApproval() // Repository bootstraps CSRF and validates the exact approve URL.
                 if (current(ticket)) {
                     approval = result
@@ -95,10 +103,11 @@ class WebApprovalOwner(
 
     /** Invoke directly from Continue's click handler, never after a suspend or a focus/visibility hint. */
     fun continueToTmdb() {
-        if (disposed || !visible || busy || !guest()) return
+        if (!active() || !visible || busy || !guest()) return
         val descriptor = approval ?: return
         val ticket = revision
         mutable.value = mutable.value.copy(openRequested = true)
+        if (!current(ticket) || busy || cancelRequested || !guest() || approval !== descriptor) return
         try {
             opener.open(descriptor)
             if (current(ticket)) publish(WebApprovalPhase.Waiting, null)
@@ -110,13 +119,14 @@ class WebApprovalOwner(
 
     /** Root's existing focus/visibility/callback hook may call this. Query flags are not identity proof. */
     fun approvalReturned() {
-        if (disposed || !visible || busy || signedIn()) return
+        if (!active() || !visible || busy || signedIn()) return
         busy = true
         val ticket = ++revision
         val previousIssue = mutable.value.issue
         publish(WebApprovalPhase.Checking, previousIssue)
         scope.launch {
             try {
+                if (!current(ticket)) return@launch
                 runtime.approvalReturned() // Read only. Never starts, exchanges or cancels an attempt.
                 if (current(ticket)) {
                     val unresolved = previousIssue == WebApprovalIssue.StartUnknown || previousIssue == WebApprovalIssue.CancelUnknown
@@ -135,9 +145,9 @@ class WebApprovalOwner(
 
     /** Close/scrim/Escape/Not now explicitly cancel ALL browser attempts, not a sign-out. */
     fun dismiss() {
-        if (disposed || !visible || cancelRequested || mutable.value.phase == WebApprovalPhase.Cancelling) return
-        if (!mayHaveAttempt) { hide(); return }
+        if (!active() || !visible || cancelRequested || mutable.value.phase == WebApprovalPhase.Cancelling) return
         cancelRequested = true
+        mayHaveAttempt = true // Other tabs may own attempts even without a local descriptor.
         revision++ // A late start/read cannot replace the user's cancellation intent.
         approval = null
         publish(WebApprovalPhase.Cancelling, null)
@@ -145,13 +155,14 @@ class WebApprovalOwner(
     }
 
     private fun cancel() {
-        if (disposed || !cancelRequested) return
+        if (!active() || !cancelRequested) return
         cancelRequested = false
         busy = true
         val ticket = ++revision
         publish(WebApprovalPhase.Cancelling, null)
         scope.launch {
             try {
+                if (!active()) return@launch
                 runtime.cancelApproval()
                 if (current(ticket)) hide() // POST + repository read both completed; no fabricated guest state.
             } catch (cancelled: CancellationException) { throw cancelled
@@ -165,13 +176,14 @@ class WebApprovalOwner(
 
     private fun finishOperation() {
         busy = false
-        if (cancelRequested && !disposed) cancel() else publish()
+        if (cancelRequested && active()) cancel() else publish()
     }
 
+    private fun active(): Boolean = !disposed && scope.isActive
     private fun guest(): Boolean = (runtime.session.value as? WebSessionState.Ready)?.let { it.session == null } == true
     private fun signedIn(): Boolean = (runtime.session.value as? WebSessionState.Ready)?.session != null
     private fun current(ticket: Long): Boolean {
-        if (disposed) return false
+        if (!active()) return false
         if (signedIn()) hide()
         return visible && revision == ticket
     }
@@ -185,7 +197,7 @@ class WebApprovalOwner(
     }
 
     private fun publish(phase: WebApprovalPhase = mutable.value.phase, issue: WebApprovalIssue? = mutable.value.issue) {
-        if (disposed || !visible) return
+        if (!active() || !visible) return
         mutable.value = mutable.value.copy(
             phase = phase, session = runtime.session.value, issue = issue,
             canStart = !busy && !mayHaveAttempt && guest(),
