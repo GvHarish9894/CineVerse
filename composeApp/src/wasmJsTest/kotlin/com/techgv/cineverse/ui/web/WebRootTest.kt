@@ -4,7 +4,10 @@ package com.techgv.cineverse.ui.web
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.semantics.SemanticsActions
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.*
+import com.techgv.cineverse.data.web.WebProxyHttp
 import com.techgv.cineverse.data.search.RecentQueryStore
 import com.techgv.cineverse.data.settings.*
 import com.techgv.cineverse.data.storage.*
@@ -30,9 +33,15 @@ class WebRootTest {
         val calls = mutableListOf<String>()
         val http = mutableListOf<String>()
         val opened = mutableListOf<String>()
+        /** Library writes as `<identity>:KIND/ref`: `fixture-account#<generation>` (account) or `guest`. */
+        val writes = mutableListOf<String>()
         val trailerHost = WebTrailerHostFake()
         var backs = 0
-        private val sessionBody = if (signedIn) WebApprovalFixture.SIGNED else WebApprovalFixture.GUEST
+        private var sessionBody = if (signedIn) WebApprovalFixture.SIGNED else WebApprovalFixture.GUEST
+        /** When set, session reads wait for it: the runtime stays Checking. */
+        var sessionGate: CompletableDeferred<Unit>? = null
+        private val guestRows = MutableStateFlow<List<GuestLibraryRow>>(emptyList())
+        private val account = mutableMapOf<MediaRef, LibraryState>()
         private val api = object : WebSeasonUnusedApi() {
             override suspend fun movieDetail(id: Int, language: String, append: String, sessionId: String?): MovieDetailDto {
                 calls += "movie:$id"
@@ -75,11 +84,29 @@ class WebRootTest {
             } }
             single { SettingsRepository(get<SettingsStore>()) }
             single<GuestLibraryStore> { object : GuestLibraryStore {
-                override fun observeKind(kind: LibraryKind, media: MediaType): Flow<List<GuestLibraryRow>> = flowOf(emptyList())
-                override fun observeTitle(ref: MediaRef): Flow<List<GuestLibraryRow>> = flowOf(emptyList())
-                override suspend fun all(): List<GuestLibraryRow> = emptyList()
-                override suspend fun upsert(row: GuestLibraryRow) { error("No library writes in root tests") }
-                override suspend fun delete(ref: MediaRef, kind: LibraryKind) { error("No library writes in root tests") }
+                override fun observeKind(kind: LibraryKind, media: MediaType): Flow<List<GuestLibraryRow>> =
+                    guestRows.map { rows -> rows.filter { it.kind == kind && it.ref.mediaType == media } }
+                override fun observeTitle(ref: MediaRef): Flow<List<GuestLibraryRow>> = guestRows.map { rows -> rows.filter { it.ref == ref } }
+                override suspend fun all(): List<GuestLibraryRow> = guestRows.value
+                override suspend fun upsert(row: GuestLibraryRow) {
+                    writes += "guest:${row.kind}/${row.ref.key}"
+                    guestRows.value = guestRows.value.filterNot { it.ref == row.ref && it.kind == row.kind } + row
+                }
+                override suspend fun delete(ref: MediaRef, kind: LibraryKind) {
+                    writes += "guest:$kind/${ref.key}"
+                    guestRows.value = guestRows.value.filterNot { it.ref == ref && it.kind == kind }
+                }
+            } }
+            single<AccountLibrarySource> { object : AccountLibrarySource {
+                override suspend fun page(session: AuthSession, kind: LibraryKind, media: MediaType, page: Int): LibraryPage =
+                    error("No account list reads in root tests")
+                override fun invalidateLists() = Unit
+                override suspend fun states(session: AuthSession, ref: MediaRef) =
+                    account[ref] ?: LibraryState(known = true, watchlist = false, favourite = false, rating = null, pending = emptySet())
+                override suspend fun write(session: AuthSession, ref: MediaRef, kind: LibraryKind, target: LibraryState) {
+                    writes += "${session.accountObjectId.value}#${session.sessionGeneration}:$kind/${ref.key}"
+                    account[ref] = target.copy(pending = emptySet())
+                }
             } }
             single<ImportOfferStore> { object : ImportOfferStore {
                 override suspend fun offer(accountObjectId: String) = ImportOfferRecord(accountObjectId, imported = false, complete = true)
@@ -89,11 +116,15 @@ class WebRootTest {
                 override val config = HttpClientEngineConfig().apply { dispatcher = Dispatchers.Unconfined }
                 override suspend fun execute(data: HttpRequestData): HttpResponseData {
                     http += "${data.method.value} ${data.url.encodedPath}"
-                    check(data.method == HttpMethod.Get && data.url.encodedPath == "/api/session") { "Root fixture allows only session reads" }
-                    return HttpResponseData(HttpStatusCode.OK, GMTDate(), headersOf(HttpHeaders.ContentType, "application/json"),
-                        HttpProtocolVersion.HTTP_1_1, ByteReadChannel(sessionBody), callContext())
+                    val logout = data.method == HttpMethod.Post && data.url.encodedPath == "/api/auth/logout" && data.headers["X-CV-CSRF"] == "root-fixture-csrf"
+                    check(logout || data.method == HttpMethod.Get && data.url.encodedPath == "/api/session") { "Root fixture allows only session reads and logout" }
+                    if (logout) sessionBody = WebApprovalFixture.GUEST else sessionGate?.await()
+                    return HttpResponseData(if (logout) HttpStatusCode.NoContent else HttpStatusCode.OK, GMTDate(),
+                        headersOf(HttpHeaders.ContentType, "application/json"), HttpProtocolVersion.HTTP_1_1,
+                        ByteReadChannel(if (logout) "" else sessionBody), callContext())
                 }
             }) }
+            single { WebProxyHttp(get()) { "root-fixture-csrf" } }
         }) }
         val runtime = app.koin.get<WebRuntime>()
         val catalog = app.koin.get<CatalogRepository>()
@@ -101,7 +132,7 @@ class WebRootTest {
         val repository = app.koin.get<SettingsRepository>()
         val recent = RecentQueryStore(app.koin.get<SettingsStore>())
         val opener = WebApprovalOpener { opened += "open" }
-        override fun close() { runtime.stop(); app.close() }
+        override fun close() { sessionGate?.complete(Unit); runtime.stop(); app.close() }
         companion object { private var next = 0 }
     }
 
@@ -145,6 +176,120 @@ class WebRootTest {
             exists("web-settings")
             onNodeWithText("not implemented in this preview", substring = true).assertDoesNotExist()
             assertEquals(setOf("GET /api/session"), f.http.toSet())
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
+    @Test fun detailWatchlistDispatchesTheRenderedSessionThroughTheAppHolderAndToastsSynced() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        val history = FakeHistory("/movie/1")
+        try {
+            root(f, history)
+            val rendered = (f.runtime.session.value as WebSessionState.Ready).session!!
+            exists("web-detail")
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Add to watchlist").performClick()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Synced to your TMDB account").fetchSemanticsNodes().isNotEmpty() }
+            assertEquals(listOf("fixture-account#${rendered.sessionGeneration}:WATCHLIST/movie:1"), f.writes)
+            onNodeWithText("Added “Root film” to Watchlist").assertExists()
+            onNodeWithText("In watchlist").assertExists()
+        } finally { f.close() }
+    }
+
+    @Test fun detailRateOpensTheAppLevelDialogAndSubmitWritesOnce() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        val history = FakeHistory("/movie/1")
+        try {
+            root(f, history)
+            exists("web-detail")
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rate").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Rate").performClick()
+            exists("web-rate-dialog")
+            onNodeWithText("Rate on TMDB", ignoreCase = true).assertExists()
+            onNodeWithTag("web-rate-stars").performSemanticsAction(SemanticsActions.SetProgress) { it(8f) }
+            onNodeWithText("Submit rating").performClick()
+            onNodeWithTag("web-rate-dialog").assertDoesNotExist()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rated Root film 8.0 / 10").fetchSemanticsNodes().isNotEmpty() }
+            assertEquals(1, f.writes.size)
+            assertTrue(f.writes.single().endsWith(":RATING/movie:1"))
+        } finally { f.close() }
+    }
+
+    @Test fun rateDialogIsNeverComposedWithTheTrailerAndReturnsAfterIt() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        val history = FakeHistory("/movie/1")
+        try {
+            root(f, history)
+            exists("web-detail")
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rate").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Rate").performClick()
+            exists("web-rate-dialog")
+            // The Detail button stays in the tree behind the modal; its click action opens the trailer (the web Player).
+            onNodeWithText("Play trailer").performSemanticsAction(SemanticsActions.OnClick)
+            exists("web-trailer-dialog")
+            onNodeWithTag("web-rate-dialog").assertDoesNotExist()
+            onNodeWithContentDescription("Close").performClick()
+            exists("web-rate-dialog") // Held by the holder while the trailer was up, not dropped.
+            onNodeWithTag("web-trailer-dialog").assertDoesNotExist()
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
+    @Test fun detailAccountStateIsMaskedUnknownWhileItsOriginIsNotTheRenderedReadySession() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        val history = FakeHistory("/movie/1")
+        try {
+            root(f, history)
+            val rendered = (f.runtime.session.value as WebSessionState.Ready).session!!
+            exists("web-detail")
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
+            f.sessionGate = CompletableDeferred()
+            runOnIdle { f.runtime.revalidateSession() } // Checking: the repository still publishes the account-origin snapshot.
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Watchlist · unknown").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
+            onNodeWithText("Rating · unknown").assertIsNotEnabled()
+            var snapshot: LibraryStateSnapshot? = null
+            val read = CoroutineScope(Dispatchers.Unconfined).launch {
+                snapshot = f.runtime.libraryStateWithOrigin(MediaRef(MediaType.Movie, 1)).first { it.sourceIdentityKnown }
+            }
+            waitUntil(timeoutMillis = 10_000) { snapshot != null }
+            read.cancel()
+            assertEquals(rendered, snapshot!!.sourceIdentity) // Known account data, masked only because the render is not Ready.
+            runOnIdle { f.sessionGate!!.complete(Unit) }
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Add to watchlist").fetchSemanticsNodes().isNotEmpty() }
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
+    @Test fun settingsSignOutOpensTheOwnerDialogAndLogsOutOnlyOnConfirm() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        val history = FakeHistory("/settings")
+        try {
+            root(f, history)
+            exists("web-settings")
+            onNode(hasText("Sign out") and hasAnyAncestor(hasTestTag("settings-account"))).performClick()
+            exists("web-sign-out-dialog")
+            onNodeWithText("Sign out Fixture viewer from this browser?", substring = true).assertExists()
+            assertEquals(setOf("GET /api/session"), f.http.toSet()) // Opening the dialog sends nothing.
+            onNode(hasText("Sign out") and hasAnyAncestor(hasTestTag("web-sign-out-dialog"))).performClick()
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("This browser is now verified as signed out.").fetchSemanticsNodes().isNotEmpty() }
+            assertEquals(1, f.http.count { it == "POST /api/auth/logout" })
+            assertEquals(WebSessionState.Ready(null), f.runtime.session.value)
+        } finally { f.close() }
+    }
+
+    @Test fun settingsImportOpensTheOwnerDialogWithoutWritesOrLogout() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        val history = FakeHistory("/settings")
+        try {
+            root(f, history)
+            exists("web-settings")
+            onNodeWithText("Import guest library").performClick()
+            exists("web-import-dialog")
+            onNodeWithText("Nothing to import").assertExists() // The fake offer is complete: the owner reports it honestly.
+            onNodeWithTag("web-sign-out-dialog").assertDoesNotExist()
+            assertEquals(setOf("GET /api/session"), f.http.toSet())
+            assertEquals(emptyList(), f.writes)
         } finally { f.close() }
     }
 
