@@ -264,7 +264,7 @@ class WebSeasonOwnerTest {
         val context = owner.state.value.context!!
         owner.selectSeason(context, 0)
         owner.selectSeason(context, 3)
-        assertEquals(listOf(WebRoute.Season(7, 0)), fake.destinations)
+        assertEquals(listOf<WebRoute>(WebRoute.Season(7, 0)), fake.destinations)
         assertEquals("7", entry.getString("selectedSeason"))
         assertEquals(2, fake.calls.size)
         owner.close()
