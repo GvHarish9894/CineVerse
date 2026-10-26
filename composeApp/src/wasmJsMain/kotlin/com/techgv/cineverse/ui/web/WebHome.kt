@@ -16,7 +16,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.em
+import com.techgv.cineverse.data.storage.StorageException
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,8 +50,13 @@ import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+/**
+ * [playTrailer] opens the root trailer dialog with the validated YouTube list of the title whose Play-trailer event
+ * arrived; [signIn] is the root's sign-in (approval) path.
+ */
 @Composable
-internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: GenerationCounter, settings: Flow<Settings>, session: WebSessionState, runtime: WebRuntime, navigate: (WebRoute, Boolean) -> Unit) {
+internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: GenerationCounter, settings: Flow<Settings>, session: WebSessionState, runtime: WebRuntime,
+                     navigate: (WebRoute, Boolean) -> Unit, playTrailer: (List<Video>, Video) -> Unit, signIn: () -> Unit) {
     val scope = rememberCoroutineScope()
     val holder = remember(entry) { HomeStateHolder(catalog, generation, settings, entry, scope, runtime::reportStorageFailure) }
     val storage by runtime.storageFailure.collectAsState()
@@ -55,12 +68,25 @@ internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: Ge
     val visible = rememberPageVisible()
     DisposableEffect(holder, visible) { holder.setActive(visible); onDispose { holder.setActive(false) } }
     val toasts = LocalToasts.current
+    // The title whose Play trailer was pressed (the holder's event carries only its name and video key).
+    var requested by remember(holder) { mutableStateOf<Title?>(null) }
+    var noTrailer by remember(holder) { mutableStateOf(emptySet<MediaRef>()) }
     LaunchedEffect(holder, visible) {
         if (!visible) return@LaunchedEffect
         holder.events.collect { event ->
+            val title = requested
             when (event) {
-                is TrailerEvent.Play -> navigate(WebRoute.Trailer(event.videoKey, event.title), false)
-                is TrailerEvent.Unavailable -> toasts.show(ToastMessage("No trailer available for ${event.title}"))
+                is TrailerEvent.Play -> {
+                    val match = title?.takeIf { it.title == event.title }
+                    val videos = match?.let { homeTrailerVideos(catalog, it, event.videoKey, runtime::reportStorageFailure) }
+                    if (match == null || videos == null) toasts.show(ToastMessage("Could not find a trailer. Try again."))
+                    else if (videos.isEmpty()) { noTrailer += match.ref; toasts.show(ToastMessage("No trailer available for ${event.title}")) }
+                    else playTrailer(videos, videos.first { it.key == event.videoKey })
+                }
+                is TrailerEvent.Unavailable -> {
+                    if (title?.title == event.title) noTrailer += title.ref
+                    toasts.show(ToastMessage("No trailer available for ${event.title}"))
+                }
                 TrailerEvent.Failed -> toasts.show(ToastMessage("Could not find a trailer. Try again."))
             }
         }
@@ -71,14 +97,36 @@ internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: Ge
         val titles = (state.rows[HomeRow.Trending] as? SectionState.Content)?.value?.items.orEmpty()
         (titles.firstOrNull { it.key == saved } ?: titles.firstOrNull())?.let { holder.selectHero(it) }
     }
-    WebHomeContent(state, entry, session, { entry.putString("home.hero", null); holder.selectTrend(it) }, { holder.selectHero(it) }, holder::retry, holder::playTrailer, { navigate(it, false) }, retryStorage, storage)
+    WebHomeContent(state, entry, session, { entry.putString("home.hero", null); holder.selectTrend(it) }, { holder.selectHero(it) }, holder::retry,
+        { requested = it; holder.playTrailer(it) }, { navigate(it, false) }, retryStorage, storage, signIn, noTrailer)
 }
+
+/**
+ * The full YouTube list (valid 11-character keys, trailer order) that contains [key], read through the catalog's
+ * cached `/videos` requests the holder just made (settings language, then its `en-US` fallback). Empty when [key] is
+ * not a playable entry; null when the read failed.
+ */
+private suspend fun homeTrailerVideos(catalog: CatalogRepository, title: Title, key: String, onStorageFailure: (StorageException) -> Unit): List<Video>? = try {
+    listOf(null, ENGLISH).firstNotNullOfOrNull { language ->
+        orderedYouTubeVideos(catalog.videos(title.mediaType, title.ref.id, language).results)
+            .filter { it.key.matches(YOUTUBE_KEY) }
+            .takeIf { videos -> videos.any { it.key == key } }
+    }.orEmpty()
+} catch (_: TmdbException) {
+    null
+} catch (failure: StorageException) {
+    onStorageFailure(failure)
+    null
+}
+
+private val YOUTUBE_KEY = Regex("[A-Za-z0-9_-]{11}")
 
 @Composable
 internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebSessionState,
                             selectTrend: (TrendingWindow) -> Unit, selectHero: (Hero) -> Unit,
                             retry: (HomeRow) -> Unit, playTrailer: (Title) -> Unit, navigate: (WebRoute) -> Unit,
-                            retryStorage: () -> Unit, storage: BrowserStorageFailure?) {
+                            retryStorage: () -> Unit, storage: BrowserStorageFailure?, signIn: () -> Unit,
+                            noTrailer: Set<MediaRef> = emptySet()) {
     val scroll = savedScroll(saver, "page")
     var popularTv by remember { mutableStateOf(saver.getBoolean("home.popularTv") ?: false) }
     LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-home").semantics {
@@ -91,52 +139,62 @@ internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebS
             }
         }
     }, verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        if (storage != null) item("storage-error") { WebStorageNotice(storage, retryStorage, Modifier.testTag("home-storage-recovery")) }
+        if (storage != null) item("storage-error") { WebPage(Modifier.padding(top = 16.dp)) { WebStorageNotice(storage, retryStorage, Modifier.testTag("home-storage-recovery")) } }
         if (state.settingsError != null) item("settings-error") {
-            ErrorState("Saved preferences could not be observed. Last loaded values are retained.", retryStorage, Modifier.padding(16.dp).testTag("home-settings-recovery"))
+            WebPage { ErrorState("Saved preferences could not be observed. Last loaded values are retained.", retryStorage, Modifier.testTag("home-settings-recovery")) }
         }
         if (state.genresError != null) item("genres-error") {
-            ErrorState("Genre names could not be read. Loaded content is retained.", retryStorage, Modifier.padding(16.dp).testTag("home-genres-recovery"))
+            WebPage { ErrorState("Genre names could not be read. Loaded content is retained.", retryStorage, Modifier.testTag("home-genres-recovery")) }
         }
-        item("hero") { HomeHero(state, { saver.putString("home.hero", it.key); selectHero(it) }, playTrailer, navigate) }
+        item("hero") { HomeHero(state, { saver.putString("home.hero", it.key); selectHero(it) }, playTrailer, navigate, noTrailer) }
         item("trending") {
-            Column {
-                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip("Today", state.trend == TrendingWindow.Day, { selectTrend(TrendingWindow.Day) })
-                    Chip("This week", state.trend == TrendingWindow.Week, { selectTrend(TrendingWindow.Week) })
-                }
-                HomeSection(HomeRow.Trending, state.rows[HomeRow.Trending] ?: SectionState.Loading, saver, retry, navigate)
+            HomeSection(HomeRow.Trending, state.rows[HomeRow.Trending] ?: SectionState.Loading, saver, retry, navigate) {
+                SegmentedControl(listOf("Today", "This week"), if (state.trend == TrendingWindow.Day) 0 else 1,
+                    { selectTrend(if (it == 0) TrendingWindow.Day else TrendingWindow.Week) }, Modifier.width(196.dp))
             }
         }
         item("popular") {
-            Column {
-                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip("Movies", !popularTv, { popularTv = false; saver.putBoolean("home.popularTv", false) })
-                    Chip("On TV", popularTv, { popularTv = true; saver.putBoolean("home.popularTv", true) })
-                }
-                val row = if (popularTv) HomeRow.PopularTv else HomeRow.PopularMovies
-                HomeSection(row, state.rows[row] ?: SectionState.Loading, saver, retry, navigate)
+            val row = if (popularTv) HomeRow.PopularTv else HomeRow.PopularMovies
+            HomeSection(row, state.rows[row] ?: SectionState.Loading, saver, retry, navigate, title = "What’s popular") {
+                SegmentedControl(listOf("Movies", "On TV"), if (popularTv) 1 else 0,
+                    { popularTv = it == 1; saver.putBoolean("home.popularTv", popularTv) }, Modifier.width(176.dp))
             }
         }
         item("trailers") {
             val upcoming = state.rows[HomeRow.Upcoming]
-            val titles = (upcoming as? SectionState.Content)?.value?.items.orEmpty().filterIsInstance<Hero.OfTitle>().take(8)
+            val titles = (upcoming as? SectionState.Content)?.value?.items.orEmpty().filterIsInstance<Hero.OfTitle>().filter { it.title.ref !in noTrailer }.take(8)
             if (titles.isNotEmpty()) ScrollRow("Find a trailer · Upcoming movies", state = savedScroll(saver, "trailers")) {
                 items(titles, key = { it.key }) { hero ->
                     VideoCard(hero.title.title, "Find a trailer", webPalette(hero.key), { playTrailer(hero.title) }, imageUrl = webImage(hero.title.backdropPath, "w780"))
                 }
             }
         }
-        if (session is WebSessionState.Ready && session.session == null) item("guest") {
-            Panel(Modifier.padding(horizontal = 16.dp), "Make it yours") {
-                Text("Sign in to manage your TMDB library. Account screens are coming in a later preview.")
-                PillButton("Account preview", { navigate(WebRoute.Settings) }, Modifier.padding(top = 12.dp), variant = ButtonVariant.Ghost)
-            }
-        }
+        if (session is WebSessionState.Ready && session.session == null) item("guest") { GuestCallToAction(signIn) }
         listOf(HomeRow.NowPlaying, HomeRow.Upcoming, HomeRow.PopularPeople, HomeRow.TopRatedMovies).forEach { row ->
             item(row.key) { HomeSection(row, state.rows[row] ?: SectionState.Loading, saver, retry, navigate) }
         }
-        item("footer") { Footer(browse = listOf(FooterLink("Movies") { navigate(WebRoute.Browse("movie")) }, FooterLink("TV Shows") { navigate(WebRoute.Browse("tv")) }, FooterLink("People") { navigate(WebRoute.People) }), you = listOf(FooterLink("My Library") { navigate(WebRoute.Library()) }, FooterLink("Settings") { navigate(WebRoute.Settings) })) }
+        item("footer") { Footer(Modifier.padding(top = 56.dp)) }
+    }
+}
+
+/** `.cta` "Build your watchlist": the guest's way into the root sign-in; the guest library itself stays local. */
+@Composable
+private fun GuestCallToAction(signIn: () -> Unit) {
+    WebPage(Modifier.padding(top = 32.dp)) {
+        val shape = RoundedCornerShape(Tokens.Radius.Dialog)
+        FlowRow(
+            Modifier.fillMaxWidth().clip(shape)
+                .background(Brush.linearGradient(listOf(Tokens.Colors.Secondary.copy(alpha = 0.55f), Tokens.Colors.Accent.copy(alpha = 0.30f))))
+                .border(1.dp, Tokens.Colors.Stroke, shape).padding(32.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp), itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f).widthIn(min = 260.dp)) {
+                Text("Build your watchlist", style = displayStyle(30.sp), modifier = Modifier.semantics { heading() })
+                Text("Sign in with your TMDB account to sync your watchlist, favourites and ratings. Until then they are saved in this browser.",
+                    Modifier.padding(top = 8.dp).widthIn(max = 560.dp), style = bodyStyle(16.sp).copy(lineHeight = 24.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.85f))
+            }
+            PillButton("Sign in with TMDB", signIn, variant = ButtonVariant.White, small = true)
+        }
     }
 }
 
@@ -152,27 +210,35 @@ private fun savedScroll(saver: StateSaver, key: String): LazyListState {
 }
 
 @Composable
-private fun HomeSection(row: HomeRow, section: SectionState<PagedItems>, saver: StateSaver, retry: (HomeRow) -> Unit, navigate: (WebRoute) -> Unit) {
+private fun HomeSection(row: HomeRow, section: SectionState<PagedItems>, saver: StateSaver, retry: (HomeRow) -> Unit, navigate: (WebRoute) -> Unit,
+                        title: String = row.title, trailing: @Composable RowScope.() -> Unit = {}) {
     when (section) {
-        SectionState.Loading -> ScrollRow(row.title) { items(5) { PosterCardSkeleton() } }
-        SectionState.Empty -> Column(Modifier.padding(16.dp)) { SectionTitle(row.title); EmptyState("No titles yet", "There are no results for this section.") { PillButton("Refresh ${row.title}", { retry(row) }) } }
-        is SectionState.Error -> Column(Modifier.padding(16.dp)) {
-            SectionTitle(row.title)
+        SectionState.Loading -> ScrollRow(title, headerTrailing = trailing) { items(5) { PosterCardSkeleton() } }
+        SectionState.Empty -> WebPage {
+            WebSectionHeader(title, Modifier.padding(bottom = 14.dp), trailing = trailing)
+            EmptyState("No titles yet", "There are no results for this section.") { PillButton("Refresh ${row.title}", { retry(row) }, variant = ButtonVariant.Ghost) }
+        }
+        is SectionState.Error -> WebPage {
+            WebSectionHeader(title, Modifier.padding(bottom = 14.dp), trailing = trailing)
             val message = homeSectionError(section.kind)
-            if (section.kind.retryable) ErrorState(message, { retry(row) }, Modifier.testTag("home-${row.key}-recovery")) else Text(message)
+            if (section.kind.retryable) ErrorState(message, { retry(row) }, Modifier.testTag("home-${row.key}-recovery")) else Text(message, color = Tokens.Colors.TextSecondary)
         }
         is SectionState.Content -> Column {
-            ScrollRow(row.title, state = savedScroll(saver, row.key)) {
+            ScrollRow(title, state = savedScroll(saver, row.key), headerTrailing = trailing) {
                 items(section.value.items, key = { it.key }) { hero ->
                     when (hero) {
                         is Hero.OfPerson -> PersonCard(hero.person.name, hero.person.knownForDepartment, webPalette(hero.key), { navigate(hero.route()) }, imageUrl = webImage(hero.person.profilePath, "w185"))
-                        is Hero.OfTitle -> PosterCard(hero.title.title, hero.title.releaseDate, webPalette(hero.key), { navigate(hero.route()) }, modifier = Modifier.testTag("home-${row.key}-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"), voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, badge = if (row == HomeRow.Upcoming) hero.title.releaseDate else null)
+                        is Hero.OfTitle -> PosterCard(hero.title.title, formatDate(hero.title.releaseDate)?.let { if (row == HomeRow.Upcoming) "Coming $it" else it },
+                            webPalette(hero.key), { navigate(hero.route()) }, modifier = Modifier.testTag("home-${row.key}-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"),
+                            voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount)
                     }
                 }
             }
             section.value.moreError?.let { error ->
                 val message = "${homeSectionError(error)} Loaded titles are retained."
-                if (error.retryable) ErrorState(message, { retry(row) }, Modifier.padding(16.dp).testTag("home-${row.key}-recovery")) else Text(message, Modifier.padding(16.dp))
+                WebPage {
+                    if (error.retryable) ErrorState(message, { retry(row) }, Modifier.testTag("home-${row.key}-recovery")) else Text(message, color = Tokens.Colors.TextSecondary)
+                }
             }
         }
     }
@@ -187,9 +253,10 @@ private fun homeSectionError(kind: SectionErrorKind): String = when (kind) {
 }
 
 @Composable
-private fun HomeHero(state: HomeUiState, select: (Hero) -> Unit, play: (Title) -> Unit, navigate: (WebRoute) -> Unit) {
+private fun HomeHero(state: HomeUiState, select: (Hero) -> Unit, play: (Title) -> Unit, navigate: (WebRoute) -> Unit, noTrailer: Set<MediaRef>) {
     val hero = state.hero
-    val picks = (state.rows[HomeRow.Trending] as? SectionState.Content)?.value?.items.orEmpty().take(5)
+    val trending = (state.rows[HomeRow.Trending] as? SectionState.Content)?.value?.items.orEmpty()
+    val picks = trending.take(5)
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     var focused by remember { mutableStateOf(false) }
@@ -206,40 +273,81 @@ private fun HomeHero(state: HomeUiState, select: (Hero) -> Unit, play: (Title) -
     BoxWithConstraints(Modifier.fillMaxWidth().hoverable(source).onFocusChanged { focused = it.hasFocus }.focusGroup()) {
         val width = maxWidth
         val phone = width <= 640.dp
-        val gutter = contentGutter(ShellStyle.Web, maxWidth)
         Box(Modifier.fillMaxWidth().height(if (phone) 560.dp else 660.dp)) {
             if (hero != null) {
                 val path = when (hero) { is Hero.OfTitle -> hero.title.backdropPath; is Hero.OfPerson -> hero.person.profilePath }
                 PaletteArt(webImage(path, "w1280"), webPalette(hero.key), ArtStyle.Backdrop, Modifier.fillMaxSize())
+                Box(Modifier.matchParentSize().webHeroScrim())
             }
-            Box(Modifier.matchParentSize().webHeroScrim())
-            Column(Modifier.align(Alignment.CenterStart).padding(horizontal = gutter).widthIn(max = 660.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (hero != null) {
-                    Text(if (hero is Hero.OfTitle) "${if (hero.title.mediaType == MediaType.Movie) "Movie" else "TV Show"} · Trending" else "Person · Trending", style = MaterialTheme.typography.labelLarge)
-                    Text(hero.name(), style = displayStyle(if (phone) 42.sp else if (width <= 1000.dp) 56.sp else 76.sp), maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
-                    if (hero is Hero.OfTitle) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            ScoreRing(hero.title.voteAverage, hero.title.voteCount)
-                            Text(hero.title.releaseDate.orEmpty())
+            WebPage(Modifier.align(Alignment.CenterStart).padding(bottom = 40.dp)) {
+                Column(Modifier.widthIn(max = 760.dp)) {
+                    if (hero != null) {
+                        HeroKicker(hero, trending.indexOfFirst { it.key == hero.key }, state.trend)
+                        Text(hero.name(), Modifier.padding(top = 14.dp).semantics { heading() },
+                            style = displayStyle(if (phone) 42.sp else if (width <= 1000.dp) 56.sp else Tokens.Typography.ScaleWeb.Hero, trackingEm = -0.035f).copy(lineHeight = 0.98.em),
+                            maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        val meta = when (hero) {
+                            // List items carry year and genre ids only: certification and runtime are omitted, never guessed.
+                            is Hero.OfTitle -> listOfNotNull(yearOf(hero.title.releaseDate),
+                                hero.title.genreIds.mapNotNull(state.genres::get).take(3).joinToString(" · ").ifEmpty { null }).joinToString(" • ")
+                            is Hero.OfPerson -> hero.person.knownForDepartment.orEmpty()
                         }
-                        Text(hero.title.overview, maxLines = if (phone) 4 else 3, overflow = TextOverflow.Ellipsis)
+                        FlowRow(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                            if (hero is Hero.OfTitle) ScoreRing(hero.title.voteAverage, hero.title.voteCount, size = ScoreRingSize.Web)
+                            if (meta.isNotEmpty()) Text(meta, style = bodyStyle(15.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.86f))
+                        }
+                        if (hero is Hero.OfTitle && hero.title.overview.isNotBlank()) {
+                            Text(hero.title.overview, Modifier.padding(top = 16.dp).widthIn(max = 580.dp), maxLines = if (phone) 4 else 3, overflow = TextOverflow.Ellipsis,
+                                style = bodyStyle(if (phone) 15.5.sp else 17.sp).copy(lineHeight = if (phone) 24.sp else 26.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.86f))
+                        }
+                        FlowRow(Modifier.padding(top = 26.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (hero is Hero.OfTitle && hero.title.ref !in noTrailer) {
+                                val finding = state.trailerLoading == hero.title.ref
+                                PillButton(if (finding) "Finding trailer…" else "Play trailer", { play(hero.title) }, icon = CvIcons.Play, enabled = state.trailerLoading == null)
+                            }
+                            PillButton("More info", { navigate(hero.route()) }, variant = ButtonVariant.Ghost, icon = CvIcons.Info)
+                        }
+                    } else {
+                        Text("Discover your next favourite", style = displayStyle(if (phone) 42.sp else 56.sp), modifier = Modifier.semantics { heading() })
+                        when (state.rows[HomeRow.Trending]) {
+                            SectionState.Loading, null -> SkeletonLines(3, Modifier.padding(top = 20.dp).widthIn(max = 580.dp))
+                            SectionState.Empty -> Text("No trending titles available.", Modifier.padding(top = 16.dp), color = Tokens.Colors.TextSecondary)
+                            else -> Text("Trending titles are unavailable. Retry the Trending section below.", Modifier.padding(top = 16.dp), color = Tokens.Colors.TextSecondary)
+                        }
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (hero is Hero.OfTitle) PillButton(if (state.trailerLoading == hero.title.ref) "Finding trailer…" else "Find a trailer", { play(hero.title) }, enabled = state.trailerLoading == null)
-                        PillButton("Open library", { navigate(WebRoute.Library()) }, variant = ButtonVariant.Ghost)
-                        PillButton("More info", { navigate(hero.route()) }, variant = ButtonVariant.Ghost)
-                    }
-                } else {
-                    Text("Discover your next favourite", style = displayStyle(if (phone) 42.sp else 56.sp), modifier = Modifier.semantics { heading() })
-                    Text(when (state.rows[HomeRow.Trending]) { SectionState.Loading -> "Loading trending titles…"; SectionState.Empty -> "No trending titles available."; else -> "Trending titles are unavailable. Retry the Trending section below." })
                 }
             }
-            if (width > 1000.dp && picks.isNotEmpty()) Row(Modifier.align(Alignment.BottomEnd).padding(end = gutter, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                picks.forEach { pick -> Column(Modifier.width(156.dp)) {
-                    LandscapeCard(pick.name(), null, webPalette(pick.key), { select(pick) }, modifier = if (pick.key == hero?.key) Modifier.border(2.dp, Color.White, RoundedCornerShape(16.dp)) else Modifier, imageUrl = webImage(when (pick) { is Hero.OfTitle -> pick.title.backdropPath; is Hero.OfPerson -> pick.person.profilePath }, "w300"), width = 156.dp)
-                    if (pick.key == hero?.key) LinearProgressIndicator(progress = { if (reduceMotion) 1f else progress.value }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
-                } }
+            if (width > 1000.dp && picks.isNotEmpty()) Row(Modifier.align(Alignment.BottomEnd).padding(end = contentGutter(ShellStyle.Web, width), bottom = 34.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                picks.forEach { pick -> HeroPick(pick, pick.key == hero?.key, if (reduceMotion) 1f else progress.value) { select(pick) } }
             }
+        }
+    }
+}
+
+/** `.eyebrow`: accent dot + "MOVIE · #1 TRENDING THIS WEEK" (rank only when the hero is in the loaded trending row). */
+@Composable
+private fun HeroKicker(hero: Hero, index: Int, window: TrendingWindow) {
+    val kind = when (hero) { is Hero.OfTitle -> if (hero.title.mediaType == MediaType.Movie) "Movie" else "TV show"; is Hero.OfPerson -> "Person" }
+    val trend = (if (index >= 0) "#${index + 1} trending " else "Trending ") + if (window == TrendingWindow.Day) "today" else "this week"
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(Tokens.Colors.Accent))
+        Text("$kind · $trend".uppercase(), style = bodyStyle(13.sp, FontWeight.Bold, trackingEm = 0.1f), color = Tokens.Colors.TextPrimary.copy(alpha = 0.82f))
+    }
+}
+
+/** `.pick`: 156×88 thumbnail (white ring when shown), title, and the auto-advance bar under the shown pick. */
+@Composable
+private fun HeroPick(pick: Hero, shown: Boolean, progress: Float, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    val shape = RoundedCornerShape(12.dp)
+    Column(Modifier.width(156.dp).graphicsLayer { alpha = if (shown || hovered) 1f else 0.7f }
+        .cvClickable(onClick, focusShape = shape, interactionSource = source).semantics { selected = shown }) {
+        PaletteArt(webImage(when (pick) { is Hero.OfTitle -> pick.title.backdropPath; is Hero.OfPerson -> pick.person.profilePath }, "w300"), webPalette(pick.key), ArtStyle.Backdrop,
+            Modifier.fillMaxWidth().height(88.dp).clip(shape).border(if (shown) 2.dp else 1.dp, if (shown) Color.White else Color.White.copy(alpha = 0.12f), shape))
+        Text(pick.name(), Modifier.padding(top = 8.dp), style = bodyStyle(12.5.sp, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(3.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = 0.18f))) {
+            if (shown) Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(Tokens.Colors.Accent))
         }
     }
 }
