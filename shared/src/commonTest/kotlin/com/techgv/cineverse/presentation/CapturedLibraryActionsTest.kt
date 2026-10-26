@@ -104,6 +104,10 @@ class CapturedLibraryActionsTest {
         assertEquals(listOf(a, a), f.requests.map { it.session })
         assertEquals(listOf(LibraryKind.WATCHLIST, LibraryKind.FAVOURITE), f.requests.map { it.kind })
         assertTrue(f.outcomes.all { it.result is LibraryWriteResult.Done })
+        // A rate prompt needs the forwarded identity to agree too; a stale forward never opens one.
+        f.holder.openRate(movie, a)
+        runCurrent()
+        assertNull(f.holder.ratePrompt.first())
     }
 
     @Test fun explicitDispatchBeforeCoroutineSchedulingIsSuperseded() = runTest {
