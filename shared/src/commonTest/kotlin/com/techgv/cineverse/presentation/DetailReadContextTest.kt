@@ -554,7 +554,7 @@ class DetailReadContextTest {
         }
         val source = if (raw) flow<Settings> { throw failure } else flowOf(Settings(language = if (optional) "hi-IN" else ENGLISH))
         val holder = holder(source, scope); runCurrent()
-        assertEquals(listOf(failure), uncaught); assertEquals(0, failures)
+        assertEquals(listOf<Throwable>(failure), uncaught); assertEquals(0, failures)
         assertNotEquals(DetailSettingsRead.Failed, holder.state.value.settingsRead)
         assertFalse(holder.state.value.detail is SectionState.Error)
         assertTrue(calls.none { it.startsWith("videos/") })
