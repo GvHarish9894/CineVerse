@@ -107,6 +107,8 @@ fun PosterCard(
     badge: String? = null,
     tag: String? = null,
     quickAction: QuickAction? = null,
+    /** Show the "NR" ring when there are no votes (web Browse/Search grids); otherwise no ring without votes. */
+    nrRing: Boolean = false,
 ) {
     val web = LocalShellStyle.current == ShellStyle.Web
     val radius = posterRadius()
@@ -116,7 +118,7 @@ fun PosterCard(
     val reduceMotion = LocalReduceMotion.current
     val t by animateFloatAsState(if (active) 1f else 0f, tween(300, easing = EmphasizedEasing), label = "posterLift")
     val lift = if (reduceMotion) 0f else t
-    val ring = showScoreRing && voteCount > 0
+    val ring = showScoreRing && (voteCount > 0 || nrRing)
 
     Box(modifier.width(width)) {
         Column(Modifier.fillMaxWidth().cvClickable(onClick, onClickLabel = title, focusShape = shape, interactionSource = source)) {
@@ -141,7 +143,7 @@ fun PosterCard(
                     bottomScrim = true,
                 ) { PosterTitleOverlay(title, if (web) 21.sp else 15.sp, if (web) 14.dp else 10.dp, if (web && ring) 24.dp else 10.dp) }
                 if (tag != null || badge != null) PosterLabel(tag, badge)
-                if (ring) ScoreRing(voteAverage, voteCount, Modifier.align(Alignment.BottomStart).offset(10.dp, 18.dp), ScoreRingSize.Mini)
+                if (ring) ScoreRing(voteAverage, voteCount, Modifier.align(Alignment.BottomStart).offset(10.dp, 18.dp), ScoreRingSize.Mini, nr = nrRing)
             }
             Spacer(Modifier.height(if (ring) 28.dp else 8.dp))
             Text(

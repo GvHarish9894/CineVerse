@@ -46,14 +46,18 @@ enum class ScoreRingSize(val outer: Dp, val inner: Dp, val text: TextUnit) {
     Large(72.dp, 62.dp, 20.sp),
 }
 
-/** User-score ring; renders nothing when [voteCount] is 0 (TV spec §6: no score without votes). */
+/**
+ * User-score ring; renders nothing when [voteCount] is 0 (TV spec §6: no score without votes), unless [nr] opts in to
+ * the web cards' "NR" ring (grey track, no arc), which never shows a score.
+ */
 @Composable
-fun ScoreRing(voteAverage: Double, voteCount: Int, modifier: Modifier = Modifier, size: ScoreRingSize = ScoreRingSize.Mobile) {
-    if (voteCount == 0) return
+fun ScoreRing(voteAverage: Double, voteCount: Int, modifier: Modifier = Modifier, size: ScoreRingSize = ScoreRingSize.Mobile, nr: Boolean = false) {
+    if (voteCount == 0 && !nr) return
+    val rated = voteCount > 0
     val percent = scorePercent(voteAverage)
     val color = scoreColor(percent)
     Box(
-        modifier.size(size.outer).clearAndSetSemantics { contentDescription = "User score $percent percent" },
+        modifier.size(size.outer).clearAndSetSemantics { contentDescription = if (rated) "User score $percent percent" else "Not rated" },
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -62,9 +66,10 @@ fun ScoreRing(voteAverage: Double, voteCount: Int, modifier: Modifier = Modifier
             val topLeft = Offset(stroke / 2, stroke / 2)
             val arc = Size(this.size.width - stroke, this.size.height - stroke)
             drawArc(Color.White.copy(alpha = 0.14f), 0f, 360f, false, topLeft, arc, style = Stroke(stroke))
-            drawArc(color, -90f, 3.6f * percent, false, topLeft, arc, style = Stroke(stroke))
+            if (rated) drawArc(color, -90f, 3.6f * percent, false, topLeft, arc, style = Stroke(stroke))
         }
-        Row(verticalAlignment = Alignment.Top) {
+        if (!rated) Text("NR", style = bodyStyle(size.text, FontWeight.Bold), color = Color.White.copy(alpha = 0.8f), maxLines = 1)
+        else Row(verticalAlignment = Alignment.Top) {
             Text("$percent", style = bodyStyle(size.text, FontWeight.Bold), color = Color.White, maxLines = 1)
             Text("%", style = bodyStyle(size.text * 0.6f, FontWeight.Bold), color = Color.White, maxLines = 1)
         }

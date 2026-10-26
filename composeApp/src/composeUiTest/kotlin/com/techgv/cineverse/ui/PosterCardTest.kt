@@ -37,6 +37,13 @@ class PosterCardTest {
     }
 
     @Test
+    fun nrRingIsOptInAndNeverShowsAScoreWithoutVotes() = runComposeUiTest {
+        setThemedContent(ShellStyle.Web) { PosterCard("Upcoming", "Coming Jun 5", palette, {}, voteAverage = 7.0, voteCount = 0, nrRing = true) }
+        onNodeWithContentDescription("Not rated", useUnmergedTree = true).assertExists()
+        onNodeWithContentDescription("User score", substring = true, useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
     fun mobileShellHidesTheRingByDefault() = runComposeUiTest {
         setThemedContent(ShellStyle.Mobile) { PosterCard("Neon Tide", "2026 · ★ 8.1", palette, {}, voteAverage = 8.1, voteCount = 120) }
         onNodeWithText("2026 · ★ 8.1").assertIsDisplayed()
