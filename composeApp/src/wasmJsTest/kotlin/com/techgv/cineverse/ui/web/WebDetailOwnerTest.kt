@@ -1,5 +1,6 @@
 package com.techgv.cineverse.ui.web
 
+import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.storage.*
 import com.techgv.cineverse.data.tmdb.*
@@ -36,9 +37,12 @@ class WebDetailOwnerTest {
         var subscriptions = 0
         var activeReaders = 0
         var upstreamRetries = 0
+        var onRetry: () -> Unit = {}
+        var firstRaw: CompletableDeferred<Unit>? = null
         val failures = mutableListOf<StorageException>()
         val rawSettings = flow {
             subscriptions++
+            firstRaw?.await()
             activeReaders++
             try {
                 revisions.collect {
@@ -49,7 +53,9 @@ class WebDetailOwnerTest {
         }
         val catalog = CatalogRepository(api, generation, { actual })
         fun owner(scope: CoroutineScope, entry: WebEntry = entry()): WebDetailOwner = WebDetailOwner(entry, catalog, generation,
-            rawSettings, session, storage, { upstreamRetries++ }, { failures += it; storage.value = BrowserStorageFailure.Blocked }, library, scope)
+            rawSettings, session, storage, { upstreamRetries++; onRetry() }, { failures += it; storage.value = BrowserStorageFailure.Blocked }, library, scope)
+        fun act(owner: WebDetailOwner, kind: LibraryKind) =
+            owner.act(kind, owner.state.value.producer.request, session.value as? WebSessionState.Ready)
     }
 
     @Test fun movieUsesSharedMappingAndTruthfulEnglishFallbackAndValidatedVideoOrder() = runTest {
@@ -138,7 +144,7 @@ class WebDetailOwnerTest {
         owner.close()
     }
 
-    @Test fun firstSettingsFailureNeverDefaultsOrFetchesAndExplicitRecoveryUsesActualValuesButStaysUnverified() = runTest {
+    @Test fun firstSettingsFailureNeverDefaultsOrFetchesAndExplicitRecoveryUsesActualValues() = runTest {
         val f = Fixture().apply { failSettings = true; actual = Settings(language = "fr-FR") }
         val owner = f.owner(backgroundScope)
         runCurrent()
@@ -147,56 +153,206 @@ class WebDetailOwnerTest {
         assertEquals(0, f.activeReaders)
         runCurrent(); assertEquals(1, f.subscriptions) // No hot failure loop.
         f.failSettings = false
+        f.storage.value = null
         owner.retryReads(); runCurrent()
         assertEquals(1, f.upstreamRetries)
         assertTrue(f.api.calls.contains("movie:7:fr-FR"))
         assertTrue(owner.holder.state.value.detail is SectionState.Content)
         assertFalse(owner.state.value.settingsFailed)
-        assertTrue(owner.state.value.freshnessUnverified)
-        assertEquals(SectionState.Loading, owner.state.value.section) // No provenance fabricated from the recovered DTO.
+        assertFalse(owner.state.value.freshnessUnverified)
+        assertTrue(owner.state.value.section is SectionState.Content)
         owner.close()
     }
 
-    @Test fun equalValueReadRecoveryExplicitlyRetriesSameHolderButNeverClaimsRefreshProvenance() = runTest {
+    @Test fun equalRecoveryRevokesEveryReadySnapshotUntilRealReplacementCompletes() = runTest {
         val f = Fixture()
-        var failing = true
-        f.api.movie = { id, _ -> if (failing) throw TmdbException(TmdbError.Network); MovieDetailDto(id, title = "Recovered internally") }
+        f.session.value = WebSessionState.Ready(null)
+        f.library.value.value = LibraryState(true, false, false, null, emptySet())
         val owner = f.owner(backgroundScope)
-        val holder = owner.holder
+        backgroundScope.launch { owner.holder.accountState.collect {} }
         runCurrent()
-        assertEquals(SectionState.Error(SectionErrorKind.Offline), owner.state.value.section)
+        val original = owner.state.value.producer.retained!!
+        val gate = CompletableDeferred<Unit>()
+        f.catalog.invalidateTitle(MediaType.Movie, 7)
+        f.api.movie = { id, _ -> gate.await(); MovieDetailDto(id, title = "Fixture film", overview = "Real fixture overview") }
         f.failSettings = true; f.revisions.value++; runCurrent()
-        failing = false; f.failSettings = false
+        assertTrue(owner.state.value.settingsFailed)
+        assertEquals(original, owner.state.value.producer.retained)
+        f.failSettings = false
+        f.onRetry = { f.storage.value = null }
+        val snapshots = mutableListOf<WebDetailReadState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { owner.state.collect { snapshots += it } }
         owner.retryReads(); runCurrent()
-        assertSame(holder, owner.holder)
+        assertSame(owner.holder, owner.holder)
         assertEquals(2, f.subscriptions)
-        assertEquals(2, f.api.calls.size)
         assertEquals(1, f.upstreamRetries)
-        assertTrue(holder.state.value.detail is SectionState.Content)
-        assertTrue(owner.state.value.freshnessUnverified)
-        assertEquals(SectionState.Error(SectionErrorKind.Offline), owner.state.value.section)
+        assertTrue(snapshots.all { it.freshnessUnverified })
+        assertEquals(original, owner.state.value.producer.retained)
+        assertNotEquals(original.context, owner.state.value.producer.request)
+        f.act(owner, LibraryKind.WATCHLIST)
+        assertTrue(f.library.actions.isEmpty())
+        gate.complete(Unit); runCurrent()
+        assertFalse(owner.state.value.freshnessUnverified)
+        val completed = owner.state.value.producer
+        assertEquals(completed.request, completed.completion?.context)
+        assertEquals(completed.request, completed.retained?.context)
+        assertEquals(original.detail, completed.retained?.detail) // Equal DTO, genuinely new completion.
+        f.act(owner, LibraryKind.WATCHLIST)
+        assertEquals(1, f.library.actions.size)
         owner.close()
     }
 
-    @Test fun externalRuntimeRecoveryResubscribesWithActualNewValuesAndKeepsFrozenLastRealDetail() = runTest {
+    @Test fun cachedEqualCompletionAlsoRestoresAuthorityWithoutClaimingHttpFreshness() = runTest {
         val f = Fixture()
-        f.api.movie = { id, language -> MovieDetailDto(id, title = "Film $language") }
         val owner = f.owner(backgroundScope)
         runCurrent()
-        assertEquals("Film en-US", owner.state.value.retained?.title)
-        f.failSettings = true; f.revisions.value++; runCurrent()
-        f.actual = Settings(language = "es-ES"); f.failSettings = false
+        val original = owner.state.value.producer.retained!!
+        f.storage.value = BrowserStorageFailure.Blocked; runCurrent()
+        assertEquals(DetailSettingsRead.Unknown, owner.holder.state.value.settingsRead)
+        assertTrue(owner.state.value.freshnessUnverified)
+        assertEquals(0, f.activeReaders)
         f.storage.value = null; runCurrent()
         assertEquals(2, f.subscriptions)
-        assertTrue(f.api.calls.contains("movie:7:es-ES"))
-        assertEquals("Film en-US", owner.state.value.retained?.title)
+        assertEquals(1, f.api.calls.size) // CatalogRepository cache, not a second HTTP call.
+        assertFalse(owner.state.value.freshnessUnverified)
+        assertNotEquals(original.context, owner.state.value.producer.retained?.context)
+        assertEquals(original.detail, owner.state.value.retained)
+        owner.close()
+    }
+
+    @Test fun externalRecoveryUsesChangedLanguageAndRegionAndRetainsOriginalContextThroughError() = runTest {
+        val f = Fixture()
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        val original = owner.state.value.producer.retained!!
+        val gate = CompletableDeferred<Unit>()
+        f.api.movie = { _, _ -> gate.await(); throw TmdbException(TmdbError.Network) }
+        f.failSettings = true; f.revisions.value++; runCurrent()
+        f.actual = Settings(language = "es-ES", region = "ES"); f.failSettings = false
+        f.storage.value = null; runCurrent()
+        assertEquals(2, f.subscriptions)
+        assertEquals("es-ES", owner.state.value.producer.request?.language)
+        assertEquals("ES", owner.state.value.producer.request?.region)
+        assertEquals(original, owner.state.value.producer.retained)
+        assertTrue(owner.state.value.freshnessUnverified)
+        gate.complete(Unit); runCurrent()
+        assertEquals(SectionState.Error(SectionErrorKind.Offline), owner.state.value.section)
+        assertEquals(original, owner.state.value.producer.retained)
+        assertEquals(owner.state.value.producer.request, owner.state.value.producer.completion?.context)
         assertTrue(owner.state.value.freshnessUnverified)
         owner.close(); runCurrent()
         assertEquals(0, f.activeReaders)
-        val subscriptions = f.subscriptions
         owner.retryReads(); f.storage.value = BrowserStorageFailure.Blocked; runCurrent(); f.storage.value = null; runCurrent()
-        assertEquals(subscriptions, f.subscriptions)
+        assertEquals(2, f.subscriptions)
         assertEquals(0, f.upstreamRetries)
+    }
+
+    @Test fun unknownRawSettingsNeverUsesDefaultsAndRegionOnlyChangeGetsANewCompletion() = runTest {
+        val f = Fixture()
+        val gate = CompletableDeferred<Unit>()
+        f.firstRaw = gate
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        assertEquals(DetailSettingsRead.Unknown, owner.state.value.producer.settingsRead)
+        assertTrue(f.api.calls.isEmpty())
+        gate.complete(Unit); runCurrent()
+        val original = owner.state.value.producer.retained!!
+        f.actual = Settings(region = "GB"); f.revisions.value++; runCurrent()
+        val updated = owner.state.value.producer.retained!!
+        assertEquals("GB", updated.context.region)
+        assertNotEquals(original.context, updated.context)
+        assertEquals(updated.context, owner.state.value.producer.completion?.context)
+        assertFalse(owner.state.value.freshnessUnverified)
+        owner.close()
+    }
+
+    @Test fun idleAppGenerationNeedsRootEventAndClickRejectsOldRenderedContext() = runTest {
+        val f = Fixture()
+        f.session.value = WebSessionState.Ready(null)
+        f.library.value.value = LibraryState(true, false, false, null, emptySet())
+        val owner = f.owner(backgroundScope)
+        backgroundScope.launch { owner.holder.accountState.collect {} }
+        runCurrent()
+        val rendered = owner.state.value.producer.request!!
+        val ready = f.session.value as WebSessionState.Ready
+        f.generation.bump()
+        owner.act(LibraryKind.WATCHLIST, rendered, ready)
+        assertTrue(f.library.actions.isEmpty())
+        assertEquals(rendered, owner.holder.state.value.request) // GenerationCounter is not observable.
+        owner.contextChanged(); runCurrent()
+        assertEquals(f.generation.current, owner.state.value.producer.request?.appGeneration)
+        owner.act(LibraryKind.WATCHLIST, rendered, ready)
+        assertTrue(f.library.actions.isEmpty())
+        f.act(owner, LibraryKind.WATCHLIST)
+        assertEquals(1, f.library.actions.size)
+        owner.close()
+    }
+
+    @Test fun staleRenderedOpaqueSessionAndSupersededRequestAreRejected() = runTest {
+        val f = Fixture()
+        val first = WebSessionState.Ready(AuthSession(AccountObjectId("account"), "Fixture", 9007199254740992L))
+        val second = WebSessionState.Ready(AuthSession(AccountObjectId("account"), "Fixture", 9007199254740993L))
+        f.session.value = first
+        f.library.value.value = LibraryState(true, false, false, null, emptySet())
+        val owner = f.owner(backgroundScope)
+        backgroundScope.launch { owner.holder.accountState.collect {} }
+        runCurrent()
+        val rendered = owner.state.value.producer.request!!
+        f.session.value = second
+        owner.act(LibraryKind.WATCHLIST, rendered, first)
+        assertTrue(f.library.actions.isEmpty())
+        owner.retryDetail(); runCurrent()
+        owner.act(LibraryKind.WATCHLIST, rendered, second)
+        assertTrue(f.library.actions.isEmpty())
+        owner.close()
+    }
+
+    @Test fun cancellationResistantOldPrimaryCannotReplaceChangedContextOrDisposedState() = runTest {
+        val f = Fixture()
+        val gate = CompletableDeferred<Unit>()
+        f.api.movie = { id, language ->
+            if (language == "en-US") withContext(NonCancellable) { gate.await() }
+            MovieDetailDto(id, title = language, tagline = "Present", overview = "Present",
+                videos = VideosDto(listOf(VideoDto(key = "aB_09-xYz12", site = "YouTube", type = "Trailer"))))
+        }
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        f.actual = Settings(language = "fr-FR"); f.revisions.value++; runCurrent()
+        assertEquals("fr-FR", owner.state.value.retained?.title)
+        val replacement = owner.state.value.producer.retained
+        owner.close()
+        val closed = owner.state.value
+        gate.complete(Unit); runCurrent()
+        assertEquals(replacement, owner.holder.state.value.retained)
+        assertEquals(closed, owner.state.value)
+        assertEquals(DetailSettingsRead.Unknown, owner.holder.state.value.settingsRead)
+    }
+
+    @Test fun reentrantCloseOnRevocationPreventsRuntimeRestart() = runTest {
+        val f = Fixture()
+        val owner = f.owner(backgroundScope)
+        runCurrent()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            owner.state.collect { if (it.freshnessUnverified) owner.close() }
+        }
+        owner.retryReads(); runCurrent()
+        assertEquals(0, f.upstreamRetries)
+        assertEquals(1, f.subscriptions)
+        assertEquals(DetailSettingsRead.Unknown, owner.holder.state.value.settingsRead)
+    }
+
+    @Test fun parentCancellationMakesSynchronousMethodsInert() = runTest {
+        val f = Fixture()
+        val parent = Job(backgroundScope.coroutineContext[Job])
+        val owner = f.owner(CoroutineScope(backgroundScope.coroutineContext + parent))
+        runCurrent()
+        parent.cancel()
+        owner.retryReads(); owner.retryDetail(); owner.contextChanged()
+        f.act(owner, LibraryKind.WATCHLIST); runCurrent()
+        assertEquals(0, f.upstreamRetries)
+        assertEquals(1, f.subscriptions)
+        assertTrue(f.library.actions.isEmpty())
+        owner.close()
     }
 
     @Test fun disposedOwnerCancelsSettingsAccountAndCatalogAndCannotPublishLateResult() = runTest {
@@ -210,7 +366,7 @@ class WebDetailOwnerTest {
         owner.close(); runCurrent()
         assertTrue(canceled)
         assertEquals(0, f.activeReaders)
-        gate.complete(Unit); owner.retryDetail(); owner.retryReads(); owner.act(LibraryKind.WATCHLIST); runCurrent()
+        gate.complete(Unit); owner.retryDetail(); owner.retryReads(); f.act(owner, LibraryKind.WATCHLIST); runCurrent()
         assertEquals(SectionState.Loading, owner.state.value.section)
         assertEquals(1, f.api.calls.size)
         assertTrue(f.library.actions.isEmpty())
@@ -222,20 +378,20 @@ class WebDetailOwnerTest {
         backgroundScope.launch { owner.holder.accountState.collect {} }
         runCurrent()
         f.session.value = WebSessionState.Ready(null)
-        owner.act(LibraryKind.WATCHLIST)
+        f.act(owner, LibraryKind.WATCHLIST)
         assertTrue(f.library.actions.isEmpty())
         f.library.value.value = LibraryState(true, true, false, 7.5, setOf(LibraryKind.FAVOURITE)); runCurrent()
-        owner.act(LibraryKind.FAVOURITE)
+        f.act(owner, LibraryKind.FAVOURITE)
         assertTrue(f.library.actions.isEmpty())
-        owner.act(LibraryKind.WATCHLIST); owner.act(LibraryKind.RATING)
+        f.act(owner, LibraryKind.WATCHLIST); f.act(owner, LibraryKind.RATING)
         assertEquals(listOf(LibraryKind.WATCHLIST, LibraryKind.RATING), f.library.actions.map { it.first })
         assertTrue(f.library.actions.all { it.second.ref == MediaRef(MediaType.Movie, 7) && it.second.title == "Fixture film" })
         f.session.value = WebSessionState.Checking
-        owner.act(LibraryKind.WATCHLIST)
+        f.act(owner, LibraryKind.WATCHLIST)
         f.session.value = WebSessionState.Failed(TmdbError.Network)
-        owner.act(LibraryKind.WATCHLIST)
+        f.act(owner, LibraryKind.WATCHLIST)
         f.session.value = WebSessionState.Ready(null); f.storage.value = BrowserStorageFailure.Blocked
-        owner.act(LibraryKind.WATCHLIST)
+        f.act(owner, LibraryKind.WATCHLIST)
         assertEquals(2, f.library.actions.size)
         owner.close()
     }

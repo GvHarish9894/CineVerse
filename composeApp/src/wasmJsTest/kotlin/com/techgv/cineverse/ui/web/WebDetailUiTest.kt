@@ -34,6 +34,13 @@ class WebDetailUiTest {
     private fun movie(): Detail = movieDto().toDetail("US")
     private val known = LibraryState(true, true, false, 7.5, emptySet())
 
+    private fun completed(detail: Detail): WebDetailReadState {
+        val context = DetailReadContext(detail.ref, "en-US", "US", 0, 1)
+        val result = SectionState.Content(detail)
+        return WebDetailReadState(result, retained = detail, producer = DetailUiState(result,
+            DetailSettingsRead.Ready, context, DetailReadCompletion(context, result), DetailReadContent(context, detail)))
+    }
+
     @Test fun delayedCatalogRestoresActualSavedScrollThenPersistsUserScrollWithoutReapplyingOnRetry() = runComposeUiTest {
         val entry = WebDetailOwnerTest.entry(values = mapOf("detail.index" to "4", "detail.offset" to "37"))
         val gate = CompletableDeferred<Unit>()
@@ -59,7 +66,7 @@ class WebDetailUiTest {
             DisposableEffect(current) { onDispose { current.close() } }
             val state by current.state.collectAsState()
             WebDetailContent(entry, state, account, session.value, false, null,
-                {}, current::retryDetail, {}, {}, {}, { _, _ -> })
+                {}, current::retryDetail, { _, _, _ -> }, {}, {}, { _, _ -> })
         }
         onNodeWithText("Loading title…").assertExists()
         runOnIdle {
@@ -102,7 +109,7 @@ class WebDetailUiTest {
         var state by mutableStateOf(WebDetailReadState(SectionState.Error(SectionErrorKind.Offline)))
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             WebDetailContent(entry, state, LibraryState.Unknown, WebSessionState.Checking, false, null,
-                {}, { state = WebDetailReadState() }, {}, {}, {}, { _, _ -> })
+                {}, { state = WebDetailReadState() }, { _, _, _ -> }, {}, {}, { _, _ -> })
         }
         onNodeWithText("Offline. Could not load this title.").assertExists()
         runOnIdle {
@@ -123,8 +130,8 @@ class WebDetailUiTest {
         val plays = mutableListOf<Pair<Title, Video>>()
         val entry = WebDetailOwnerTest.entry()
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            WebDetailContent(entry, WebDetailReadState(SectionState.Content(detail)), known, WebSessionState.Ready(null), true, null,
-                {}, {}, {}, {}, {}, { title, video -> plays += title to video })
+            WebDetailContent(entry, completed(detail), known, WebSessionState.Ready(null), true, null,
+                {}, {}, { _, _, _ -> }, {}, {}, { title, video -> plays += title to video })
         }
         onNodeWithTag("web-detail").performScrollToNode(hasText("Fixture tagline (English)"))
         onNodeWithText("Fixture overview (English)").assertExists()
@@ -144,8 +151,8 @@ class WebDetailUiTest {
         var session by mutableStateOf<WebSessionState>(WebSessionState.Ready(null))
         val entry = WebDetailOwnerTest.entry()
         setThemedContent(ShellStyle.Web) {
-            WebDetailContent(entry, WebDetailReadState(SectionState.Content(detail)), account, session, true, null,
-                {}, {}, { actions += it }, {}, {}, { _, _ -> })
+            WebDetailContent(entry, completed(detail), account, session, true, null,
+                {}, {}, { kind, _, _ -> actions += kind }, {}, {}, { _, _ -> })
         }
         onNodeWithTag("web-detail").performScrollToNode(hasText("Watchlist · unknown"))
         onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
@@ -160,14 +167,38 @@ class WebDetailUiTest {
         onNodeWithText("Add to watchlist").assertDoesNotExist()
     }
 
+    @Test fun libraryCallbackCapturesRenderedContextAndFullReadyWithoutReadingNewValues() = runComposeUiTest {
+        val entry = WebDetailOwnerTest.entry()
+        val rendered = completed(movie())
+        val ready = WebSessionState.Ready(null)
+        val callbacks = mutableListOf<Triple<LibraryKind, DetailReadContext?, WebSessionState.Ready?>>()
+        setThemedContent(ShellStyle.Web) {
+            WebDetailContent(entry, rendered, known, ready, true, null,
+                {}, {}, { kind, context, session -> callbacks += Triple(kind, context, session) }, {}, {}, { _, _ -> })
+        }
+        onNodeWithTag("web-detail").performScrollToNode(hasText("In watchlist"))
+        onNodeWithText("In watchlist").performClick()
+        assertEquals(Triple(LibraryKind.WATCHLIST, rendered.producer.request, ready), callbacks.single())
+    }
+
+    @Test fun rawContentWithoutCompletionMetadataNeverEnablesLibraryActions() = runComposeUiTest {
+        val entry = WebDetailOwnerTest.entry()
+        setThemedContent(ShellStyle.Web) {
+            WebDetailContent(entry, WebDetailReadState(SectionState.Content(movie())), known, WebSessionState.Ready(null), true, null,
+                {}, {}, { _, _, _ -> error("Unproven content dispatched") }, {}, {}, { _, _ -> })
+        }
+        onNodeWithTag("web-detail").performScrollToNode(hasText("Watchlist · unknown"))
+        onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
+    }
+
     @Test fun castAndLeadCrewEmitActualPersonIdsAndBackReachesItsCallback() = runComposeUiTest {
         val detail = movie().copy(videos = emptyList(), recommendations = emptyList(), facts = emptyList())
         val routes = mutableListOf<WebRoute>()
         var back = 0
         val entry = WebDetailOwnerTest.entry()
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            WebDetailContent(entry, WebDetailReadState(SectionState.Content(detail)), known, WebSessionState.Ready(null), true, null,
-                {}, {}, {}, { routes += it }, { back++ }, { _, _ -> })
+            WebDetailContent(entry, completed(detail), known, WebSessionState.Ready(null), true, null,
+                {}, {}, { _, _, _ -> }, { routes += it }, { back++ }, { _, _ -> })
         }
         onNodeWithText("← Back").performClick()
         onNodeWithTag("web-detail").performScrollToIndex(2)
@@ -182,8 +213,8 @@ class WebDetailUiTest {
         val routes = mutableListOf<WebRoute>()
         val entry = WebDetailOwnerTest.entry()
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            WebDetailContent(entry, WebDetailReadState(SectionState.Content(detail)), known, WebSessionState.Ready(null), true, null,
-                {}, {}, {}, { routes += it }, {}, { _, _ -> })
+            WebDetailContent(entry, completed(detail), known, WebSessionState.Ready(null), true, null,
+                {}, {}, { _, _, _ -> }, { routes += it }, {}, { _, _ -> })
         }
         onNodeWithTag("web-detail").performScrollToIndex(2)
         onNodeWithTag("detail-recommendation-movie-81").performClick()
@@ -195,7 +226,7 @@ class WebDetailUiTest {
         val entry = WebDetailOwnerTest.entry()
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             WebDetailContent(entry, WebDetailReadState(SectionState.Empty), LibraryState.Unknown, WebSessionState.Checking, false, null,
-                {}, {}, {}, { routes += it }, {}, { _, _ -> })
+                {}, {}, { _, _, _ -> }, { routes += it }, {}, { _, _ -> })
         }
         onNodeWithTag("web-detail").performScrollToIndex(2)
         onNodeWithText("My Library").performClick()
@@ -209,8 +240,8 @@ class WebDetailUiTest {
         val entry = WebDetailOwnerTest.entry(WebRoute.Detail("tv", 81))
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             Box(Modifier.width(390.dp)) {
-                WebDetailContent(entry, WebDetailReadState(SectionState.Content(detail)), LibraryState.Unknown, WebSessionState.Checking, false, null,
-                    {}, {}, {}, { routes += it }, {}, { _, _ -> error("No trailer exists") })
+                WebDetailContent(entry, completed(detail), LibraryState.Unknown, WebSessionState.Checking, false, null,
+                    {}, {}, { _, _, _ -> }, { routes += it }, {}, { _, _ -> error("No trailer exists") })
             }
         }
         onNodeWithText("Fixture series").assertExists()
@@ -230,7 +261,7 @@ class WebDetailUiTest {
         var retries = 0
         setThemedContent(ShellStyle.Web) {
             WebDetailContent(entry, state, LibraryState.Unknown, WebSessionState.Checking, false, null,
-                {}, { retries++ }, {}, {}, {}, { _, _ -> })
+                {}, { retries++ }, { _, _, _ -> }, {}, {}, { _, _ -> })
         }
         onNodeWithText("Loading title…").assertExists()
         runOnIdle { state = WebDetailReadState(SectionState.Error(SectionErrorKind.Offline), retained = movie()) }
@@ -247,30 +278,33 @@ class WebDetailUiTest {
         onNodeWithText("Retry").assertDoesNotExist()
     }
 
-    @Test fun settingsFailureAndRecoveredEqualContentNeverClearUnverifiedNoticeOrEnableActions() = runComposeUiTest {
+    @Test fun unverifiedEqualContentDoesNotEnableActionsBeforeProducerCompletion() = runComposeUiTest {
         val detail = movie()
         val entry = WebDetailOwnerTest.entry()
         var failed by mutableStateOf(true)
         var recoveries = 0
+        var replacementCompleted by mutableStateOf(false)
         setThemedContent(ShellStyle.Web) {
-            WebDetailContent(entry, WebDetailReadState(SectionState.Content(detail), retained = detail, settingsFailed = failed, freshnessUnverified = true),
-                known, WebSessionState.Ready(null), true, null, { recoveries++ }, {}, {}, {}, {}, { _, _ -> })
+            WebDetailContent(entry, if (replacementCompleted) completed(detail) else WebDetailReadState(SectionState.Content(detail), retained = detail, settingsFailed = failed, freshnessUnverified = true),
+                known, WebSessionState.Ready(null), true, null, { recoveries++ }, {}, { _, _, _ -> }, {}, {}, { _, _ -> })
         }
-        onNodeWithText("Saved preferences could not be read. Last real detail is frozen and unverified.").assertExists()
+        onNodeWithText("Saved preferences could not be read. Retained detail is stale and unverified.").assertExists()
         onNodeWithText("Retry").performClick()
         assertEquals(1, recoveries)
         runOnIdle { failed = false }
-        onNodeWithText("Read recovery requested. Detail freshness is still unverified; last real detail remains frozen.").assertExists()
+        onNodeWithText("Detail replacement is not verified. Retained detail is stale; completion may come from cache.").assertExists()
         onNodeWithTag("web-detail").performScrollToNode(hasText("Watchlist · unknown"))
         onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
+        runOnIdle { replacementCompleted = true }
+        onNodeWithText("In watchlist").assertIsEnabled()
     }
 
     @Test fun reviewsAndFactsUseOnlyAvailableMappedDataAndStorageDisablesKnownActions() = runComposeUiTest {
         val detail = MovieDetailDto(7, title = "Reviewed fixture", reviews = PageDto(results = listOf(ReviewDto(id = "review-1", author = "Fixture reviewer", content = "<p>Actual **review**</p>"))), status = "Released").toDetail("US")
         val entry = WebDetailOwnerTest.entry()
         setThemedContent(ShellStyle.Web) {
-            WebDetailContent(entry, WebDetailReadState(SectionState.Content(detail)), known, WebSessionState.Ready(null), true, BrowserStorageFailure.Blocked,
-                {}, {}, {}, {}, {}, { _, _ -> })
+            WebDetailContent(entry, completed(detail), known, WebSessionState.Ready(null), true, BrowserStorageFailure.Blocked,
+                {}, {}, { _, _, _ -> }, {}, {}, { _, _ -> })
         }
         onNodeWithTag("web-detail").performScrollToNode(hasText("Watchlist · unknown"))
         onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
