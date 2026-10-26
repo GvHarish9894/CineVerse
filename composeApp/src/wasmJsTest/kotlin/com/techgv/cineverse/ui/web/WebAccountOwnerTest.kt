@@ -112,6 +112,36 @@ class WebAccountOwnerTest {
         } finally { f.close() }
     }
 
+    @Test fun successfulLogoutWhoseReadStillShowsTheSessionResolvesStillSignedInNotHang() = runTest {
+        val f = WebAccountFixture()
+        try {
+            f.start()
+            f.logoutLands = false // 2xx logout, but the follow-up read still shows A: the holder must report false, not nothing.
+            f.owner.startSignOut(WebAccountFixture.A); f.owner.confirmSignOut()
+            f.signOutSettled(WebSignOutPhase.StillSignedIn)
+            assertEquals(1, f.count(logout))
+            f.owner.dismiss()
+            assertEquals(WebSignOutPhase.Closed, f.owner.state.value.signOut)
+        } finally { f.close() }
+    }
+
+    @Test fun unknownSessionAtStartKeepsConfirmDisabledAndImportMakesNoClaim() = runTest {
+        val f = WebAccountFixture()
+        try {
+            f.start()
+            f.sessionStatus = HttpStatusCode.ServiceUnavailable
+            f.refresh()
+            assertIs<WebSessionState.Failed>(f.runtime.session.value)
+            f.owner.startSignOut(WebAccountFixture.A)
+            assertEquals(WebSignOutPhase.Confirm, f.owner.state.value.signOut) // not "Changed": nothing is known
+            assertFalse(f.owner.state.value.canConfirmSignOut)
+            f.owner.dismiss()
+            f.owner.startImport(WebAccountFixture.A)
+            assertNull(f.owner.state.value.importNotice)
+            assertEquals(0, f.count(logout))
+        } finally { f.close() }
+    }
+
     @Test fun unreadableOutcomeIsUnknownAndCheckOnlyReads() = runTest {
         val f = WebAccountFixture()
         try {
