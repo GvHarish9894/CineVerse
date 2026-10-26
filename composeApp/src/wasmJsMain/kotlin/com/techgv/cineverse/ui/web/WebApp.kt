@@ -39,6 +39,10 @@ import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.domain.Video
 import com.techgv.cineverse.presentation.LibraryUiState
+import com.techgv.cineverse.presentation.LibraryWrite
+import com.techgv.cineverse.presentation.LibraryWriteOutcome
+import com.techgv.cineverse.data.library.LibraryWriteResult
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.browser.window
 import org.w3c.dom.events.Event
 
@@ -78,7 +82,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     val signInFocus = remember { FocusRequester() }
     val homeFocus = remember { FocusRequester() }
     // Identity follows the authoritative session (openRate requires holder identity == the rendered session).
-    val libraryActions = remember(runtime) { runtime.libraryActions(uiScope) { } }
+    val libraryOutcomes = remember(runtime) { MutableSharedFlow<LibraryWriteOutcome>(extraBufferCapacity = 8) }
+    val libraryActions = remember(runtime) { runtime.libraryActions(uiScope) { libraryOutcomes.tryEmit(it) } }
     // Remembered: Detail keys its owner on this function, so it must stay the same instance across recompositions.
     val libraryStateWithOrigin = remember(runtime) { runtime::libraryStateWithOrigin }
     LaunchedEffect(libraryActions) {
@@ -94,6 +99,10 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
         if (notice?.entry !== entry) notice = null
     }
     val shownTrailer = trailer?.takeIf { it.first === entry }
+    val trailerOpen = shownTrailer != null
+    // The trailer is the web Player: the rate prompt waits (holder) while it is up.
+    LaunchedEffect(libraryActions, trailerOpen) { libraryActions.setPlayerActive(trailerOpen) }
+    val ratePrompt by libraryActions.ratePrompt.collectAsState(null)
     val shownNotice = notice?.takeIf { it.entry === entry }
     val storage by runtime.storageFailure.collectAsState()
     val settingsState by runtime.settingsHolder.state.collectAsState()
@@ -120,6 +129,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     CineVerseTheme(ShellStyle.Web, appearance) {
         ProvideWindowClass(Modifier.fillMaxSize()) {
             WebShell {
+                val toasts = LocalToasts.current
+                LaunchedEffect(toasts) { libraryOutcomes.collect { outcome -> outcome.webToast()?.let(toasts::show) } }
                 val searchFocus = remember { FocusRequester() }
                 var searchFocused by remember { mutableStateOf(false) }
                 var mainSearchFocused by remember(entry) { mutableStateOf(false) }
@@ -173,7 +184,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                         }
                     }
                 }
-                // One root dialog at a time; no rate dialog exists yet, and approval waits while a trailer plays.
+                // One root dialog at a time: the rate dialog is never composed with the trailer; approval waits behind both.
+                // shortcut: rate focus returns to the header logo; Detail does not expose its Rate button's requester.
                 if (shownTrailer != null) key(entry, shownTrailer.third) {
                     WebTrailerDialog(shownTrailer.second, shownTrailer.third, autoplay = false, onClose = { trailer = null }, restoreFocus = homeFocus, host = trailerHost)
                 } else if (shownNotice != null) {
@@ -181,10 +193,31 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                         Text(shownNotice.body, Modifier.padding(top = 12.dp))
                         PillButton("OK", { notice = null }, Modifier.padding(top = 16.dp))
                     }
-                } else WebApprovalDialog(approval, signInFocus)
+                } else if (ratePrompt != null) WebRateDialog(libraryActions, homeFocus)
+                else WebApprovalDialog(approval, signInFocus)
             }
         }
     }
+}
+
+/** §7.12 honest copy: "Synced" only for a TMDB-confirmed write, otherwise this browser's guest library. Superseded: none. */
+private fun LibraryWriteOutcome.webToast(): ToastMessage? = when (val done = result) {
+    is LibraryWriteResult.Done -> ToastMessage(
+        when (val change = write) {
+            LibraryWrite.ToggleWatchlist -> if (done.state.watchlist) "Added “${title.title}” to Watchlist" else "Removed from Watchlist"
+            LibraryWrite.ToggleFavourite -> if (done.state.favourite) "Added “${title.title}” to Favourites" else "Removed from Favourites"
+            is LibraryWrite.Rate -> "Rated ${title.title} ${oneDecimal(change.value)} / 10"
+            LibraryWrite.Unrate -> "Rating removed"
+        },
+        when {
+            done.removedFromWatchlist -> "Synced · TMDB removed it from your watchlist"
+            done.synced -> "Synced to your TMDB account"
+            else -> "Saved in this browser · sign in to sync"
+        },
+        if (write is LibraryWrite.Rate) CvIcons.StarFilled else CvIcons.Check,
+    )
+    is LibraryWriteResult.Failed -> ToastMessage("Couldn't save · not retried", title.title, CvIcons.Close)
+    LibraryWriteResult.Superseded -> null
 }
 
 /** Routes whose component renders its own runtime storage notice (Library only once the session is verified). */
