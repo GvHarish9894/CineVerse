@@ -20,9 +20,9 @@ fun main() {
     // Resolve the graph once at the composition root; screen logic receives typed constructors.
     val catalog = application.graph.koin.get<CatalogRepository>()
     val generation = application.graph.koin.get<GenerationCounter>()
-    val settings = application.graph.koin.get<SettingsRepository>().settings
+    val repository = application.graph.koin.get<SettingsRepository>()
     val recent = RecentQueryStore(application.graph.koin.get<SettingsStore>())
-    ComposeViewport(document.body!!) { WebApp(application.runtime, catalog, generation, settings, recent) }
+    ComposeViewport(document.body!!) { WebApp(application.runtime, catalog, generation, repository.settings, recent, settingsRepository = repository) }
 }
 
 // A bfcache page retains its live graph and catches up via C3 visibility/focus signals when restored.

@@ -33,13 +33,64 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.Flow
 import com.techgv.cineverse.data.settings.Settings
+import com.techgv.cineverse.data.settings.SettingsRepository
+import com.techgv.cineverse.domain.MediaType
+import com.techgv.cineverse.domain.Video
+import com.techgv.cineverse.presentation.LibraryUiState
+import kotlinx.browser.window
+import org.w3c.dom.events.Event
 
+/** G4 extractors: identity and page come from the SAME immutable holder result; unknown origin is null. */
+private val libraryResultIdentity: (LibraryUiState) -> WebLibraryResultIdentity? = { state ->
+    if (!state.sourceIdentityKnown) null else state.sourceIdentity?.let(WebLibraryResultIdentity::Account) ?: WebLibraryResultIdentity.Guest
+}
+private val libraryResultPage: (LibraryUiState, MediaType) -> Int? = { state, media -> state.group(media).loadedPage }
+
+/** Root-owned notice for a Settings account action whose owner has not landed; it never calls runtime/auth. */
+internal data class WebUnavailableNotice(val entry: WebEntry, val title: String, val body: String)
+
+/**
+ * [settingsRepository] is the strict repository behind [browseSettings]; null only in hosts without one, where
+ * the Settings route stays a placeholder. [historyBack] is the component Back action (browser history by default).
+ */
 @Composable
-fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: GenerationCounter, browseSettings: Flow<Settings>, recent: RecentQueryStore, history: WebHistory = remember { BrowserHistory() }) {
+fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: GenerationCounter, browseSettings: Flow<Settings>, recent: RecentQueryStore,
+           history: WebHistory = remember { BrowserHistory() }, settingsRepository: SettingsRepository? = null,
+           approvalOpener: WebApprovalOpener = WebApprovalBrowserOpener, trailerHost: WebTrailerHost = WebTrailerDocumentHost,
+           historyBack: () -> Unit = ::browserHistoryBack) {
     val navigation = remember(history) { WebNavigation(history) }
     DisposableEffect(navigation) { onDispose { navigation.close() } }
     val entry by navigation.entry.collectAsState()
     val session by runtime.session.collectAsState()
+    val uiScope = rememberCoroutineScope()
+    // App lifetime, above key(entry): route changes never recreate it; closed only when the app root leaves.
+    val approval = remember(runtime, approvalOpener) { WebApprovalOwner(runtime, approvalOpener, uiScope) }
+    DisposableEffect(approval) { onDispose { approval.close() } }
+    val pageVisible = rememberPageVisible()
+    LaunchedEffect(approval, pageVisible) { if (pageVisible) approval.approvalReturned() } // Hint only, never identity.
+    DisposableEffect(approval) {
+        val focused: (Event) -> Unit = { approval.approvalReturned() }
+        window.addEventListener("focus", focused)
+        onDispose { window.removeEventListener("focus", focused) }
+    }
+    val signInFocus = remember { FocusRequester() }
+    val homeFocus = remember { FocusRequester() }
+    // Bound now so its identity follows the authoritative session; Detail/Library dispatch stays unbound (library = null).
+    val libraryActions = remember(runtime) { runtime.libraryActions(uiScope) { } }
+    LaunchedEffect(libraryActions) {
+        runtime.session.collect { (it as? WebSessionState.Ready)?.let { ready -> libraryActions.onIdentity(ready.session) } }
+    }
+    val contextInvalidations = runtime.contextInvalidations
+    var contextRevision by remember(runtime) { mutableLongStateOf(0L) }
+    LaunchedEffect(runtime) { runtime.contextInvalidations.collect { contextRevision++ } }
+    var trailer by remember { mutableStateOf<Pair<WebEntry, Video>?>(null) }
+    var notice by remember { mutableStateOf<WebUnavailableNotice?>(null) }
+    LaunchedEffect(entry) {
+        if (trailer?.first !== entry) trailer = null
+        if (notice?.entry !== entry) notice = null
+    }
+    val shownTrailer = trailer?.takeIf { it.first === entry }?.second
+    val shownNotice = notice?.takeIf { it.entry === entry }
     val storage by runtime.storageFailure.collectAsState()
     val settingsState by runtime.settingsHolder.state.collectAsState()
     val settings = settingsState?.settings
@@ -80,8 +131,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                                 navigation.navigate(WebRoute.Search(it))
                                 headerSubmission = navigation.entry.value
                             }
-                        }, searchEnabled = searchEnabled)
-                    WebStatus(session, storage.takeUnless { settings != null && (entry.route == WebRoute.Home || entry.route is WebRoute.Browse || entry.route == WebRoute.People || entry.route is WebRoute.Search) }, runtime::revalidateSession, runtime::retryStorage)
+                        }, searchEnabled = searchEnabled, signIn = approval::show, signInFocus = signInFocus, homeFocus = homeFocus)
+                    WebStatus(session, storage.takeUnless { settings != null && entry.route.ownsStorageNotice(session, settingsRepository != null) }, runtime::revalidateSession, runtime::retryStorage)
                     if (settings == null) {
                         Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                             Text(if (storage == null) "Reading saved settings…" else "Saved settings are unavailable. Retry storage to continue.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -97,13 +148,51 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                                 searchOwner.holder.retrySettings()
                                 searchOwner.holder.retryRecentRead()
                             }, navigation::navigate) { mainSearchFocused = it }
-                        } else WebPlaceholder(entry.route, navigation::navigate)
+                        } else when (val route = entry.route) {
+                            is WebRoute.Detail -> WebDetail(entry, catalog, generation, browseSettings, contextInvalidations, runtime,
+                                library = null, navigate = { navigation.navigate(it) }, back = historyBack,
+                                playTrailer = { _, video -> trailer = entry to video })
+                            is WebRoute.Person -> WebPerson(entry, catalog, generation, browseSettings, runtime.storageFailure, contextRevision,
+                                runtime::retryStorage, runtime::reportStorageFailure,
+                                { ref -> navigation.navigate(WebRoute.Detail(ref.mediaType.path, ref.id)) }, historyBack)
+                            is WebRoute.Season -> WebSeason(entry, catalog, browseSettings, runtime.storageFailure, generation, contextInvalidations,
+                                runtime::retryStorage, runtime::reportStorageFailure, historyBack,
+                                { id -> navigation.navigate(WebRoute.Detail("tv", id)) }, { id, number -> navigation.navigate(WebRoute.Season(id, number)) })
+                            is WebRoute.Library -> WebLibrary(entry, runtime, libraryResultIdentity, libraryResultPage) { navigation.navigate(it) }
+                            WebRoute.Settings -> if (settingsRepository == null) WebPlaceholder(route, navigation::navigate)
+                            else WebSettings(entry, settingsRepository, runtime, approval::show,
+                                onSignOut = { account -> notice = WebUnavailableNotice(entry, "Sign out isn't available yet",
+                                    "Signing out of the web app is not available in this build. You are still signed in as ${account.displayName.ifBlank { "your account" }}. Nothing was changed.") },
+                                onImport = { notice = WebUnavailableNotice(entry, "Import isn't available yet",
+                                    "Importing your guest library is not available in this build. Nothing was imported or changed.") })
+                            else -> WebPlaceholder(route, navigation::navigate)
+                        }
                     }
                 }
+                // One root dialog at a time; no rate dialog exists yet, and approval waits while a trailer plays.
+                if (shownTrailer != null) key(entry, shownTrailer) {
+                    WebTrailerDialog(listOf(shownTrailer), shownTrailer, autoplay = false, onClose = { trailer = null }, restoreFocus = homeFocus, host = trailerHost)
+                } else if (shownNotice != null) {
+                    CvDialog(onDismissRequest = { notice = null }, title = shownNotice.title, restoreFocus = homeFocus, modifier = Modifier.testTag("web-unavailable-notice")) {
+                        Text(shownNotice.body, Modifier.padding(top = 12.dp))
+                        PillButton("OK", { notice = null }, Modifier.padding(top = 16.dp))
+                    }
+                } else WebApprovalDialog(approval, signInFocus)
             }
         }
     }
 }
+
+/** Routes whose component renders its own runtime storage notice (Library only once the session is verified). */
+private fun WebRoute.ownsStorageNotice(session: WebSessionState, hasSettings: Boolean): Boolean = when (this) {
+    WebRoute.Home, is WebRoute.Browse, WebRoute.People, is WebRoute.Search, is WebRoute.Detail, is WebRoute.Person -> true
+    WebRoute.Settings -> hasSettings
+    is WebRoute.Library -> session is WebSessionState.Ready
+    else -> false
+}
+
+@JsFun("() => history.back()")
+private external fun browserHistoryBack()
 
 @Composable
 internal fun WebStatus(session: WebSessionState, storage: BrowserStorageFailure?, retrySession: () -> Unit, retryStorage: () -> Unit) {
@@ -129,7 +218,8 @@ internal fun WebStorageNotice(failure: BrowserStorageFailure, retry: () -> Unit,
 
 @Composable
 internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: FocusRequester, navigate: (WebRoute, Boolean) -> Unit,
-                       searchFocused: (Boolean) -> Unit = {}, searchQuery: String? = null, searchChange: (String) -> Unit = {}, searchSubmit: (String) -> Unit = {}, searchEnabled: Boolean = true) {
+                       searchFocused: (Boolean) -> Unit = {}, searchQuery: String? = null, searchChange: (String) -> Unit = {}, searchSubmit: (String) -> Unit = {}, searchEnabled: Boolean = true,
+                       signIn: () -> Unit = { navigate(WebRoute.Settings, false) }, signInFocus: FocusRequester? = null, homeFocus: FocusRequester? = null) {
     var query by remember(route) { mutableStateOf((route as? WebRoute.Search)?.query.orEmpty()) }
     var edited by remember(route) { mutableStateOf(false) }
     val displayed = searchQuery ?: query
@@ -151,7 +241,7 @@ internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: F
         val narrow = maxWidth <= 860.dp
         Column(Modifier.fillMaxWidth().padding(horizontal = if (maxWidth <= 640.dp) 16.dp else 32.dp, vertical = 12.dp)) {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.cvClickable({ navigate(WebRoute.Home, false) }, onClickLabel = "CineVerse home"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row((homeFocus?.let { Modifier.focusRequester(it) } ?: Modifier).cvClickable({ navigate(WebRoute.Home, false) }, onClickLabel = "CineVerse home"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     LogoMark()
                     if (!narrow) Text("CineVerse", style = displayStyle(22.sp))
                 }
@@ -169,7 +259,7 @@ internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: F
                 if (!narrow) WebSearchEditor(displayed, change, submit, Modifier.widthIn(max = 340.dp).weight(1f).focusRequester(searchFocus).testTag("header-search-input").onFocusChanged { searchFocused(it.isFocused) }, invalid, enabled = searchEnabled)
                 when (session) {
                     is WebSessionState.Ready -> if (session.session == null) {
-                        PillButton("Sign in", { navigate(WebRoute.Settings, false) }, small = true, variant = ButtonVariant.Ghost)
+                        PillButton("Sign in", signIn, signInFocus?.let { Modifier.focusRequester(it) } ?: Modifier, small = true, variant = ButtonVariant.Ghost)
                     } else NavigationMenu(session.session!!.displayName.ifBlank { "Account" }, listOf("Watchlist" to WebRoute.Library(), "Favourites" to WebRoute.Library("favourites"), "Ratings" to WebRoute.Library("ratings"), "Settings" to WebRoute.Settings), navigate)
                     WebSessionState.Checking -> Text("Verifying", style = MaterialTheme.typography.bodySmall)
                     is WebSessionState.Failed -> Text("Unverified", style = MaterialTheme.typography.bodySmall)
@@ -222,7 +312,7 @@ internal fun WebPlaceholder(route: WebRoute, navigate: (WebRoute, Boolean) -> Un
         }
         EmptyState(title, when (route) {
             WebRoute.NotFound -> "This URL is unknown or invalid. No account operation was performed."
-            is WebRoute.Trailer -> "Playback is not implemented in this preview. No video is playing."
+            is WebRoute.Trailer -> "Open this trailer from its title page. No video is playing."
             else -> "This destination is not implemented in this preview. No account changes were made."
         }) { PillButton("Back to Home", { navigate(WebRoute.Home, false) }) }
         Footer()
