@@ -168,7 +168,7 @@ class SeasonStateHolderTest {
         assertEquals(7, holder.state.value.selected)
         assertEquals(7, (holder.state.value.episodes as SectionState.Content).value.seasonNumber)
         assertNull(holder.state.value.notice)
-        assertEquals(listOf("selectedSeason" to 7), saver.writes)
+        assertEquals(listOf<Pair<String, Int?>>("selectedSeason" to 7), saver.writes)
         assertEquals(listOf("tv/7", "season/7"), calls)
     }
 
@@ -179,7 +179,7 @@ class SeasonStateHolderTest {
         assertEquals(2, holder.state.value.selected)
         assertEquals(2, (holder.state.value.episodes as SectionState.Content).value.seasonNumber)
         assertNull(holder.state.value.notice)
-        assertEquals(listOf("selectedSeason" to 2), saver.writes)
+        assertEquals(listOf<Pair<String, Int?>>("selectedSeason" to 2), saver.writes)
         assertEquals(listOf("tv/7", "season/2"), calls)
     }
 
@@ -190,7 +190,7 @@ class SeasonStateHolderTest {
         assertEquals(0, holder.state.value.selected)
         assertEquals(0, (holder.state.value.episodes as SectionState.Content).value.seasonNumber)
         assertNull(holder.state.value.notice)
-        assertEquals(listOf("selectedSeason" to 0), saver.writes)
+        assertEquals(listOf<Pair<String, Int?>>("selectedSeason" to 0), saver.writes)
         assertEquals(listOf("tv/7", "season/0"), calls)
     }
 
@@ -201,7 +201,7 @@ class SeasonStateHolderTest {
         assertEquals(0, holder.state.value.selected)
         assertEquals(0, (holder.state.value.episodes as SectionState.Content).value.seasonNumber)
         assertNull(holder.state.value.notice)
-        assertEquals(listOf("selectedSeason" to 0), saver.writes)
+        assertEquals(listOf<Pair<String, Int?>>("selectedSeason" to 0), saver.writes)
         assertEquals(listOf("tv/7", "season/0"), calls)
     }
 
