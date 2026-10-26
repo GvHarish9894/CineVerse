@@ -223,6 +223,45 @@ class DetailReadContextTest {
         assertEquals(fresh, holder.state.value); assertEquals(count, calls.size)
     }
 
+    @Test fun equalRawRecoveryCannotExposeOldProofToSynchronousObservers() = runTest(dispatcher) {
+        val raw = RawReader()
+        val holder = holder(raw.flow)
+        runCurrent(); raw.value(); runCurrent()
+        val first = holder.state.value
+        assertTrue(first.proven())
+        raw.fail(); runCurrent()
+        assertEquals(DetailSettingsRead.Failed, holder.state.value.settingsRead)
+        val gate = CompletableDeferred<Unit>()
+        repo.invalidateTitle(MediaType.Movie, 550)
+        movie = { gate.await(); MovieDetailDto(550, title = "Title", tagline = "Tagline", overview = "Overview") }
+        val observed = mutableListOf<DetailUiState>()
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            holder.state.collect { observed += it }
+        }
+        try {
+            holder.retryStorage(); runCurrent()
+            assertEquals(2, raw.subscriptions.size)
+            raw.value(); runCurrent()
+            assertTrue(generation.isCurrent(first.request!!.appGeneration))
+            assertTrue(observed.any { it.settingsRead == DetailSettingsRead.Ready })
+            assertFalse(observed.any { it.proven() }, "equal raw recovery must not reauthorize the old completion")
+            val pending = holder.state.value
+            assertNotEquals(first.request, pending.request)
+            assertEquals(first.completion, pending.completion)
+            assertEquals(first.retained, pending.retained)
+            assertEquals(2, calls.size)
+            assertFalse(gate.isCompleted)
+            gate.complete(Unit); runCurrent()
+            val completed = holder.state.value
+            assertTrue(completed.proven())
+            assertEquals(pending.request, completed.completion?.context)
+            assertEquals(pending.request, completed.retained?.context)
+        } finally {
+            gate.complete(Unit)
+            observer.cancel()
+        }
+    }
+
     @Test fun equalFirstRecoveryResubscribesAndDoesNotRetagRetainedUntilPrimaryCompletes() = recovery(Settings())
     @Test fun changedFirstRecoveryResubscribesAndUsesNewLanguageAndRegion() = recovery(Settings(language = "es-ES", region = "US"))
 
