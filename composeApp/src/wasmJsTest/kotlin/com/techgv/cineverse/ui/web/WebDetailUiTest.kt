@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.storage.BrowserStorageFailure
 import com.techgv.cineverse.data.tmdb.*
 import com.techgv.cineverse.di.WebSessionState
@@ -15,18 +17,106 @@ import com.techgv.cineverse.presentation.*
 import com.techgv.cineverse.ui.adaptive.ShellStyle
 import com.techgv.cineverse.ui.setThemedContent
 import com.techgv.cineverse.ui.theme.AppearanceSettings
+import com.techgv.cineverse.util.GenerationCounter
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlin.test.*
 
 @OptIn(ExperimentalTestApi::class)
 class WebDetailUiTest {
-    private fun movie(): Detail = MovieDetailDto(7, title = "Fixture film", tagline = "Fixture tagline", overview = "Fixture overview",
+    private fun movieDto(): MovieDetailDto = MovieDetailDto(7, title = "Fixture film", tagline = "Fixture tagline", overview = "Fixture overview",
         releaseDate = "2026-10-01", runtime = 121, genres = listOf(GenreDto(18, "Drama")), voteAverage = 8.1, voteCount = 15,
         credits = CreditsDto(cast = listOf(CastDto(42, name = "Fixture actor", character = "Actual role")), crew = listOf(CrewDto(43, name = "Fixture director", job = "Director"))),
         videos = VideosDto(listOf(VideoDto(key = "invalid", site = "YouTube", type = "Trailer", official = true),
             VideoDto(key = "aB_09-xYz12", name = "Actual trailer", site = "YouTube", type = "Trailer"))),
         recommendations = PageDto(results = listOf(MediaItemDto(81, title = "Related film", mediaType = "movie"))))
-        .toDetail("US")
+    private fun movie(): Detail = movieDto().toDetail("US")
     private val known = LibraryState(true, true, false, 7.5, emptySet())
+
+    @Test fun delayedCatalogRestoresActualSavedScrollThenPersistsUserScrollWithoutReapplyingOnRetry() = runComposeUiTest {
+        val entry = WebDetailOwnerTest.entry(values = mapOf("detail.index" to "4", "detail.offset" to "37"))
+        val gate = CompletableDeferred<Unit>()
+        val api = WebDetailCatalogFake()
+        val fixture = movieDto()
+        api.movie = { _, _ ->
+            gate.await()
+            fixture.copy(title = if (api.calls.size == 1) fixture.title else "Retried fixture film")
+        }
+        val generation = GenerationCounter()
+        val catalog = CatalogRepository(api, generation, { Settings() })
+        val settings = flowOf(Settings())
+        val session = MutableStateFlow<WebSessionState>(WebSessionState.Ready(null))
+        val storage = MutableStateFlow<BrowserStorageFailure?>(null)
+        lateinit var owner: WebDetailOwner
+        var account by mutableStateOf(LibraryState.Unknown)
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            val scope = rememberCoroutineScope()
+            val current = remember(entry) {
+                WebDetailOwner(entry, catalog, generation, settings, session, storage, {}, { throw it }, null, scope)
+            }
+            owner = current
+            DisposableEffect(current) { onDispose { current.close() } }
+            val state by current.state.collectAsState()
+            WebDetailContent(entry, state, account, session.value, false, null,
+                {}, current::retryDetail, {}, {}, {}, { _, _ -> })
+        }
+        onNodeWithText("Loading title…").assertExists()
+        runOnIdle {
+            assertEquals(listOf("movie:7:en-US"), api.calls)
+            assertFalse(gate.isCompleted)
+            assertEquals("4", entry.getString("detail.index"))
+            assertEquals("37", entry.getString("detail.offset"))
+        }
+        runOnIdle { gate.complete(Unit) }
+        onNodeWithTag("detail-video-aB_09-xYz12").assertIsDisplayed()
+        val list = onNodeWithTag("web-detail")
+        val restoredPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        runOnIdle {
+            assertEquals(4, entry.getInt("detail.index"))
+            assertEquals(37, entry.getInt("detail.offset"))
+        }
+        // Compare actual lazy-list semantics with an index-4 scroll, not just unchanged saved scalars.
+        list.performScrollToIndex(4)
+        val indexFourPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(37f, restoredPosition - indexFourPosition)
+        waitUntil { entry.getInt("detail.index") == 4 && entry.getInt("detail.offset") == 0 }
+        list.performScrollToIndex(2)
+        waitUntil { entry.getInt("detail.index") == 2 && entry.getInt("detail.offset") == 0 }
+        val userPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        runOnIdle {
+            account = known
+            catalog.invalidateTitle(MediaType.Movie, 7)
+            owner.retryDetail()
+        }
+        waitUntil { owner.state.value.retained?.title == "Retried fixture film" }
+        assertEquals(userPosition, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        runOnIdle {
+            assertEquals(2, entry.getInt("detail.index"))
+            assertEquals(0, entry.getInt("detail.offset"))
+        }
+    }
+
+    @Test fun initialErrorAndLoadingRetryNeverOverwriteSavedTargetWithoutRealContent() = runComposeUiTest {
+        val entry = WebDetailOwnerTest.entry(values = mapOf("detail.index" to "4", "detail.offset" to "37"))
+        var state by mutableStateOf(WebDetailReadState(SectionState.Error(SectionErrorKind.Offline)))
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            WebDetailContent(entry, state, LibraryState.Unknown, WebSessionState.Checking, false, null,
+                {}, { state = WebDetailReadState() }, {}, {}, {}, { _, _ -> })
+        }
+        onNodeWithText("Offline. Could not load this title.").assertExists()
+        runOnIdle {
+            assertEquals("4", entry.getString("detail.index"))
+            assertEquals("37", entry.getString("detail.offset"))
+        }
+        onNodeWithText("Retry").performClick()
+        onNodeWithText("Loading title…").assertExists()
+        onNodeWithTag("web-detail").performScrollToIndex(2)
+        runOnIdle {
+            assertEquals("4", entry.getString("detail.index"))
+            assertEquals("37", entry.getString("detail.offset"))
+        }
+    }
 
     @Test fun movieRendersRealMetadataAndFallbackLabelsAndActualTrailerCallback() = runComposeUiTest {
         val detail = movie().copy(taglineInEnglish = true, overviewInEnglish = true)
