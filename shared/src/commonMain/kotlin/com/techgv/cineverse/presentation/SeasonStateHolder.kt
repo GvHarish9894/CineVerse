@@ -52,6 +52,7 @@ class SeasonStateHolder(
     private val appGeneration: GenerationCounter,
     private val saver: StateSaver,
     scope: CoroutineScope? = null,
+    private val fallbackToFirstSeason: Boolean = true,
 ) : ViewModel() {
     private val scope: CoroutineScope = scope ?: viewModelScope
     val imageBase: String get() = catalog.imageBaseUrl()
