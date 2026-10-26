@@ -14,6 +14,7 @@ import com.techgv.cineverse.data.web.WebProxyException
 import com.techgv.cineverse.presentation.*
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
 
 /** Unknown/failed verification is distinct from a verified guest. The old identity is never replaced by a hint. */
@@ -48,6 +49,9 @@ class WebRuntime internal constructor(
     private var syncRevision = 0L
     private val completedImports = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val importsCompleted: Flow<Unit> = completedImports.asSharedFlow()
+    private val cacheInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    /** Every TmdbCache generation bump this runtime performs plus session/storage changes: a re-read hint, never identity. */
+    val contextInvalidations: Flow<Unit> = merge(cacheInvalidations, session.drop(1).map { }, storageFailure.drop(1).map { })
     val settingsHolder = SettingsStateHolder(settings, browserAuth, scope, ::reportStorageFailure)
     val importController = ImportLibraryStateHolder(importer, scope,
         onImported = { completedImports.tryEmit(Unit) }, onStorageFailure = ::reportStorageFailure)
@@ -77,6 +81,7 @@ class WebRuntime internal constructor(
             }.distinctUntilChanged().drop(1).collect {
                 catalog.onContentSettingsChanged()
                 invalidateLibrary()
+                cacheInvalidations.tryEmit(Unit)
             }
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -92,6 +97,7 @@ class WebRuntime internal constructor(
                 if (sessionState.value != WebSessionState.Checking && auth.isVerifiedSession(identity)) {
                     catalog.onAccountChanged()
                     invalidateLibrary()
+                    cacheInvalidations.tryEmit(Unit)
                     sessionState.value = WebSessionState.Ready(identity)
                 }
             }
@@ -105,6 +111,7 @@ class WebRuntime internal constructor(
             auth.sessionExpired.collect {
                 catalog.onAccountChanged()
                 invalidateLibrary()
+                cacheInvalidations.tryEmit(Unit)
             }
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -126,6 +133,7 @@ class WebRuntime internal constructor(
         auth.invalidateSession()
         catalog.onAccountChanged()
         invalidateLibrary()
+        cacheInvalidations.tryEmit(Unit)
         importController.later()
         sessionState.value = WebSessionState.Checking
         syncing?.cancel()
