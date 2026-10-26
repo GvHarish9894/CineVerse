@@ -43,7 +43,8 @@ class WebDetailUiTest {
     }
 
     @Test fun delayedCatalogRestoresActualSavedScrollThenPersistsUserScrollWithoutReapplyingOnRetry() = runComposeUiTest {
-        val entry = WebDetailOwnerTest.entry(values = mapOf("detail.index" to "4", "detail.offset" to "37"))
+        // Item 2 is the body (cast, videos, aside) under back (0) and hero (1).
+        val entry = WebDetailOwnerTest.entry(values = mapOf("detail.index" to "2", "detail.offset" to "37"))
         val gate = CompletableDeferred<Unit>()
         val api = WebDetailCatalogFake()
         val fixture = movieDto()
@@ -69,11 +70,11 @@ class WebDetailUiTest {
             WebDetailContent(entry, state, account, session.value, false, null,
                 {}, current::retryDetail, { _, _, _ -> }, {}, {}, { _, _, _ -> })
         }
-        onNodeWithText("Loading title…").assertExists()
+        onNodeWithContentDescription("Loading title…").assertExists()
         runOnIdle {
             assertEquals(listOf("movie:7:en-US"), api.calls)
             assertFalse(gate.isCompleted)
-            assertEquals("4", entry.getString("detail.index"))
+            assertEquals("2", entry.getString("detail.index"))
             assertEquals("37", entry.getString("detail.offset"))
         }
         runOnIdle { gate.complete(Unit) }
@@ -81,16 +82,16 @@ class WebDetailUiTest {
         val list = onNodeWithTag("web-detail")
         val restoredPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         runOnIdle {
-            assertEquals(4, entry.getInt("detail.index"))
+            assertEquals(2, entry.getInt("detail.index"))
             assertEquals(37, entry.getInt("detail.offset"))
         }
-        // Compare actual lazy-list semantics with an index-4 scroll, not just unchanged saved scalars.
-        list.performScrollToIndex(4)
-        val indexFourPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
-        assertEquals(37f, restoredPosition - indexFourPosition)
-        waitUntil { entry.getInt("detail.index") == 4 && entry.getInt("detail.offset") == 0 }
+        // Compare actual lazy-list semantics with an index-2 scroll, not just unchanged saved scalars.
         list.performScrollToIndex(2)
+        val indexTwoPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(37f, restoredPosition - indexTwoPosition)
         waitUntil { entry.getInt("detail.index") == 2 && entry.getInt("detail.offset") == 0 }
+        list.performScrollToIndex(1)
+        waitUntil { entry.getInt("detail.index") == 1 && entry.getInt("detail.offset") == 0 }
         val userPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         runOnIdle {
             account = known
@@ -100,7 +101,7 @@ class WebDetailUiTest {
         waitUntil { owner.state.value.retained?.title == "Retried fixture film" }
         assertEquals(userPosition, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
         runOnIdle {
-            assertEquals(2, entry.getInt("detail.index"))
+            assertEquals(1, entry.getInt("detail.index"))
             assertEquals(0, entry.getInt("detail.offset"))
         }
     }
@@ -118,7 +119,7 @@ class WebDetailUiTest {
             assertEquals("37", entry.getString("detail.offset"))
         }
         onNodeWithText("Retry").performClick()
-        onNodeWithText("Loading title…").assertExists()
+        onNodeWithContentDescription("Loading title…").assertExists()
         onNodeWithTag("web-detail").performScrollToIndex(2)
         runOnIdle {
             assertEquals("4", entry.getString("detail.index"))
@@ -136,14 +137,22 @@ class WebDetailUiTest {
         }
         onNodeWithTag("web-detail").performScrollToNode(hasText("Fixture tagline (English)"))
         onNodeWithText("Fixture overview (English)").assertExists()
-        onNodeWithText("2026 · 2026-10-01 · Drama · 2h 1m").assertExists()
+        onNodeWithText("Fixture film (2026)").assertExists()
+        onNodeWithText("Oct 1, 2026 • Drama • 2h 1m").assertExists()
+        onAllNodes(hasText("2026-10-01", substring = true)).assertCountEquals(0)
         onNodeWithText("Play trailer").performClick()
         assertEquals(detail.toTitle(), plays.single().first)
         assertEquals(listOf("aB_09-xYz12"), plays.single().second.map { it.key })
         assertEquals("aB_09-xYz12", plays.single().third.key)
         onNodeWithTag("detail-video-invalid").assertDoesNotExist()
+        // Crew grid: only the mapped lead crew credit; no invented Screenplay/Producer rows.
+        onNodeWithText("Fixture director").assertExists()
+        onNodeWithText("Director").assertExists()
         onNodeWithText("Screenplay").assertDoesNotExist()
         onNodeWithText("Producer").assertDoesNotExist()
+        onNodeWithTag("web-detail").performScrollToNode(hasTestTag("detail-aside"))
+        onNodeWithText("Oct 1, 2026").assertExists()
+        onNodeWithText("Genres").assertDoesNotExist()
     }
 
     @Test fun trailerCallbacksCarryTheFullValidatedVideoListAndTheClickedVideo() = runComposeUiTest {
@@ -176,19 +185,19 @@ class WebDetailUiTest {
             WebDetailContent(entry, completed(detail), account, session, true, null,
                 {}, {}, { kind, _, _ -> actions += kind }, {}, {}, { _, _, _ -> })
         }
-        onNodeWithTag("web-detail").performScrollToNode(hasText("Watchlist · unknown"))
-        onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
-        onNodeWithText("Rating · unknown").assertIsNotEnabled()
+        onNodeWithTag("web-detail").performScrollToNode(hasContentDescription("Watchlist · unknown"))
+        onNodeWithContentDescription("Watchlist · unknown").assertIsNotEnabled()
+        onNodeWithContentDescription("Rating · unknown").assertIsNotEnabled()
         runOnIdle { account = known.copy(pending = setOf(LibraryKind.FAVOURITE)) }
-        onNodeWithText("Favourite").assertIsNotEnabled()
-        onNodeWithText("In watchlist").performClick()
-        onNodeWithText("Rated 7.5").performClick()
+        onNodeWithContentDescription("Favourite").assertIsNotEnabled()
+        onNodeWithContentDescription("In watchlist").performClick()
+        onNodeWithContentDescription("Rated 7.5").performClick()
         assertEquals(listOf(LibraryKind.WATCHLIST, LibraryKind.RATING), actions)
         runOnIdle { account = known.copy(pending = setOf(LibraryKind.RATING)) }
-        onNodeWithText("Rated 7.5").assertIsNotEnabled()
+        onNodeWithContentDescription("Rated 7.5").assertIsNotEnabled()
         runOnIdle { session = WebSessionState.Checking }
-        onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
-        onNodeWithText("Add to watchlist").assertDoesNotExist()
+        onNodeWithContentDescription("Watchlist · unknown").assertIsNotEnabled()
+        onNodeWithContentDescription("Add to watchlist").assertDoesNotExist()
     }
 
     @Test fun libraryCallbackCapturesRenderedContextAndFullReadyWithoutReadingNewValues() = runComposeUiTest {
@@ -200,8 +209,8 @@ class WebDetailUiTest {
             WebDetailContent(entry, rendered, known, ready, true, null,
                 {}, {}, { kind, context, session -> callbacks += Triple(kind, context, session) }, {}, {}, { _, _, _ -> })
         }
-        onNodeWithTag("web-detail").performScrollToNode(hasText("In watchlist"))
-        onNodeWithText("In watchlist").performClick()
+        onNodeWithTag("web-detail").performScrollToNode(hasContentDescription("In watchlist"))
+        onNodeWithContentDescription("In watchlist").performClick()
         assertEquals(Triple(LibraryKind.WATCHLIST, rendered.producer.request, ready), callbacks.single())
     }
 
@@ -211,8 +220,8 @@ class WebDetailUiTest {
             WebDetailContent(entry, WebDetailReadState(SectionState.Content(movie())), known, WebSessionState.Ready(null), true, null,
                 {}, {}, { _, _, _ -> error("Unproven content dispatched") }, {}, {}, { _, _, _ -> })
         }
-        onNodeWithTag("web-detail").performScrollToNode(hasText("Watchlist · unknown"))
-        onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
+        onNodeWithTag("web-detail").performScrollToNode(hasContentDescription("Watchlist · unknown"))
+        onNodeWithContentDescription("Watchlist · unknown").assertIsNotEnabled()
     }
 
     @Test fun castAndLeadCrewEmitActualPersonIdsAndBackReachesItsCallback() = runComposeUiTest {
@@ -224,9 +233,10 @@ class WebDetailUiTest {
             WebDetailContent(entry, completed(detail), known, WebSessionState.Ready(null), true, null,
                 {}, {}, { _, _, _ -> }, { routes += it }, { back++ }, { _, _, _ -> })
         }
-        onNodeWithText("← Back").performClick()
-        onNodeWithTag("web-detail").performScrollToIndex(2)
+        onNodeWithText("Back").performClick()
+        onNodeWithTag("web-detail").performScrollToNode(hasTestTag("detail-person-42"))
         onNodeWithTag("detail-person-42").performClick()
+        onNodeWithTag("web-detail").performScrollToNode(hasTestTag("detail-person-43"))
         onNodeWithTag("detail-person-43").performClick()
         assertEquals(1, back)
         assertEquals(listOf<WebRoute>(WebRoute.Person(42), WebRoute.Person(43)), routes)
@@ -240,7 +250,7 @@ class WebDetailUiTest {
             WebDetailContent(entry, completed(detail), known, WebSessionState.Ready(null), true, null,
                 {}, {}, { _, _, _ -> }, { routes += it }, {}, { _, _, _ -> })
         }
-        onNodeWithTag("web-detail").performScrollToIndex(2)
+        onNodeWithTag("web-detail").performScrollToNode(hasTestTag("detail-recommendation-movie-81"))
         onNodeWithTag("detail-recommendation-movie-81").performClick()
         assertEquals(listOf<WebRoute>(WebRoute.Detail("movie", 81)), routes)
     }
@@ -271,9 +281,10 @@ class WebDetailUiTest {
         onNodeWithText("Fixture series").assertExists()
         onNodeWithText("Play trailer").assertDoesNotExist()
         onNodeWithText("User score").assertDoesNotExist()
-        onNodeWithTag("web-detail").performScrollToIndex(2)
+        onNodeWithTag("web-detail").performScrollToNode(hasTestTag("detail-person-42"))
         onNodeWithTag("detail-person-42").performClick()
-        onNodeWithTag("web-detail").performScrollToIndex(3)
+        onNodeWithTag("web-detail").performScrollToNode(hasTestTag("detail-season-2"))
+        onNodeWithText("Current season").assertExists()
         onNodeWithTag("detail-season-2").performClick()
         assertEquals(listOf(WebRoute.Person(42), WebRoute.Season(81, 2)), routes)
         onNodeWithText("24 episodes").assertDoesNotExist()
@@ -287,18 +298,18 @@ class WebDetailUiTest {
             WebDetailContent(entry, state, LibraryState.Unknown, WebSessionState.Checking, false, null,
                 {}, { retries++ }, { _, _, _ -> }, {}, {}, { _, _, _ -> })
         }
-        onNodeWithText("Loading title…").assertExists()
+        onNodeWithContentDescription("Loading title…").assertExists()
         runOnIdle { state = WebDetailReadState(SectionState.Error(SectionErrorKind.Offline), retained = movie()) }
         onNodeWithText("Offline. Could not load this title. Last loaded detail is retained, not a fresh result.").assertExists()
         onNodeWithText("Retry").performClick()
         assertEquals(1, retries)
-        onNodeWithTag("web-detail").performScrollToNode(hasText("Fixture film"))
-        onNodeWithText("Fixture film").assertExists()
-        onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
+        onNodeWithTag("web-detail").performScrollToNode(hasText("Fixture film (2026)"))
+        onNodeWithText("Fixture film (2026)").assertExists()
+        onNodeWithContentDescription("Watchlist · unknown").assertIsNotEnabled()
         runOnIdle { state = WebDetailReadState(SectionState.Error(SectionErrorKind.NotAvailable)) }
         onNodeWithTag("web-detail").performScrollToIndex(0)
         onNodeWithText("Title not found or unavailable.").assertExists()
-        onNodeWithText("Loading title…").assertDoesNotExist()
+        onNodeWithContentDescription("Loading title…").assertDoesNotExist()
         onNodeWithText("Retry").assertDoesNotExist()
     }
 
@@ -317,10 +328,10 @@ class WebDetailUiTest {
         assertEquals(1, recoveries)
         runOnIdle { failed = false }
         onNodeWithText("Detail replacement is not verified. Retained detail is stale; completion may come from cache.").assertExists()
-        onNodeWithTag("web-detail").performScrollToNode(hasText("Watchlist · unknown"))
-        onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
+        onNodeWithTag("web-detail").performScrollToNode(hasContentDescription("Watchlist · unknown"))
+        onNodeWithContentDescription("Watchlist · unknown").assertIsNotEnabled()
         runOnIdle { replacementCompleted = true }
-        onNodeWithText("In watchlist").assertIsEnabled()
+        onNodeWithContentDescription("In watchlist").assertIsEnabled()
     }
 
     @Test fun reviewsAndFactsUseOnlyAvailableMappedDataAndStorageDisablesKnownActions() = runComposeUiTest {
@@ -330,8 +341,8 @@ class WebDetailUiTest {
             WebDetailContent(entry, completed(detail), known, WebSessionState.Ready(null), true, BrowserStorageFailure.Blocked,
                 {}, {}, { _, _, _ -> }, {}, {}, { _, _, _ -> })
         }
-        onNodeWithTag("web-detail").performScrollToNode(hasText("Watchlist · unknown"))
-        onNodeWithText("Watchlist · unknown").assertIsNotEnabled()
+        onNodeWithTag("web-detail").performScrollToNode(hasContentDescription("Watchlist · unknown"))
+        onNodeWithContentDescription("Watchlist · unknown").assertIsNotEnabled()
         onNodeWithTag("web-detail").performScrollToNode(hasText("Actual review"))
         onNodeWithText("Actual review").assertExists()
         onNodeWithText("Released").assertExists()
