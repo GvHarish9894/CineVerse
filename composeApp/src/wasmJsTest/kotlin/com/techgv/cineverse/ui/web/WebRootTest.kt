@@ -208,6 +208,35 @@ class WebRootTest {
         } finally { f.close() }
     }
 
+    @Test fun detailTrailerCloseReturnsToTheLivePlayButton() = runComposeUiTest {
+        val f = Fixture()
+        try {
+            root(f, FakeHistory("/movie/1"))
+            exists("web-detail")
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Play trailer").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Play trailer").performClick()
+            exists("web-trailer-dialog")
+            onNodeWithContentDescription("Close").performClick()
+            onNodeWithText("Play trailer").assertIsFocused()
+            assertEquals(0, f.trailerHost.live)
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
+    @Test fun detailRateCancelReturnsToTheActualRateTriggerWithoutWriting() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        try {
+            root(f, FakeHistory("/movie/1"))
+            exists("web-detail")
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Rate").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithContentDescription("Rate").performClick()
+            exists("web-rate-dialog")
+            onNodeWithContentDescription("Close").performClick()
+            onNodeWithContentDescription("Rate").assertIsFocused()
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
     @Test fun detailWatchlistDispatchesTheRenderedSessionThroughTheAppHolderAndToastsSynced() = runComposeUiTest {
         val f = Fixture(signedIn = true)
         val history = FakeHistory("/movie/1")
