@@ -101,6 +101,25 @@ class MobileDetailRootFactoryTest {
         model.close(); f.graph.close()
     }
 
+    @Test fun graphNotifiesIncludeAdultOnlyGenerationsEvenWhenSettingsReturnToTheirOriginalValue() = runTest {
+        val f = MobileDetailRootFixture(backgroundScope)
+        f.auth.emissions.emit(null); runCurrent()
+        val settings = f.graph.settings.value
+        val context = f.graph.contextChanges.value
+        val generation = f.generation.current
+        f.settings.update { it.copy(haptics = !it.haptics) }; runCurrent()
+        assertEquals(context, f.graph.contextChanges.value)
+        f.settings.update { it.copy(includeAdult = !it.includeAdult) }; runCurrent()
+        assertEquals(generation + 1, f.generation.current)
+        assertTrue(f.graph.contextChanges.value != context)
+        val changed = f.graph.contextChanges.value
+        f.settings.update { settings!! }; runCurrent()
+        assertEquals(settings, f.graph.settings.value)
+        assertEquals(generation + 2, f.generation.current)
+        assertTrue(f.graph.contextChanges.value != changed)
+        f.graph.close()
+    }
+
     @Test fun identityReadFailureClosesQueuedRateWithoutGuestEmissionOrReplay() = runTest {
         val f = MobileDetailRootFixture(backgroundScope)
         f.auth.emissions.emit(null); runCurrent()

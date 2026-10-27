@@ -4,9 +4,12 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.lifecycle.Lifecycle
+import com.techgv.cineverse.data.library.GuestLibraryRow
 import com.techgv.cineverse.data.tmdb.MovieDetailDto
 import com.techgv.cineverse.data.tmdb.toDetail
 import com.techgv.cineverse.domain.LibraryKind
+import com.techgv.cineverse.domain.MediaRef
+import com.techgv.cineverse.domain.MediaType
 import kotlin.test.*
 
 /** Prepared integration cases only; source-only handoff does not claim native execution. */
@@ -124,6 +127,43 @@ class MobileDetailRootTest {
         onNodeWithContentDescription("Favourite title").assertIsEnabled()
         onNodeWithTag("mobile-rate-sheet").assertDoesNotExist()
         runOnIdle { assertTrue(f.guest.rows.value.isEmpty()) }
+    }
+
+    @Test fun tabTransitionClosesRateBeforeQueuedSubmitOrDismissAndDoesNotReopenOnReturn() = runComposeUiTest {
+        lateinit var f: MobileDetailRootFixture
+        setContent { MobileDetailRootUiFixture { fixture, _ -> f = fixture } }
+        onNodeWithContentDescription("Details for week-en-US 1").performClick()
+        val selectExplore = onNodeWithText("Explore", useUnmergedTree = true).onParent().fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        runOnIdle { f.graph.actions.openRate(title, null) }
+        val submit = onNodeWithText("Submit rating").performScrollTo().fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        val dismiss = onNodeWithText("Cancel").performScrollTo().fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        runOnIdle { selectExplore(); submit(); dismiss() }
+        onNodeWithTag("mobile-rate-sheet").assertDoesNotExist()
+        onNodeWithText("Movies · Popular").assertIsDisplayed()
+        onNodeWithText("Home", useUnmergedTree = true).performClick()
+        onNodeWithText("Root title 101 en-US").assertExists()
+        onNodeWithTag("mobile-rate-sheet").assertDoesNotExist()
+        runOnIdle { assertTrue(f.guest.rows.value.isEmpty()) }
+    }
+
+    @Test fun actualOriginReadFailureClosesSheetAndExplicitReadRecoveryNeverReplaysRating() = runComposeUiTest {
+        lateinit var f: MobileDetailRootFixture
+        setContent { MobileDetailRootUiFixture { fixture, _ -> f = fixture } }
+        onNodeWithContentDescription("Details for week-en-US 1").performClick()
+        runOnIdle { f.graph.actions.openRate(title, null) }
+        val submit = onNodeWithText("Submit rating").performScrollTo().fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        runOnIdle {
+            f.guest.fail = true
+            f.guest.rows.value = listOf(GuestLibraryRow(MediaRef(MediaType.Movie, 765), LibraryKind.WATCHLIST, null, 0, "{}"))
+        }
+        onNodeWithTag("mobile-rate-sheet").assertDoesNotExist()
+        onNodeWithContentDescription("Favourite title").assertIsNotEnabled()
+        runOnIdle { submit(); f.guest.fail = false }
+        onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-account-recovery"))
+        onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("detail-account-recovery"))).performClick()
+        onNodeWithContentDescription("Favourite title").assertIsEnabled()
+        onNodeWithTag("mobile-rate-sheet").assertDoesNotExist()
+        runOnIdle { assertTrue(f.guest.rows.value.none { it.kind == LibraryKind.RATING }) }
     }
 
     @Test fun unknownAndFailedIdentityHideRateAndReadRecoveryDoesNotReopenIt() = runComposeUiTest {
