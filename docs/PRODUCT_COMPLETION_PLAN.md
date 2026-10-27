@@ -45,6 +45,8 @@ W1 inspected installed CMP1.11.1: only last scene owner is exposed (focusable Cl
 
 M3 Season follow-up c63d67d9 atc9ae87d is OK with notes: both scroll P1s CLOSED in source; host29/0 and17UI compiled-only/5nativecompile retained. Parent preserved mobile-season-component and reused C2 as web-font-resilience fromd1bc075 for independent W2 FONT/BOOTSTRAP source seam. W2 owns CineVerseTheme font-selection override with native defaults unchanged, wasm main/font provider+matching tests only; MUST NOT edit W1 WebApp/header/overlay/buttons/trailer focus files. W2 source-only, no initial lease. Source graph/application lifetime never recreated on font failure/retry. Parent merges cleared Season into mobile candidate at next clean C5 writer boundary.
 
+M1 corrected Person compilation completed at unchanged clean7c505c6: five native targets EXECUTED,11UI compiled-only, owner20/0 prior source parity (no unnecessary host repeat). Root remaining fresh-prompt fix cleandfa7b0b adds only comment+operation++ AFTER fresh verified prompt acceptance and one actual same-owner recovery regression; fix SHA624618d752d794b458504319ec6f15715c09714b5dcfdd9bfd083a43d586536e,18rootUI current new case uncompiled. Parent merged cleared Season into clean C5 ->b745076943f981c7fa10540c6196d098f5a34424, no conflicts and source parity checked. Required short targeted reviews: Person scroll correction and root remaining prompt continuation; W1/W2 writers continue source-only. No build lease held after Person handoff; subsequent merged-head/native runtime checks serialized. Persistent preview remains off.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
