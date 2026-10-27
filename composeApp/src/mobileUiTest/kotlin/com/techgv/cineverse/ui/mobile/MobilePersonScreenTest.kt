@@ -1,9 +1,13 @@
 package com.techgv.cineverse.ui.mobile
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.domain.*
@@ -14,7 +18,7 @@ import com.techgv.cineverse.ui.theme.CineVerseTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.test.*
 
-/** PREPARED ONLY; neither compiled nor executed in the source-only Person lane. */
+/** Original eight cases previously compiled only; scroll revisions/additions are source-only. */
 @OptIn(ExperimentalTestApi::class)
 class MobilePersonScreenTest {
     @Test fun actualMetadataAndFourLineBiographyExpandAndCollapse() = runComposeUiTest {
@@ -99,12 +103,15 @@ class MobilePersonScreenTest {
         lateinit var fixture: MobilePersonComponentFixture
         setContent { MobilePersonUiFixture(saved = saved, configure = { it.api.gate = gate }, onReady = { m, f -> model = m; fixture = f }) }
         onNodeWithText("Loading person…").assertIsDisplayed()
-        runOnIdle { assertEquals(20, saved.get<Int>("person.index")); gate.complete(Unit) }
+        runOnIdle {
+            assertEquals(20, saved.get<Int>("person.index")); assertEquals(17, saved.get<Int>("person.offset"))
+            gate.complete(Unit)
+        }
         val list = onNodeWithTag("mobile-person")
-        runOnIdle { assertEquals(20, model.state.value.index) }
-        list.performScrollToIndex(20)
+        // Compose encodes index * 500 + pixel offset; assert restoration before driving the list.
         val position = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
-        assertTrue(position >= 20f)
+        assertEquals(10017f, position)
+        runOnIdle { assertEquals(20, model.state.value.index); assertEquals(17, model.state.value.offset) }
         runOnIdle { model.contextChanged() }
         onNodeWithTag("mobile-person").performScrollToIndex(21)
         waitUntil { saved.get<Int>("person.index") == 21 }
@@ -115,8 +122,124 @@ class MobilePersonScreenTest {
         onNodeWithText("You're offline. Check your connection.").assertIsDisplayed()
         runOnIdle { assertEquals(21, saved.get<Int>("person.index")); fixture.api.failure = false }
         onNodeWithText("Retry").performClick()
+        val recovered = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(10500f, recovered)
         list.performScrollToIndex(22)
         waitUntil { saved.get<Int>("person.index") == 22 }
+    }
+
+    @Test fun shorterLanguageContextAndDisposalPreserveDeepTargetBeforeLongContentRestoresAndUserScrollPersists() = runComposeUiTest {
+        val saved = SavedStateHandle(mapOf("person.index" to 20, "person.offset" to 17))
+        var shown by mutableStateOf(true)
+        lateinit var model: MobilePersonViewModel
+        lateinit var fixture: MobilePersonComponentFixture
+        setContent {
+            Box(Modifier.requiredSize(400.dp, 600.dp)) {
+                MobilePersonUiFixture(saved = saved, shown = shown, onReady = { m, f -> model = m; fixture = f })
+            }
+        }
+        val list = onNodeWithTag("mobile-person")
+        val original = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(10017f, original)
+        runOnIdle {
+            fixture.api.empty = true
+            fixture.raw.value = Result.success(Settings(language = "fr-FR"))
+        }
+        onNodeWithText("No credits available.").assertExists()
+        val clamped = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertTrue(clamped < 10000f)
+        runOnIdle {
+            assertEquals(20, saved.get<Int>("person.index")); assertEquals(17, saved.get<Int>("person.offset"))
+            shown = false
+        }
+        onNodeWithTag("mobile-person").assertDoesNotExist()
+        runOnIdle {
+            assertEquals(20, saved.get<Int>("person.index")); assertEquals(17, saved.get<Int>("person.offset"))
+            fixture.api.empty = false
+            fixture.raw.value = Result.success(Settings(language = "de-DE"))
+            shown = true
+        }
+        assertEquals(original, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        runOnIdle {
+            assertEquals(listOf("42/en-US", "42/fr-FR", "42/de-DE"), fixture.api.calls)
+            assertEquals(20, saved.get<Int>("person.index")); assertEquals(17, saved.get<Int>("person.offset"))
+        }
+        list.performTouchInput { swipeUp() }
+        runOnIdle {
+            assertTrue(saved.get<Int>("person.index")!! > 20)
+            assertEquals(saved.get<Int>("person.index"), model.state.value.index)
+            assertEquals(saved.get<Int>("person.offset"), model.state.value.offset)
+        }
+    }
+
+    @Test fun retainedOwnerRemountRestoresLatestSavedPositionWithoutRecreatingOwner() = runComposeUiTest {
+        val saved = SavedStateHandle(mapOf("person.index" to 20, "person.offset" to 17))
+        var shown by mutableStateOf(true)
+        lateinit var model: MobilePersonViewModel
+        setContent {
+            Box(Modifier.requiredSize(400.dp, 600.dp)) {
+                MobilePersonUiFixture(saved = saved, shown = shown, onReady = { m, _ -> model = m })
+            }
+        }
+        val list = onNodeWithTag("mobile-person")
+        val initial = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(10017f, initial)
+        val retained = model
+        list.performScrollToIndex(23)
+        list.performTouchInput { swipeUp() }
+        val latest = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertTrue(latest > 11500f)
+        var latestIndex = 0
+        var latestOffset = 0
+        runOnIdle {
+            latestIndex = saved.get<Int>("person.index")!!
+            latestOffset = saved.get<Int>("person.offset")!!
+            assertTrue(latestIndex >= 23)
+            assertEquals(latest, (latestIndex * 500 + latestOffset).toFloat())
+            shown = false
+        }
+        onNodeWithTag("mobile-person").assertDoesNotExist()
+        runOnIdle { shown = true }
+        assertEquals(latest, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        runOnIdle {
+            assertSame(retained, model)
+            assertEquals(latestIndex, saved.get<Int>("person.index")); assertEquals(latestOffset, saved.get<Int>("person.offset"))
+        }
+    }
+
+    @Test fun deliberateMovementFromClampedBaselineBecomesTheSavedTarget() = runComposeUiTest {
+        val saved = SavedStateHandle(mapOf("bioExpanded" to true, "person.index" to 20, "person.offset" to 17))
+        lateinit var fixture: MobilePersonComponentFixture
+        setContent {
+            Box(Modifier.requiredSize(400.dp, 600.dp)) {
+                MobilePersonUiFixture(saved = saved, onReady = { _, f -> fixture = f })
+            }
+        }
+        val list = onNodeWithTag("mobile-person")
+        val original = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(10017f, original)
+        runOnIdle {
+            fixture.api.empty = true
+            fixture.raw.value = Result.success(Settings(language = "fr-FR"))
+        }
+        val baseline = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertTrue(baseline < 10000f)
+        runOnIdle { assertEquals(20, saved.get<Int>("person.index")); assertEquals(17, saved.get<Int>("person.offset")) }
+        list.performTouchInput { swipeDown() }
+        val moved = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertTrue(moved < baseline)
+        var movedIndex = 0
+        var movedOffset = 0
+        runOnIdle {
+            movedIndex = saved.get<Int>("person.index")!!
+            movedOffset = saved.get<Int>("person.offset")!!
+            assertTrue(movedIndex < 20)
+            assertEquals(moved, (movedIndex * 500 + movedOffset).toFloat())
+            fixture.api.empty = false
+            fixture.raw.value = Result.success(Settings(language = "de-DE"))
+        }
+        assertEquals(moved, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        runOnIdle { assertEquals(movedIndex, saved.get<Int>("person.index")); assertEquals(movedOffset, saved.get<Int>("person.offset")) }
     }
 
     @Test fun wrongPrimaryNeverDisplaysMetadataAndDisposedCallbacksHaveNoAuthority() = runComposeUiTest {
@@ -135,6 +258,7 @@ class MobilePersonScreenTest {
 @Composable
 private fun MobilePersonUiFixture(
     saved: SavedStateHandle = SavedStateHandle(),
+    shown: Boolean = true,
     configure: (MobilePersonComponentFixture) -> Unit = {},
     onReady: (MobilePersonViewModel, MobilePersonComponentFixture) -> Unit = { _, _ -> },
     onNavigate: (MobileDestination) -> Unit = {},
@@ -143,9 +267,9 @@ private fun MobilePersonUiFixture(
     val scope = rememberCoroutineScope()
     val fixture = remember { MobilePersonComponentFixture(scope).also(configure) }
     val model = remember { fixture.model(saved = saved) }
-    DisposableEffect(model) { model.setActive(true); onDispose { model.close(); fixture.graph.close() } }
-    SideEffect { onReady(model, fixture) }
+    DisposableEffect(model) { onDispose { model.close(); fixture.graph.close() } }
+    SideEffect { model.setActive(shown); onReady(model, fixture) }
     CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = true)) {
-        ProvideWindowClass { MobilePersonScreen(model, MobileNavigator(onNavigate), onBack) }
+        ProvideWindowClass { if (shown) MobilePersonScreen(model, MobileNavigator(onNavigate), onBack) }
     }
 }
