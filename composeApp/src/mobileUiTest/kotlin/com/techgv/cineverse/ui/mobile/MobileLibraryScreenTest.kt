@@ -74,7 +74,7 @@ class MobileLibraryScreenTest {
         val state = mutableStateOf(MobileLibraryState())
         var retries = 0
         setThemedContent {
-            MobileLibraryContent(state.value, "", {}, {}, {}, { retries++ }, {}, {}, {})
+            MobileLibraryContent(state.value, "", {}, {}, {}, { retries++ }, {}, {}, {}, {})
         }
         onNodeWithText("Loading Library…").assertExists()
         onNodeWithText("Saved on this device · Guest").assertDoesNotExist()
@@ -113,4 +113,4 @@ private fun LibraryContentFixture(
     onMore: (MediaType) -> Unit = {},
     onRetry: (MediaType) -> Unit = {},
 ) = MobileLibraryContent(MobileLibraryState(library = library, scrollReady = true), "", onTab, onMore,
-    onRetry, {}, onOpen, onSignIn, onExplore)
+    onRetry, {}, onOpen, onSignIn, onExplore, {})
