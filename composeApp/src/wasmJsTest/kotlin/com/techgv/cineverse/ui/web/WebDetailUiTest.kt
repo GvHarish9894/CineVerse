@@ -49,8 +49,8 @@ class WebDetailUiTest {
     }
 
     @Test fun delayedCatalogRestoresActualSavedScrollThenPersistsUserScrollWithoutReapplyingOnRetry() = runComposeUiTest {
-        // Item 2 is the body (cast, videos, aside) under back (0) and hero (1).
-        val entry = WebDetailOwnerTest.entry(values = mapOf("detail.index" to "2", "detail.offset" to "37"))
+        // Item 1 is the body (cast, videos, aside) under the hero (0), which carries the Back link once content exists.
+        val entry = WebDetailOwnerTest.entry(values = mapOf("detail.index" to "1", "detail.offset" to "37"))
         val gate = CompletableDeferred<Unit>()
         val api = WebDetailCatalogFake()
         val fixture = movieDto()
@@ -80,7 +80,7 @@ class WebDetailUiTest {
         runOnIdle {
             assertEquals(listOf("movie:7:en-US"), api.calls)
             assertFalse(gate.isCompleted)
-            assertEquals("2", entry.getString("detail.index"))
+            assertEquals("1", entry.getString("detail.index"))
             assertEquals("37", entry.getString("detail.offset"))
         }
         runOnIdle { gate.complete(Unit) }
@@ -88,16 +88,16 @@ class WebDetailUiTest {
         val list = onNodeWithTag("web-detail")
         val restoredPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         runOnIdle {
-            assertEquals(2, entry.getInt("detail.index"))
+            assertEquals(1, entry.getInt("detail.index"))
             assertEquals(37, entry.getInt("detail.offset"))
         }
-        // Compare actual lazy-list semantics with an index-2 scroll, not just unchanged saved scalars.
-        list.performScrollToIndex(2)
-        val indexTwoPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
-        assertEquals(37f, restoredPosition - indexTwoPosition)
-        waitUntil { entry.getInt("detail.index") == 2 && entry.getInt("detail.offset") == 0 }
+        // Compare actual lazy-list semantics with an index-1 scroll, not just unchanged saved scalars.
         list.performScrollToIndex(1)
+        val indexOnePosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(37f, restoredPosition - indexOnePosition)
         waitUntil { entry.getInt("detail.index") == 1 && entry.getInt("detail.offset") == 0 }
+        list.performScrollToIndex(0)
+        waitUntil { entry.getInt("detail.index") == 0 && entry.getInt("detail.offset") == 0 }
         val userPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         runOnIdle {
             account = known
@@ -107,7 +107,7 @@ class WebDetailUiTest {
         waitUntil { owner.state.value.retained?.title == "Retried fixture film" }
         assertEquals(userPosition, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
         runOnIdle {
-            assertEquals(1, entry.getInt("detail.index"))
+            assertEquals(0, entry.getInt("detail.index"))
             assertEquals(0, entry.getInt("detail.offset"))
         }
     }
@@ -173,7 +173,18 @@ class WebDetailUiTest {
         }
         fun band() = onNodeWithTag("detail-hero").getBoundsInRoot()
         fun viewport() = onNodeWithTag("viewport").getBoundsInRoot()
+        fun backLink() = onNodeWithText("Back").getBoundsInRoot()
+        fun title() = onNodeWithText("Fixture film (2026)").getBoundsInRoot()
         fun near(expected: Dp, actual: Dp) = assertTrue(abs(expected.value - actual.value) < 0.5f, "expected $expected, was $actual")
+        // No strip: the band starts at the list top and Back sits inside it, 16dp below its top edge, never over the title.
+        fun backInsideBand() {
+            assertTrue(abs(band().top.value - onNodeWithTag("web-detail").getBoundsInRoot().top.value) <= 1f, "band top ${band().top}")
+            onAllNodesWithText("Back").assertCountEquals(1)
+            assertTrue(backLink().left >= band().left && backLink().right <= band().right && backLink().bottom <= band().bottom, "Back ${backLink()} in ${band()}")
+            near(band().top + 16.dp, backLink().top)
+            assertTrue(backLink().bottom <= title().top, "Back ${backLink()} above title ${title()}")
+        }
+        backInsideBand()
         // 1440 wide: 16:9 would be 810dp, so the band stops at the 760dp cap; it spans the viewport edge to edge.
         near(viewport().left, band().left)
         near(1440.dp, band().width)
@@ -187,10 +198,12 @@ class WebDetailUiTest {
         runOnIdle { width = 390.dp }
         near(390.dp, band().width)
         assertTrue(band().height > 390.dp * 9f / 16f + 100.dp, "phone band follows its content: ${band().height}")
+        backInsideBand()
         // No backdrop: nothing to show at 16:9, so the band is only as tall as its content.
         runOnIdle { width = 1440.dp; detail = movie() }
         near(1440.dp, band().width)
         assertTrue(band().height < 700.dp, "no-backdrop band stays content-height: ${band().height}")
+        backInsideBand()
     }
 
     @Test fun trailerCallbacksCarryTheFullValidatedVideoListAndTheClickedVideo() = runComposeUiTest {
@@ -337,6 +350,8 @@ class WebDetailUiTest {
                 {}, { retries++ }, { _, _, _ -> }, {}, {}, { _, _, _ -> })
         }
         onNodeWithContentDescription("Loading title…").assertExists()
+        // Without a hero, Back stays reachable as its own row.
+        onNodeWithText("Back").assertExists()
         runOnIdle { state = WebDetailReadState(SectionState.Error(SectionErrorKind.Offline), retained = movie()) }
         onNodeWithText("Offline. Could not load this title. Last loaded detail is retained, not a fresh result.").assertExists()
         onNodeWithText("Retry").performClick()
@@ -347,6 +362,7 @@ class WebDetailUiTest {
         runOnIdle { state = WebDetailReadState(SectionState.Error(SectionErrorKind.NotAvailable)) }
         onNodeWithTag("web-detail").performScrollToIndex(0)
         onNodeWithText("Title not found or unavailable.").assertExists()
+        onNodeWithText("Back").assertExists()
         onNodeWithContentDescription("Loading title…").assertDoesNotExist()
         onNodeWithText("Retry").assertDoesNotExist()
     }

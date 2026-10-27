@@ -136,8 +136,8 @@ internal fun WebDetailContent(
         renderedSession != null && hasLibrary && renderedContext != null &&
         state.producer.completedWebDetail(validated.ref, renderedContext.appGeneration) != null
     LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-detail"), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        // History back: the origin page is not known here, so the link never claims one.
-        item("back") { WebPage { WebBackLink("Back", back, Modifier.padding(top = 12.dp)) } }
+        // History back: the origin page is not known here, so the link never claims one. With a hero it sits inside the band.
+        if (detail == null) item("back") { WebPage { WebBackLink("Back", back, Modifier.padding(top = 12.dp)) } }
         if (storage != null) item("storage") { WebPage { WebStorageNotice(storage, retryReads, Modifier.testTag("detail-storage-recovery")) } }
         if (state.freshnessUnverified) item("preferences") {
             WebPage {
@@ -155,7 +155,7 @@ internal fun WebDetailContent(
         if (detail != null) {
             item("hero") {
                 WebDetailHero(detail, account, actionable, { kind -> act(kind, renderedContext, renderedSession) }, playTrailer,
-                    { id -> navigate(WebRoute.Person(id)) })
+                    { id -> navigate(WebRoute.Person(id)) }, back)
             }
             if (detail.hasWebDetailBody()) item("body") { WebDetailBody(detail, navigate, playTrailer) }
             val recommendations = detail.recommendations.filter { it.ref.id > 0 && it.mediaType == it.ref.mediaType }.distinctBy { it.ref }
@@ -194,14 +194,15 @@ private fun Detail.hasWebDetailBody() = webDetailCast().isNotEmpty() || webDetai
 
 @Composable
 private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boolean, act: (LibraryKind) -> Unit,
-                          playTrailer: (Title, List<Video>, Video) -> Unit, openPerson: (Int) -> Unit) {
+                          playTrailer: (Title, List<Video>, Video) -> Unit, openPerson: (Int) -> Unit, back: () -> Unit) {
     // Full-bleed (the Detail list has no side padding); the whole backdrop shows on desktop, Crop applies only on taller (phone) bands.
     // No backdrop, no art to show: the band stays content-height.
     Box(Modifier.fillMaxWidth().testTag("detail-hero").then(if (detail.backdropPath != null) Modifier.backdropBand() else Modifier),
         contentAlignment = Alignment.CenterStart) {
         if (detail.backdropPath != null) PaletteArt(webImage(detail.backdropPath, "w1280"), detailPalette, ArtStyle.Backdrop, Modifier.matchParentSize())
         Box(Modifier.matchParentSize().webDetailHeroScrim())
-        WebPage(Modifier.padding(top = 16.dp, bottom = 40.dp)) {
+        // Top padding reserves the Back row (16dp + its 48dp min height) so content that fills the band never sits under it.
+        WebPage(Modifier.padding(top = 64.dp, bottom = 40.dp)) {
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val phone = maxWidth <= 640.dp
                 val side = maxWidth >= 300.dp + 44.dp + 440.dp
@@ -217,6 +218,7 @@ private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boo
                 else Column(verticalArrangement = Arrangement.spacedBy(28.dp)) { poster(); info(Modifier.fillMaxWidth()) }
             }
         }
+        WebPage(Modifier.align(Alignment.TopStart).padding(top = 16.dp)) { WebBackLink("Back", back) }
     }
 }
 
