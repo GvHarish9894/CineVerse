@@ -55,8 +55,6 @@ import com.techgv.cineverse.presentation.LibraryWrite
 import com.techgv.cineverse.presentation.LibraryWriteOutcome
 import com.techgv.cineverse.data.library.LibraryWriteResult
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.browser.window
-import org.w3c.dom.events.Event
 
 /** G4 extractors: identity and page come from the SAME immutable holder result; unknown origin is null. */
 private val libraryResultIdentity: (LibraryUiState) -> WebLibraryResultIdentity? = { state ->
@@ -85,13 +83,7 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     val account = remember(runtime) { WebAccountOwner(runtime, uiScope) }
     DisposableEffect(account) { onDispose { account.close() } }
     val accountState by account.state.collectAsState()
-    val pageVisible = rememberPageVisible()
-    LaunchedEffect(approval, pageVisible) { if (pageVisible) approval.approvalReturned() } // Hint only, never identity.
-    DisposableEffect(approval) {
-        val focused: (Event) -> Unit = { approval.approvalReturned() }
-        window.addEventListener("focus", focused)
-        onDispose { window.removeEventListener("focus", focused) }
-    }
+    // Return hints are the runtime's soft session reads; forwarding them to the approval owner would busy it on every tab switch.
     val signInFocus = remember { FocusRequester() }
     val homeFocus = remember { FocusRequester() }
     // Identity follows the authoritative session (openRate requires holder identity == the rendered session).
