@@ -156,6 +156,8 @@ internal class MobileDetailRootBinding(private val graph: MobileApplication) {
             graph.actions.closeRate(next)
             return null
         }
+        // Fresh verified intent supersedes an older context-close continuation.
+        operation++
         return next
     }
 
