@@ -1,0 +1,59 @@
+# Web + Android + iOS completion — 2026-10-27
+
+## Current operator decision
+
+Stop the local deployed preview and implement the remaining web and both mobile apps in parallel. This supersedes web-first/mobile-first holds. PID22225 was stopped; port49272 has no listener. Do NOT restart the persistent preview unless requested. Temporary, owned loopback test servers must be stopped after checks.
+
+Use `cliproxyapi/gpt-6.1-sol` explicitly for every subagent. No provider/model/CLI/auth fallback. Preserve partial work and report terminal provider/infrastructure failures; retries need operator direction. Recovered Kotlin incremental diagnostics inside a successful invocation are recorded, not silently counted as terminal build failures.
+
+## Privacy and safety boundaries
+
+- Repository/worktrees, managed artifacts, required exact SDK/Gradle/Xcode paths and owned test temp only. No Desktop, Pictures, Photos, iCloud/cloud-storage or broad home searches; use repo kit docs. Never grant/change OS privacy permissions.
+- Use isolated agent-owned Chrome profiles and emulator/simulator test hosts only. Current request covers necessary local product validation; no personal profiles/physical devices, resets, user-data migration/destruction, real account writes or permission bypasses. Confirm device ownership before use. Native UI tests are now a required completion gate, not perpetually waived by compilation.
+- Real TMDB-account acceptance still requires operator interaction. External deployment needs a supplied target/credentials; do not invent either or claim it happened. No push until correct GitHub identity is verified; never switch global auth.
+- Six worktrees including main maximum, retain milestone branches; one writer per worktree. Exactly ONE CineVerse Gradle/Karma/browser/device-test lease at a time. Do not touch unrelated Zuper builds/daemons.
+- Commit author AND committer: GvHarish9894 <hariharangv9894@gmail.com>. Main remains docs-only; preserve owner IDE/app/staging. Commit docs with explicit `--only` paths.
+
+## Existing checkpoints (read actual artifacts before continuing)
+
+| Slot | Branch/head | Current state |
+|---|---|---|
+| C3 `../CineVerse-c3-browser-storage` | `web-integration@d1bc075` | Last web build: implemented routes, polish, popup/session/redirect and Detail-back fixes; server stopped. Known keyboard/AX/font and final live checks open. |
+| C5 `../CineVerse-c5-catalog` | `mobile-integration@6a5435f` | Search/storage/Detail/rate/Library source integrated. Root41 host passes and five native compile targets. Root follow-up closes local-read P1 but one introduced same-owner fresh-prompt close continuation remains. Library tab not yet bound; Profile/Person/Season/trailer destinations incomplete. |
+| C1 `../CineVerse-c1-native-auth` | `mobile-person-component@7c505c6` | Person20 host/5compile prior a97140c; latest scroll-only correction + tests uncompiled; needs corrected compile + targeted review. |
+| C2 `../CineVerse-c2-web-http` | `mobile-season-component@c9ae87d` | Season29 host/5compile pass;17 UI compiled-only; targeted scroll follow-up review pending. |
+| retained design | `l3-design@b5e69a6` | Owner/Safari milestone, untouched. |
+
+Prior evidence is not final-head acceptance. Five historical iOS failures stay enabled and explicit: two unsupported StateRestorationTester helper cases and three unconfirmed navigation/storage-recovery UI failures. Reproduce/diagnose on owned test hosts; never disable or count compilation as passes.
+
+## Partitioned lane board / first wave
+
+This is MULTI-SEAM. Independent components have exclusive writers; parent merges only cleared handoffs, then one integration-only owner wires app roots.
+
+| Lane | Isolated cwd | Exclusive contract/files | Authority now | Next gate / handoff | Independence |
+|---|---|---|---|---|---|
+| W1 web keyboard/AX | C3, new `web-final-accessibility` from d1bc075 | Web root/header/dialog-trigger focus, trailer DOM focus, real modal semantics, corresponding web tests; minimal common overlay hook only if native defaults preserved | Source/tests/commit; NO initial build lease | Focused browser + real production-document keyboard/AX checks after source handoff; native compatibility compile if shared UI changes | Separate web platform/rendering seam, no mobile root files |
+| M1 corrected Person | C1/7c505c6 | Same five native Person component/test files only | Sole native host/compile lease for corrected five-target compilation; no unrelated successful-host repeats | Stable exact head + source parity; targeted Person review; later rendered UI checks | Public component, no root edits |
+| M2 remaining root prompt P1 | C5/6a5435f | MobileDetailEntry and root-specific regression/fixture only | Source/tests/commit ONLY while C1 builds | New real same-owner recovery opens prompt during context refresh; follow-up review/gates | Root continuation seam, no shared producer or component redesign |
+| M3 Season closure | C2/c9ae87d | Exact accepted scroll-fix follow-up | Read/search-only review, no builds/edits | Named P1 closure or exact correction; slot reused after handoff | Stable component independent of root/Person |
+
+## Subsequent delivery stages (not optional omissions)
+
+### Web
+
+1. Keyboard/AX: actual iframe forward/back Tab path, stable focus return to actual trigger, header dead/split focus, narrow logo name, modal role/name/controls exposed. Reproduce on the real component path, not injected-iframe approximations.
+2. Font/asset failure: recoverable/static-font fallback with no uncaught fetch leaving session/settings stuck. Separate bootstrap/font seam after W1 handoff; preserve house typography when assets load.
+3. Independent review of polish + later fixes, desktop/phone screenshots from repo kit expectations, real production-document navigation/session/approval/refresh checks. Fake transports can test lifecycle and failures but not claim real-account approval.
+4. Safari/mobile browser, corruption/quota/private/eviction/multitab failures, CSP/BFF/header/CSRF/session/error redaction and production secret scans. Explicit evidence and residual blockers, no fabricated deployed acceptance.
+
+### Android + iOS
+
+1. Clear current root/Person/Season findings, merge reviewed components, bind Person/Season per actual navigation-entry lifecycle (same typed graph, no parallel business stacks).
+2. Native Profile/Settings + sign-in/account dialog flow as bounded components using existing settings/auth/import holders, actual platform approval hosts and captured sessions. Wire Library tab and real sign-in/explore CTAs; no no-op buttons or guessed all-account counts. Sign-out/import/default-offer outcomes honest, no automatic write replay.
+3. Validated YouTube trailer open-out/platform URL adapters (and genuine sharing if shipped); no fictitious movie/episode streams/player controls.
+4. Owned Android emulator + hosted iOS simulator UI validation for new screens, keyboard/insets/accessibility/sheets/back/tab/foreground/restoration; diagnose five old iOS failures with exact traces. Resolve actual Skiko/runtime compatibility if reproduced, not arbitrary upgrades to silence warnings.
+5. Combined final-head host/native/UI/package/TV regression gates, independent integrated review, screenshots and explicit operator account/hardware acceptance boundaries.
+
+## Finish criteria
+
+No known reachable P0/P1 remains unaddressed; each delivered component and root is independently reviewed; final-head validation artifacts distinguish executed, compiled-only and blocked cases. All live test servers/profiles are cleaned; persistent preview stays off. Product acceptance, external deployment and push are reported separately from local implementation; no claim of all-done while real-account/deployment requirements remain unsupplied.
