@@ -22,7 +22,7 @@ import io.ktor.http.HttpStatusCode
 import kotlin.test.*
 
 class WebApprovalDialogTest {
-    @Test fun prepareAndContinueAreSeparateClicksAndNullStyleOpenerHasNoSuccessClaim() = runComposeUiTest {
+    @Test fun continueToTmdbIsOneClickAndNullStyleTabHasNoSuccessClaim() = runComposeUiTest {
         val f = WebApprovalFixture()
         try {
             f.runtime.start()
@@ -31,15 +31,17 @@ class WebApprovalDialogTest {
             setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
                 WebApprovalDialog(f.owner, remember { FocusRequester() })
             }
-            onNodeWithTag("web-approval-content").performScrollToNode(hasText("Prepare sign-in"))
-            onNodeWithText("Prepare sign-in").performClick()
-            waitUntil { f.owner.state.value.canOpen }
-            assertTrue(f.opened.isEmpty())
+            onNodeWithText("Prepare sign-in").assertDoesNotExist()
             onNodeWithTag("web-approval-content").performScrollToNode(hasText("Continue to TMDB"))
             onNodeWithText("Continue to TMDB").performClick()
-            assertEquals(1, f.opened.size)
-            onNodeWithText("An open was requested.", substring = true).assertExists()
+            assertEquals(1, f.tabs.size) // Opened inside the click, before the start POST.
+            waitUntil { f.owner.state.value.canOpen }
+            assertEquals(listOf(WebApprovalFixture.APPROVE_URL), f.tabs.single().navigated)
+            assertTrue(f.opened.isEmpty())
+            onNodeWithText("Continue to TMDB").assertDoesNotExist()
+            onNodeWithText("If no tab appeared, allow popups", substring = true).assertExists()
             onNodeWithTag("web-approval-content").performScrollToNode(hasText("Open TMDB again"))
+            onNodeWithText("Open TMDB again").performClick()
             onNodeWithText("Open TMDB again").performClick()
             assertSame(f.opened[0], f.opened[1])
             assertEquals(1, f.count("/api/auth/start"))
@@ -114,7 +116,7 @@ class WebApprovalDialogTest {
                 WebApprovalDialog(f.owner, trigger)
             }
             onNodeWithText("Sign in trigger").performClick()
-            runOnIdle { f.owner.startApproval() }
+            runOnIdle { f.owner.continueToTmdb() }
             waitUntil { f.owner.state.value.canOpen }
             onNodeWithContentDescription("Close").requestFocus()
             onNodeWithContentDescription("Close").performKeyInput { pressKey(Key.Escape) }
@@ -131,17 +133,18 @@ class WebApprovalDialogTest {
             f.owner.show()
             setThemedContent(ShellStyle.Web) { WebApprovalDialog(f.owner, remember { FocusRequester() }) }
             onNodeWithText("Browser identity is being verified.").assertExists()
-            onNodeWithText("Prepare sign-in").assertDoesNotExist()
+            onNodeWithText("Continue to TMDB").assertDoesNotExist()
             runOnIdle { f.sessionStatus = HttpStatusCode.ServiceUnavailable; f.runtime.start() }
             waitUntil { f.owner.state.value.session is WebSessionState.Failed }
             onNodeWithText("Browser identity is unknown.", substring = true).assertExists()
-            onNodeWithText("Prepare sign-in").assertDoesNotExist()
+            onNodeWithText("Continue to TMDB").assertDoesNotExist()
             runOnIdle { f.sessionStatus = HttpStatusCode.OK }
             onNodeWithTag("web-approval-content").performScrollToNode(hasText("Check session"))
             onNodeWithText("Check session").performClick()
             waitUntil { f.owner.state.value.canStart }
-            onNodeWithText("Prepare sign-in").assertExists()
+            onNodeWithText("Continue to TMDB").assertExists()
             assertEquals(0, f.count("/api/auth/start"))
+            assertTrue(f.tabs.isEmpty())
         } finally { f.dispose() }
     }
 
@@ -168,7 +171,7 @@ class WebApprovalDialogTest {
             waitUntil { f.owner.state.value.phase == WebApprovalPhase.Uncertain && f.owner.state.value.canCheck }
             assertEquals(1, f.count("/api/auth/cancel"))
             onNodeWithText("Continue to TMDB").assertDoesNotExist()
-            onNodeWithText("Prepare sign-in").assertDoesNotExist()
+            onNodeWithText("Open TMDB again").assertDoesNotExist()
         } finally { f.dispose() }
     }
 
@@ -178,7 +181,7 @@ class WebApprovalDialogTest {
         try {
             f.runtime.start()
             waitUntil { f.runtime.session.value is WebSessionState.Ready }
-            f.owner.show(); f.owner.startApproval()
+            f.owner.show(); f.owner.continueToTmdb()
             waitUntil { f.owner.state.value.canOpen }
             setThemedContent(ShellStyle.Web) {
                 key(route) { Text("Route: $route") }
@@ -211,13 +214,13 @@ class WebApprovalDialogTest {
                 }
             }
             onNodeWithText("Sign in to CineVerse").assertExists()
-            listOf("Prepare a sign-in request, then continue to themoviedb.org in a new tab.", "Sign in there and approve CineVerse.",
-                "Come back to this tab and check your session.").forEach { onNodeWithText(it).assertExists() }
+            listOf("Choose Continue to TMDB to open themoviedb.org in a new tab.",
+                "Approve CineVerse on themoviedb.org, then come back to this tab.").forEach { onNodeWithText(it).assertExists() }
             onNodeWithTag("web-approval-content").performScrollToNode(hasText("Not now"))
             onNodeWithText("Not now").assertIsDisplayed()
             runOnIdle { width = WindowClass.Desktop }
-            onNodeWithTag("web-approval-content").performScrollToNode(hasText("Prepare sign-in"))
-            onNodeWithText("Prepare sign-in").assertIsDisplayed()
+            onNodeWithTag("web-approval-content").performScrollToNode(hasText("Continue to TMDB"))
+            onNodeWithText("Continue to TMDB").assertIsDisplayed()
             onNodeWithContentDescription("Close").performClick()
             waitUntil { f.owner.state.value.phase == WebApprovalPhase.Closed }
             onNodeWithTag("web-approval-dialog").assertDoesNotExist()

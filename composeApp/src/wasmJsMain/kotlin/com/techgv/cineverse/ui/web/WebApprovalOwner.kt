@@ -9,8 +9,16 @@ import com.techgv.cineverse.di.WebSessionState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-/** Synchronous user-gesture callback, fed only runtime-validated descriptors. Unit does NOT prove a tab opened. */
-fun interface WebApprovalOpener {
+/** Synchronous user-gesture callbacks, fed only runtime-validated descriptors. Unit does NOT prove a tab opened. */
+interface WebApprovalOpener {
+    /** A placeholder tab requested inside the gesture, before any await; popup blockers allow nothing later. */
+    interface PendingTab {
+        /** Only ever the runtime-validated exact TMDB approve URL. */
+        fun navigate(url: String)
+        fun close()
+    }
+    fun openPending(): PendingTab
+    /** "Open TMDB again": a later explicit gesture reopening the same validated descriptor. */
     fun open(approval: WebApprovalAttempt)
 }
 
@@ -22,7 +30,6 @@ data class WebApprovalState(
     val phase: WebApprovalPhase,
     val session: WebSessionState,
     val issue: WebApprovalIssue? = null,
-    val openRequested: Boolean = false,
     val canStart: Boolean = false,
     val canOpen: Boolean = false,
     val canCheck: Boolean = false,
@@ -30,8 +37,9 @@ data class WebApprovalState(
 
 /**
  * One owner per browser APP lifetime, above routes; route changes must not close/recreate it.
- * Root injects the existing runtime and opener, hosts WebApprovalDialog, forwards return hints to
- * approvalReturned(), and closes this owner only at app teardown. No listeners, polling or persistence.
+ * Root injects the existing runtime and opener, hosts WebApprovalDialog and closes this owner only at app teardown.
+ * Return hints are the runtime's soft session reads; a verified sign-in closes this owner through runtime.session.
+ * approvalReturned() is the explicit "Check session" read. No listeners, polling or persistence.
  * All methods run on the app's UI dispatcher. Disposal revokes feedback, never cancels server attempts.
  */
 class WebApprovalOwner(
@@ -69,10 +77,20 @@ class WebApprovalOwner(
         publish(WebApprovalPhase.Ready, null)
     }
 
-    fun startApproval() {
+    /**
+     * "Continue to TMDB": invoke directly from the click handler. The placeholder tab opens before any suspension;
+     * it is navigated only to the validated approve URL of THIS current attempt, otherwise closed.
+     */
+    fun continueToTmdb() {
         if (!active() || !visible || busy || mayHaveAttempt || !guest()) return
+        val tab = try { opener.openPending() } catch (_: Exception) {
+            // Browser exceptions may contain URLs. Retain only a fixed, non-sensitive issue; nothing was started.
+            publish(WebApprovalPhase.Error, WebApprovalIssue.Open)
+            return
+        }
         busy = true
         val ticket = ++revision
+        var navigated = false
         publish(WebApprovalPhase.Starting, null)
         scope.launch {
             try {
@@ -85,7 +103,11 @@ class WebApprovalOwner(
                 val result = runtime.startApproval() // Repository bootstraps CSRF and validates the exact approve URL.
                 if (current(ticket)) {
                     approval = result
-                    publish(WebApprovalPhase.Waiting, null)
+                    try {
+                        tab.navigate(result.approveUrl)
+                        navigated = true
+                        publish(WebApprovalPhase.Waiting, null)
+                    } catch (_: Exception) { publish(WebApprovalPhase.Error, WebApprovalIssue.Open) }
                 }
             } catch (cancelled: CancellationException) { throw cancelled
             } catch (failure: TmdbException) {
@@ -98,26 +120,23 @@ class WebApprovalOwner(
             } finally {
                 finishOperation()
             }
-        }
+        }.invokeOnCompletion { if (!navigated) tab.close() } // Also when revoked before the body ever ran.
     }
 
-    /** Invoke directly from Continue's click handler, never after a suspend or a focus/visibility hint. */
-    fun continueToTmdb() {
-        if (!active() || !visible || busy || !guest()) return
+    /** "Open TMDB again": invoke directly from the click handler, never after a suspend or a focus/visibility hint. */
+    fun openTmdbAgain() {
+        if (!active() || !visible || busy || cancelRequested || !guest()) return
         val descriptor = approval ?: return
-        val ticket = revision
-        mutable.value = mutable.value.copy(openRequested = true)
-        if (!current(ticket) || busy || cancelRequested || !guest() || approval !== descriptor) return
         try {
             opener.open(descriptor)
-            if (current(ticket)) publish(WebApprovalPhase.Waiting, null)
+            publish(WebApprovalPhase.Waiting, null)
         } catch (_: Exception) {
             // Browser exceptions may contain the full URL. Retain only a fixed, non-sensitive issue.
-            if (current(ticket)) publish(WebApprovalPhase.Error, WebApprovalIssue.Open)
+            publish(WebApprovalPhase.Error, WebApprovalIssue.Open)
         }
     }
 
-    /** Root's existing focus/visibility/callback hook may call this. Query flags are not identity proof. */
+    /** "Check session": an explicit read that can close on a verified sign-in. Query flags are not identity proof. */
     fun approvalReturned() {
         if (!active() || !visible || busy || signedIn()) return
         busy = true

@@ -334,7 +334,12 @@ class WebSharedModulesTest {
             source.write(current, MediaRef(MediaType.Movie, 7), LibraryKind.WATCHLIST,
                 LibraryState(true, true, false, null, emptySet()))
             assertEquals(Long.MIN_VALUE.toString(), f.calls.last { it.method == HttpMethod.Post }.headers["X-CV-Expected-Session-Generation"])
-            until { f.runtime.session.value is WebSessionState.Ready }
+            until { f.runtime.session.value == WebSessionState.Ready(current) }
+            tick().await()
+            // Unchanged identity: focus/visibility are soft reads that keep Ready(b), its verification and the generation.
+            val sessions = mutableListOf<WebSessionState>()
+            val recorder = f.uiScope.launch(start = CoroutineStart.UNDISPATCHED) { f.runtime.session.collect { sessions += it } }
+            val generation = f.koin.get<GenerationCounter>().current
             val count = f.count("/api/session")
             focus(); until { f.count("/api/session") > count }
             val afterFocus = f.count("/api/session")
@@ -342,6 +347,10 @@ class WebSharedModulesTest {
             tick().await(); val stable = f.bus.changes.value; val calls = f.count("/api/session")
             tick().await(); tick().await()
             assertEquals(stable, f.bus.changes.value); assertEquals(calls, f.count("/api/session"))
+            recorder.cancel()
+            assertEquals(listOf<WebSessionState>(WebSessionState.Ready(current)), sessions)
+            assertEquals(generation, f.koin.get<GenerationCounter>().current)
+            assertTrue(f.auth.isVerifiedSession(current))
         } finally { f.gate?.complete(Unit); removeRealm(peer) }
     } }
 

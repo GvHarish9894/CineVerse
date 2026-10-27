@@ -31,8 +31,10 @@ class WebRuntimeContextInvalidationsTest {
         val database = BrowserDatabase(name)
         val bus = BrowserChanges(channel)
         var identity: AuthSession? = AuthSession(AccountObjectId("a"), "A", Long.MAX_VALUE)
+        var sessionReads = 0
         val client = HttpClient(MockEngine { request ->
             val body = if (request.url.encodedPath == "/api/session") {
+                sessionReads++
                 document.cookie = "cv_csrf=invalidations; Path=/; SameSite=Strict"
                 identity?.let { """{"signedIn":true,"sessionGeneration":"${it.sessionGeneration}","accountObjectId":"${it.accountObjectId.value}","displayName":"${it.displayName}"}""" }
                     ?: """{"signedIn":false,"sessionGeneration":"0","accountObjectId":null,"displayName":null}"""
@@ -67,6 +69,25 @@ class WebRuntimeContextInvalidationsTest {
             emitsAfterBump(bumps = true) { settings.update { it.copy(language = "ta-IN") } }
             emitsAfterBump(bumps = true) { runtime.revalidateSession() }
             runtime.session.first { it == WebSessionState.Ready(identity) }
+            settle()
+            // Focus/visibility/peer-session hints with an unchanged identity: a background read only.
+            val sessions = mutableListOf<WebSessionState>()
+            val recorder = observer.launch(start = CoroutineStart.UNDISPATCHED) { runtime.session.collect { sessions += it } }
+            val quiet = received; val quietGeneration = generation.current; val reads = sessionReads
+            invalidationFocus(); invalidationVisible(); bus.publish(BrowserChangeTopic.Session)
+            invalidationUntil { sessionReads > reads }
+            settle()
+            assertEquals(quiet, received, "an unchanged identity emits no invalidation")
+            assertEquals(quietGeneration, generation.current)
+            assertEquals(listOf<WebSessionState>(WebSessionState.Ready(identity)), sessions, "a hint never shows Checking")
+            // A changed verified identity takes the hard transition and bumps the generation exactly once.
+            identity = AuthSession(AccountObjectId("b"), "B", 7)
+            invalidationFocus()
+            runtime.session.first { it == WebSessionState.Ready(identity) }
+            settle()
+            recorder.cancel()
+            assertEquals(quietGeneration + 1, generation.current)
+            assertTrue(received > quiet)
             emitsAfterBump(bumps = false) { runtime.reportStorageFailure(BrowserStorageException(BrowserStorageFailure.Quota)) }
             emitsAfterBump(bumps = false) { runtime.retryStorage() }
             assertNull(runtime.storageFailure.value)
@@ -96,6 +117,10 @@ private suspend fun invalidationUntil(condition: () -> Boolean) {
 
 @JsFun("() => crypto.randomUUID()")
 private external fun invalidationId(): String
+@JsFun("() => window.dispatchEvent(new Event('focus'))")
+private external fun invalidationFocus()
+@JsFun("() => { Object.defineProperty(document, 'visibilityState', {configurable:true,value:'visible'}); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; }")
+private external fun invalidationVisible()
 @JsFun("() => new Promise(resolve => setTimeout(() => resolve(null), 20))")
 private external fun invalidationTick(): Promise<JsAny?>
 @JsFun("name => new Promise((resolve, reject) => { const r = indexedDB.deleteDatabase(name); r.onsuccess = () => resolve(null); r.onerror = () => reject(r.error); r.onblocked = () => reject(new Error('isolated cleanup blocked')); })")

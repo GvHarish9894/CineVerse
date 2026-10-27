@@ -41,14 +41,12 @@ fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester) {
             Text("We use your TMDB account, so your watchlist, favourites and ratings live on TMDB instead of only in this browser.",
                 Modifier.padding(top = 10.dp), style = bodyStyle(15.5.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.8f))
             Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ApprovalStep(1, "Prepare a sign-in request, then continue to themoviedb.org in a new tab.")
-                ApprovalStep(2, "Sign in there and approve CineVerse.")
-                ApprovalStep(3, "Come back to this tab and check your session.")
+                ApprovalStep(1, "Choose Continue to TMDB to open themoviedb.org in a new tab.")
+                ApprovalStep(2, "Approve CineVerse on themoviedb.org, then come back to this tab.")
             }
             Text(when (state.phase) {
-                WebApprovalPhase.Starting -> "Preparing your request. No TMDB tab has been opened."
-                WebApprovalPhase.Waiting -> if (state.openRequested) "An open was requested. If no tab appeared, allow popups and choose Open TMDB again. After approving, return here and check session."
-                    else "Your request is ready. Choose Continue to TMDB to request a new tab."
+                WebApprovalPhase.Starting -> "Requesting sign-in. The new tab continues to themoviedb.org once the request is ready."
+                WebApprovalPhase.Waiting -> "Approve CineVerse on themoviedb.org, then come back to this tab. If no tab appeared, allow popups and choose Open TMDB again."
                 WebApprovalPhase.Checking -> "Checking the browser session. This does not retry sign-in or cancellation."
                 WebApprovalPhase.Cancelling -> "Cancelling browser sign-in requests. Any already committed sign-in stays signed in."
                 WebApprovalPhase.Uncertain -> when (state.issue) {
@@ -56,21 +54,21 @@ fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester) {
                     else -> "The request may have reached the server, but no usable approval link was received. Check session or choose Not now to cancel browser sign-in requests."
                 }
                 WebApprovalPhase.Error -> when (state.issue) {
-                    WebApprovalIssue.StartUnsent -> "Approval did not start. You can explicitly try preparing it again."
-                    WebApprovalIssue.Open -> "The browser could not request a new tab. You can try opening the same request again."
+                    WebApprovalIssue.StartUnsent -> "Sign-in did not start. You can choose Continue to TMDB to try again."
+                    WebApprovalIssue.Open -> "The browser could not open a TMDB tab. Allow popups for this site, then try again."
                     else -> "Session could not be checked. Retry the read; sign-in requests will not be replayed."
                 }
-                else -> "Prepare a request when your browser session is verified as signed out."
+                else -> "Continue to TMDB when your browser session is verified as signed out."
             }, Modifier.padding(top = 6.dp), style = bodyStyle(15.sp), color = Tokens.Colors.TextPrimary)
             Text(when (val session = state.session) {
                 WebSessionState.Checking -> "Browser identity is being verified."
-                is WebSessionState.Failed -> "Browser identity is unknown. Check session before starting or opening TMDB."
+                is WebSessionState.Failed -> "Browser identity is unknown. Check session before continuing to TMDB."
                 is WebSessionState.Ready -> if (session.session == null) "No verified browser sign-in is currently shown. Returning from TMDB alone is not proof of sign-in."
                     else "This browser has a verified signed-in identity."
             }, style = bodyStyle(14.sp), color = Tokens.Colors.TextSecondary)
             FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (state.canStart) PillButton("Prepare sign-in", owner::startApproval)
-                if (state.canOpen) PillButton(if (state.openRequested) "Open TMDB again" else "Continue to TMDB", owner::continueToTmdb)
+                if (state.canStart) PillButton("Continue to TMDB", owner::continueToTmdb)
+                if (state.canOpen) PillButton("Open TMDB again", owner::openTmdbAgain)
                 PillButton("Check session", owner::approvalReturned, variant = ButtonVariant.Ghost, enabled = state.canCheck)
                 PillButton("Not now", owner::dismiss, variant = ButtonVariant.Ghost, enabled = state.phase != WebApprovalPhase.Cancelling)
             }

@@ -134,6 +134,30 @@ class WebRuntimeUiTest {
         } finally { f.close() }
     }
 
+    @Test fun focusAndVisibilityHintsWithAnUnchangedIdentityNeitherCheckNorReloadTheRoute() = runComposeUiTest {
+        val f = Fixture()
+        val history = FakeHistory()
+        try {
+            f.failSession = false; f.failSettings = false
+            f.runtime.start()
+            setContent { WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) }
+            waitUntil(timeoutMillis = 10_000) { f.catalogReads >= 7 }
+            onNodeWithText("Discover your next favourite").assertExists()
+            val sessions = mutableListOf<WebSessionState>()
+            val recorder = CoroutineScope(Dispatchers.Unconfined).launch { f.runtime.session.collect { sessions += it } }
+            val reads = f.catalogReads; val sessionReads = f.sessionReads; val generation = f.generation.current
+            runOnIdle { dispatchWindowFocus(); dispatchPageVisible() } // A tab switch back to CineVerse.
+            waitUntil(timeoutMillis = 10_000) { f.sessionReads > sessionReads }
+            withContext(Dispatchers.Default) { delay(100) }
+            waitForIdle()
+            recorder.cancel()
+            assertEquals(listOf<WebSessionState>(WebSessionState.Ready(null)), sessions, "a soft hint never shows Checking")
+            assertEquals(generation, f.generation.current)
+            assertEquals(reads, f.catalogReads, "an unchanged identity reloads nothing")
+            onNodeWithText("Discover your next favourite").assertExists()
+        } finally { f.close() }
+    }
+
     @Test fun ambientGlowFollowsTheSavedPreference() = runComposeUiTest {
         val f = Fixture()
         val history = FakeHistory("/settings")
