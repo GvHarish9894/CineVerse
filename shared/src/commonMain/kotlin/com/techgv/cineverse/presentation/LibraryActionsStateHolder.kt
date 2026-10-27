@@ -136,7 +136,11 @@ class LibraryActionsStateHolder(
         write(expected.title, LibraryWrite.Unrate, expected.identity) { repository.unrate(expected.title, expected.identity) }
     }
 
-    fun closeRate(expected: RatePrompt) = closeRate()
+    /** A delayed dismiss may close only the exact prompt that supplied its callback. */
+    fun closeRate(expected: RatePrompt) {
+        if (prompt.value !== expected) return
+        closeRate()
+    }
 
     fun closeRate() {
         rateRequest++
