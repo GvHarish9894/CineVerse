@@ -24,6 +24,7 @@ internal class MobileSeasonContext internal constructor(
 }
 
 internal data class MobileSeasonState(
+    val revision: Long = 0L,
     val invalid: Boolean = false,
     val settingsFailed: Boolean = false,
     val stale: Boolean = false,
@@ -110,7 +111,7 @@ internal class MobileSeasonViewModel(
         readerJob = null
         context = null
         capturedSettings = null
-        mutableState.value = state.value.copy(context = null, current = null, settingsFailed = failed,
+        mutableState.value = state.value.copy(revision = state.value.revision + 1, context = null, current = null, settingsFailed = failed,
             stale = state.value.retainedShow != null || state.value.retainedSeason != null)
         oldContext?.job?.cancel()
         oldReader?.cancel()
@@ -152,7 +153,7 @@ internal class MobileSeasonViewModel(
         val old = context
         context = null
         capturedSettings = null
-        mutableState.value = state.value.copy(context = null, current = null,
+        mutableState.value = state.value.copy(revision = state.value.revision + 1, context = null, current = null,
             stale = state.value.retainedShow != null || state.value.retainedSeason != null)
         old?.job?.cancel()
         if (!ownsReader(epoch, reader)) return
@@ -215,8 +216,8 @@ internal class MobileSeasonViewModel(
 
     fun contextChanged() { if (active()) restartReader() }
 
-    fun retryReads() {
-        if (!active()) return
+    fun retryReads(renderedRevision: Long = state.value.revision) {
+        if (!active() || renderedRevision != state.value.revision) return
         val epoch = resetReader()
         if (!active() || epoch != readerEpoch) return
         graph.retrySettings()
@@ -258,7 +259,9 @@ internal class MobileSeasonViewModel(
         if (current(rendered) && state.value.bodyReady) savedState["mobileSeason.offset"] = offset
     }
 
-    fun back(onBack: () -> Unit) { if (alive() && visible) onBack() }
+    fun back(renderedRevision: Long = state.value.revision, onBack: () -> Unit) {
+        if (alive() && visible && renderedRevision == state.value.revision) onBack()
+    }
 
     fun close() {
         if (closed) return

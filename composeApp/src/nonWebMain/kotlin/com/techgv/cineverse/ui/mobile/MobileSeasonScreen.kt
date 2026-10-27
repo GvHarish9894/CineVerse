@@ -80,7 +80,7 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
         AmbientGlow(palette)
         Column {
             GlassTopBar(solid, title = seasonTitle.takeIf { solid },
-                navigation = { RoundIconButton(CvIcons.ChevronLeft, "Back", { model.back(onBack) }) })
+                navigation = { RoundIconButton(CvIcons.ChevronLeft, "Back", { model.back(state.revision, onBack) }) })
             LazyColumn(Modifier.fillMaxSize().testTag("mobile-season"), state = scroll,
                 contentPadding = PaddingValues(bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (state.invalid) item("invalid") {
@@ -89,10 +89,10 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
                     if (state.settingsFailed || state.stale || token == null) item("reader") {
                         Column(Modifier.padding(horizontal = 20.dp).testTag("season-read-recovery"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (state.stale) Text("Previously loaded metadata — unverified. Actions disabled.")
-                            if (state.settingsFailed || state.stale) ErrorState("Preferences unavailable or metadata unverified. Retry reads.", model::retryReads)
+                            if (state.settingsFailed || state.stale) ErrorState("Preferences unavailable or metadata unverified. Retry reads.", { model.retryReads(state.revision) })
                             else {
                                 Text("Waiting for saved preferences…")
-                                PillButton("Retry reads", model::retryReads, variant = ButtonVariant.Ghost, small = true)
+                                PillButton("Retry reads", { model.retryReads(state.revision) }, variant = ButtonVariant.Ghost, small = true)
                             }
                         }
                     }
