@@ -186,10 +186,12 @@ class MobilePersonViewModelTest {
         m.close(); m.setActive(true); runCurrent(); assertEquals(1, f.subscriptions)
     }
 
-    @Test fun reentrantHideOnLoadingCannotInstallReader() = runTest(UnconfinedTestDispatcher()) {
-        val f = MobilePersonComponentFixture(backgroundScope)
+    @Test fun reentrantHideOnLoadingCannotInstallReader() = runTest {
+        val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+        val f = MobilePersonComponentFixture(scope)
+        runCurrent()
         val m = f.model()
-        val observer = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+        val observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             m.state.drop(1).collect { m.setActive(false) }
         }
         m.setActive(true)
@@ -197,11 +199,13 @@ class MobilePersonViewModelTest {
         observer.cancel(); m.close()
     }
 
-    @Test fun reentrantReplacementOnPublicationCannotCancelNewerReader() = runTest(UnconfinedTestDispatcher()) {
-        val f = MobilePersonComponentFixture(backgroundScope)
+    @Test fun reentrantReplacementOnPublicationCannotCancelNewerReader() = runTest {
+        val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+        val f = MobilePersonComponentFixture(scope)
+        runCurrent()
         val m = f.model()
         var replaced = false
-        val observer = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+        val observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             m.state.drop(1).collect {
                 if (!replaced) { replaced = true; m.contextChanged() }
             }
@@ -211,8 +215,10 @@ class MobilePersonViewModelTest {
         observer.cancel(); m.close()
     }
 
-    @Test fun unconfinedGraphRecoveryDoesNotInstallTransientRawReaders() = runTest(UnconfinedTestDispatcher()) {
-        val f = MobilePersonComponentFixture(backgroundScope)
+    @Test fun unconfinedGraphRecoveryDoesNotInstallTransientRawReaders() = runTest {
+        val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+        val f = MobilePersonComponentFixture(scope)
+        runCurrent()
         val m = f.model(); m.setActive(true)
         f.store.fail = true; f.store.values.value = mapOf("language" to "fr-FR")
         assertTrue(m.state.value.settingsFailed); assertEquals(0, f.readers)
@@ -221,11 +227,13 @@ class MobilePersonViewModelTest {
         assertEquals(2, f.subscriptions); assertEquals(1, f.readers); assertEquals(42, m.person()?.id)
     }
 
-    @Test fun reentrantScrollWriteCannotOverwriteOffsetAfterRevocation() = runTest(UnconfinedTestDispatcher()) {
-        val f = MobilePersonComponentFixture(backgroundScope)
+    @Test fun reentrantScrollWriteCannotOverwriteOffsetAfterRevocation() = runTest {
+        val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+        val f = MobilePersonComponentFixture(scope)
+        runCurrent()
         val saved = SavedStateHandle(mapOf("person.index" to 1, "person.offset" to 2))
         val m = f.model(saved = saved); m.setActive(true)
-        val observer = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+        val observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             saved.getStateFlow("person.index", 1).collect { if (it == 8) m.setActive(false) }
         }
         m.saveScroll(m.state.value.context, 8, 9)
@@ -234,12 +242,14 @@ class MobilePersonViewModelTest {
         observer.cancel()
     }
 
-    @Test fun reentrantBiographySaverCannotPublishIntoReplacementHolder() = runTest(UnconfinedTestDispatcher()) {
-        val f = MobilePersonComponentFixture(backgroundScope)
+    @Test fun reentrantBiographySaverCannotPublishIntoReplacementHolder() = runTest {
+        val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+        val f = MobilePersonComponentFixture(scope)
+        runCurrent()
         val saved = SavedStateHandle(mapOf("bioExpanded" to false))
         val m = f.model(saved = saved); m.setActive(true)
         val old = m.state.value.context
-        val observer = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+        val observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             saved.getStateFlow("bioExpanded", false).collect { if (it) m.contextChanged() }
         }
         m.toggleBiography(old)
