@@ -53,7 +53,7 @@ internal class MobileLibraryViewModel(
     // shortcut: process-restored positions have no source proof; restore deep pages/scroll only within this owner.
     private val positions = mutableMapOf<LibraryTab, MobileLibraryPosition>()
     private val blockedRestore = mutableSetOf<MediaType>()
-    private data class ReadContext(val identity: MobileIdentity, val preferences: Triple<String, String, Boolean>, val generation: Long)
+    private data class ReadContext(val identity: MobileIdentity, val preferences: Triple<String, String, Boolean>, val generation: Long, val tab: LibraryTab)
 
     private val observer = ownerScope.launch {
         combine(graph.identity, graph.settings, graph.identityFailed, graph.settingsFailed, graph.storageFailed) { _, _, _, _, _ -> Unit }
@@ -70,48 +70,57 @@ internal class MobileLibraryViewModel(
         if (!active || closed || !valid || failed || graph.identityFailed.value || graph.settingsFailed.value || graph.storageFailed.value) return null
         val identity = graph.identity.value ?: return null
         val settings = graph.settings.value ?: return null
-        return ReadContext(identity, Triple(settings.language, settings.region, settings.includeAdult), graph.generation.current)
+        return ReadContext(identity, Triple(settings.language, settings.region, settings.includeAdult), graph.generation.current, tab)
     }
 
-    private fun reconcile() {
+    private fun reconcile(expectedSerial: Long = serial) {
+        if (expectedSerial != serial) return
         val next = currentContext()
         if (next == null) {
             revoke()
-            mutableState.value = mutableState.value.copy(failed = failed || graph.identityFailed.value || graph.settingsFailed.value || graph.storageFailed.value)
             return
         }
-        if (context == next && holder != null) return
-        revoke()
+        if (context == next && child != null) return
+        val token = revoke()
+        if (token != serial || next != currentContext()) return
         if (positionIdentity != next.identity) {
             positions.clear()
             positionIdentity = next.identity
         }
         context = next
-        val token = serial
         blockedRestore.clear()
         val job = SupervisorJob(ownerScope.coroutineContext[Job])
         child = job
         val reads = CoroutineScope(ownerScope.coroutineContext + job + CoroutineExceptionHandler { _, failure ->
             if (failure is StorageException) storageFailure(token) else throw failure
         })
-        val library = LibraryStateHolder(repository, saver, reads) { storageFailure(token) }
-        holder = library
+        // Install authority before publication or constructor-launched session subscriptions can reenter.
+        val start = reads.launch(start = CoroutineStart.LAZY) {
+            if (!accepts(token) || child !== job) return@launch
+            val library = LibraryStateHolder(repository, saver, reads) { storageFailure(token) }
+            if (!accepts(token) || child !== job) return@launch
+            holder = library
+            // Before initial session collection, invalidation is sufficient; no duplicate first-page reload.
+            library.revalidate()
+            if (!accepts(token) || holder !== library) return@launch
+            library.state.collect { accept(token, library, it) }
+        }
         mutableState.value = MobileLibraryState(token, position = positions[tab] ?: MobileLibraryPosition())
-        // Before initial session collection, invalidation is sufficient; no duplicate first-page reload.
-        library.revalidate()
-        reads.launch { library.state.collect { accept(token, it) } }
+        if (accepts(token) && child === job) start.start()
     }
 
-    /** Revoke both display and callback authority synchronously, then cancel without joining old work. */
-    private fun revoke() {
-        serial++
-        context = null
-        holder = null
-        mutableState.value = MobileLibraryState(serial, invalid = !valid, failed = failed,
-            position = positions[tab] ?: MobileLibraryPosition())
+    /** Revoke both display and callback authority synchronously, then cancel only the detached old work. */
+    private fun revoke(): Long {
+        val token = ++serial
         val previous = child
         child = null
+        context = null
+        holder = null
+        mutableState.value = MobileLibraryState(token, invalid = !valid,
+            failed = failed || graph.identityFailed.value || graph.settingsFailed.value || graph.storageFailed.value,
+            position = positions[tab] ?: MobileLibraryPosition())
         previous?.cancel()
+        return token
     }
 
     private fun storageFailure(token: Long) {
@@ -127,8 +136,8 @@ internal class MobileLibraryViewModel(
         if (snapshot.library != null && !accepts(snapshot.context)) snapshot.copy(library = null, scrollReady = false,
             failed = failed || graph.identityFailed.value || graph.settingsFailed.value || graph.storageFailed.value) else snapshot
 
-    private fun accept(token: Long, payload: LibraryUiState) {
-        if (!accepts(token)) return
+    private fun accept(token: Long, library: LibraryStateHolder, payload: LibraryUiState) {
+        if (!accepts(token) || holder !== library) return
         if (!payload.sourceIdentityKnown || payload.sourceIdentity != context?.identity?.session || payload.tab != tab) {
             mutableState.value = mutableState.value.copy(library = null, scrollReady = false)
             return
@@ -152,7 +161,10 @@ internal class MobileLibraryViewModel(
         }
         positions[tab] = position
         mutableState.value = MobileLibraryState(token, library = payload, position = position, scrollReady = settled)
-        more.forEach { holder?.loadMore(it) }
+        more.forEach {
+            if (!accepts(token) || holder !== library) return
+            library.loadMore(it)
+        }
     }
 
     private fun confirmed(token: Long): LibraryUiState? = mutableState.value.library?.takeIf {
@@ -163,8 +175,8 @@ internal class MobileLibraryViewModel(
         if (confirmed(token) == null || value == tab) return
         saver.putString("library.tab", value.name)
         tab = value
-        revoke()
-        reconcile()
+        val revision = revoke()
+        reconcile(revision)
     }
 
     fun saveScroll(token: Long, index: Int, offset: Int) {
@@ -178,7 +190,7 @@ internal class MobileLibraryViewModel(
 
     fun loadMore(token: Long, media: MediaType) {
         val group = confirmed(token)?.group(media) ?: return
-        if (group.moreError == null && group.refreshError == null && mutableState.value.scrollReady) holder?.loadMore(media)
+        if (group.section !is SectionState.Error && group.moreError == null && group.refreshError == null) holder?.loadMore(media)
     }
 
     fun retry(token: Long, media: MediaType) {
@@ -189,18 +201,21 @@ internal class MobileLibraryViewModel(
 
     fun retryStorage(token: Long = mutableState.value.context) {
         if (token != serial || !active || closed || !valid) return
-        revoke()
+        val revision = revoke()
+        if (revision != serial || !active || closed) return
         failed = false
         graph.retrySettings()
+        if (revision != serial || !active || closed) return
         graph.retryIdentity()
+        if (revision != serial || !active || closed) return
         graph.retryLibraryStorage()
-        reconcile() // Equal recovered values must restart this repository's actual session/guest readers.
+        reconcile(revision) // Equal recovered values must restart this repository's actual session/guest readers.
     }
 
     fun refresh(token: Long) {
         if (confirmed(token) == null) return
-        revoke()
-        reconcile()
+        val revision = revoke()
+        reconcile(revision)
     }
 
     fun open(token: Long, ref: MediaRef, navigator: MobileNavigator) {
