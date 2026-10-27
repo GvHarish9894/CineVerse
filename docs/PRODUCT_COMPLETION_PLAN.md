@@ -39,6 +39,12 @@ This is MULTI-SEAM. Independent components have exclusive writers; parent merges
 
 Initial wave launched as workflow404cfb57: W1 web source, M1 corrected Person compilation (sole lease), M2 root fresh-prompt source correction, M3 Season targeted review. No background test polling. Parent runtime inventory only: no Android devices connected; existing `CineVerse_Phone_API36`, TV and tablet AVDs available; all iOS simulators shutdown, historical owned iPhone17Pro `1F4DFB14-7325-4855-BE5E-4DD01D97D168` available. Nothing booted/deployed/reset. `adb devices` started the standard adb daemon automatically; no emulator or personal device was used.
 
+### Current scoped amendments and rolling slot reuse
+
+W1 inspected installed CMP1.11.1: only last scene owner is exposed (focusable Close tooltip masks dialog), and dialog/paneTitle semantics are not mapped. Parent approved Buttons.kt additive tooltipFocusable=true with false ONLY for web CvDialog Close; Overlays default-noop platform hook and DialogProperties wasm annotation of existing actual modal semantics node (Android/iOS actual noop), cleanup scoped to exact node/owner. No duplicate invisible controls/semantics tree. Two iframe boundary focus guards permitted (NOT focusable aria-hidden descendants), no reading/intercepting cross-origin YouTube controls. Optional CvDialog onRestoreFocus callback propagated through five web dialog wrappers, null preserves native behavior; ordinary callback recomposition must not trigger disposal focus return. Source-only, no browser/build yet.
+
+M3 Season follow-up c63d67d9 atc9ae87d is OK with notes: both scroll P1s CLOSED in source; host29/0 and17UI compiled-only/5nativecompile retained. Parent preserved mobile-season-component and reused C2 as web-font-resilience fromd1bc075 for independent W2 FONT/BOOTSTRAP source seam. W2 owns CineVerseTheme font-selection override with native defaults unchanged, wasm main/font provider+matching tests only; MUST NOT edit W1 WebApp/header/overlay/buttons/trailer focus files. W2 source-only, no initial lease. Source graph/application lifetime never recreated on font failure/retry. Parent merges cleared Season into mobile candidate at next clean C5 writer boundary.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
