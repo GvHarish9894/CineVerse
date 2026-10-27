@@ -35,7 +35,9 @@ internal fun MobilePersonScreen(model: MobilePersonViewModel, navigator: MobileN
         val token = state.context
         val position = remember { state.index to state.offset }
         val scroll = remember { LazyListState() }
-        var restored by remember { mutableStateOf(false) }
+        var restorationBaseline by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+        var positionChanged by remember { mutableStateOf(false) }
+        val restored = restorationBaseline != null
         val ready = !state.invalid && !state.settingsFailed &&
             (state.section as? SectionState.Content)?.value?.id == model.id
         val persist by rememberUpdatedState(restored && ready)
@@ -43,14 +45,24 @@ internal fun MobilePersonScreen(model: MobilePersonViewModel, navigator: MobileN
             if (!ready || restored) return@LaunchedEffect
             // The real provider is remeasured by scrollToItem; the header need not be visible.
             scroll.scrollToItem(position.first, position.second)
-            restored = true
+            restorationBaseline = scroll.firstVisibleItemIndex to scroll.firstVisibleItemScrollOffset
         }
         LaunchedEffect(scroll, restored, ready) {
             if (persist) snapshotFlow { scroll.firstVisibleItemIndex to scroll.firstVisibleItemScrollOffset }
-                .distinctUntilChanged().collect { (index, offset) -> if (persist) model.saveScroll(token, index, offset) }
+                .distinctUntilChanged().collect { current ->
+                    // Restoration's realized position may be a clamp, not a new saved target.
+                    if (persist && (positionChanged || current != restorationBaseline)) {
+                        positionChanged = true
+                        model.saveScroll(token, current.first, current.second)
+                    }
+                }
         }
         DisposableEffect(scroll) {
-            onDispose { if (persist) model.saveScroll(token, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
+            onDispose {
+                val current = scroll.firstVisibleItemIndex to scroll.firstVisibleItemScrollOffset
+                if (persist && (positionChanged || current != restorationBaseline))
+                    model.saveScroll(token, current.first, current.second)
+            }
         }
         PersonContent(state, model.imageBase, scroll, { model.back(token, onBack) },
             { model.retry(token) }, { model.toggleBiography(token) }, { model.open(token, it, navigator) })
