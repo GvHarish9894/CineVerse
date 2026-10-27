@@ -51,12 +51,14 @@ class LibraryActionsStateHolder(
     private val reads = MutableStateFlow(0L)
     fun retryStorage() { reads.update { it + 1 } }
     private var identity: AuthSession? = null
-    private val prompt = MutableStateFlow<RatePrompt?>(null)
+    // Include the request epoch so slow collectors see value-equal replacement instances.
+    private data class RatePromptState(val request: Long, val prompt: RatePrompt?)
+    private val prompt = MutableStateFlow(RatePromptState(0L, null))
     private var rateRequest = 0L
     private val playerActive = MutableStateFlow(false)
 
     /** The Rate dialog to display: null while the Player is up (the prompt waits). */
-    val ratePrompt: Flow<RatePrompt?> = combine(prompt, playerActive) { p, player -> p.takeUnless { player } }
+    val ratePrompt: Flow<RatePrompt?> = combine(prompt, playerActive) { p, player -> p.prompt.takeUnless { player } }
 
     /** The collected sign-in changed: a dialog of another identity closes without writing. */
     fun onIdentity(c: AuthSession?) {
@@ -101,7 +103,7 @@ class LibraryActionsStateHolder(
                 if (repository.session.first() != expected || request != rateRequest || expected != identity) return@launch
                 val initial = repository.currentRating(expected, title.ref)
                 if (repository.session.first() == expected && request == rateRequest && expected == identity) {
-                    prompt.value = RatePrompt(title, initial, expected)
+                    prompt.value = RatePromptState(request, RatePrompt(title, initial, expected))
                 }
             } catch (failure: StorageException) {
                 // As before: a real storage failure is reported unless the sign-in changed (a closed dialog still reports).
@@ -111,20 +113,40 @@ class LibraryActionsStateHolder(
     }
 
     fun submitRating(value: Double) {
-        val p = prompt.value ?: return
+        val p = prompt.value.prompt ?: return
+        submitRating(value, p)
+    }
+
+    /** Only the exact owned prompt may dispatch; a value-equal reopened prompt is a different intent. */
+    fun submitRating(value: Double, expected: RatePrompt) {
+        if (prompt.value.prompt !== expected) return
         closeRate()
-        write(p.title, LibraryWrite.Rate(value), p.identity) { repository.rate(p.title, value, p.identity) }
+        write(expected.title, LibraryWrite.Rate(value), expected.identity) {
+            repository.rate(expected.title, value, expected.identity)
+        }
     }
 
     fun removeRating() {
-        val p = prompt.value ?: return
+        val p = prompt.value.prompt ?: return
+        removeRating(p)
+    }
+
+    /** A stale callback must neither remove a rating nor close a replacement prompt. */
+    fun removeRating(expected: RatePrompt) {
+        if (prompt.value.prompt !== expected) return
         closeRate()
-        write(p.title, LibraryWrite.Unrate, p.identity) { repository.unrate(p.title, p.identity) }
+        write(expected.title, LibraryWrite.Unrate, expected.identity) { repository.unrate(expected.title, expected.identity) }
+    }
+
+    /** A delayed dismiss may close only the exact prompt that supplied its callback. */
+    fun closeRate(expected: RatePrompt) {
+        if (prompt.value.prompt !== expected) return
+        closeRate()
     }
 
     fun closeRate() {
         rateRequest++
-        prompt.value = null
+        prompt.value = RatePromptState(rateRequest, null)
     }
 
     private fun write(title: Title, write: LibraryWrite, captured: AuthSession?, operation: suspend () -> LibraryWriteResult) {
