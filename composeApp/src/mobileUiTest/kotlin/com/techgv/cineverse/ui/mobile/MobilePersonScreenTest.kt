@@ -28,6 +28,7 @@ class MobilePersonScreenTest {
         onNodeWithTag("mobile-person").performScrollToNode(hasText("Read more"))
         onNodeWithText("Read more").performClick()
         runOnIdle { assertTrue(model.state.value.expanded) }
+        onNodeWithTag("mobile-person").performScrollToNode(hasText("Read less"))
         onNodeWithText("Read less").performClick()
         runOnIdle { assertFalse(model.state.value.expanded) }
     }
@@ -53,6 +54,17 @@ class MobilePersonScreenTest {
         onNodeWithTag("mobile-person").performScrollToNode(hasText("No credits available."))
         onNodeWithText("No credits available.").assertIsDisplayed()
         onNodeWithText("Known for").assertDoesNotExist()
+    }
+
+    @Test fun absentMetadataDoesNotInventDepartmentOrLifeDates() = runComposeUiTest {
+        setContent { MobilePersonUiFixture(configure = { it.api.omitMetadata = true }) }
+        onNodeWithText("Person en-US").assertExists()
+        onNodeWithText("Acting").assertDoesNotExist()
+        onNodeWithText("Born", substring = true).assertDoesNotExist()
+        onNodeWithText("Died", substring = true).assertDoesNotExist()
+        onNodeWithText("Actual birthplace").assertDoesNotExist()
+        onNodeWithTag("mobile-person").performScrollToNode(hasText("Credits", substring = false))
+        onNodeWithText("Credits", substring = false).assertExists()
     }
 
     @Test fun invalidSavedScalarKeepsBackReachableAndDoesNotFetchOrRepair() = runComposeUiTest {
@@ -84,7 +96,8 @@ class MobilePersonScreenTest {
         val saved = SavedStateHandle(mapOf("person.index" to 20, "person.offset" to 17))
         val gate = CompletableDeferred<Unit>()
         lateinit var model: MobilePersonViewModel
-        setContent { MobilePersonUiFixture(saved = saved, configure = { it.api.gate = gate }, onReady = { m, _ -> model = m }) }
+        lateinit var fixture: MobilePersonComponentFixture
+        setContent { MobilePersonUiFixture(saved = saved, configure = { it.api.gate = gate }, onReady = { m, f -> model = m; fixture = f }) }
         onNodeWithText("Loading person…").assertIsDisplayed()
         runOnIdle { assertEquals(20, saved.get<Int>("person.index")); gate.complete(Unit) }
         val list = onNodeWithTag("mobile-person")
@@ -95,6 +108,15 @@ class MobilePersonScreenTest {
         runOnIdle { model.contextChanged() }
         onNodeWithTag("mobile-person").performScrollToIndex(21)
         waitUntil { saved.get<Int>("person.index") == 21 }
+        runOnIdle {
+            fixture.api.gate = null; fixture.api.failure = true
+            fixture.raw.value = Result.success(Settings(language = "fr-FR"))
+        }
+        onNodeWithText("You're offline. Check your connection.").assertIsDisplayed()
+        runOnIdle { assertEquals(21, saved.get<Int>("person.index")); fixture.api.failure = false }
+        onNodeWithText("Retry").performClick()
+        list.performScrollToIndex(22)
+        waitUntil { saved.get<Int>("person.index") == 22 }
     }
 
     @Test fun wrongPrimaryNeverDisplaysMetadataAndDisposedCallbacksHaveNoAuthority() = runComposeUiTest {
@@ -103,7 +125,7 @@ class MobilePersonScreenTest {
         var backs = 0
         setContent { if (shown) MobilePersonUiFixture(configure = { it.api.wrongId = true }, onReady = { m, _ -> model = m }, onBack = { backs++ }) }
         onNodeWithText("Person en-US").assertDoesNotExist()
-        onNodeWithText("Something went wrong. Try again.").assertExists()
+        onNodeWithText("Not available.").assertExists()
         var token = 0L
         runOnIdle { token = model.state.value.context; shown = false }
         runOnIdle { model.back(token) { backs++ }; model.toggleBiography(token); assertEquals(0, backs) }

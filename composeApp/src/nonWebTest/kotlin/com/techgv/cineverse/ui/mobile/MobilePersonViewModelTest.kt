@@ -128,7 +128,7 @@ class MobilePersonViewModelTest {
     @Test fun wrongPrimaryIdIsUnavailableAndCannotNavigateOrToggle() = runTest {
         val f = MobilePersonComponentFixture(backgroundScope); runCurrent(); f.api.wrongId = true
         val saved = SavedStateHandle(); val m = f.model(saved = saved); m.setActive(true); runCurrent()
-        assertIs<SectionState.Error>(m.state.value.section)
+        assertEquals(SectionState.Error(com.techgv.cineverse.presentation.SectionErrorKind.NotAvailable), m.state.value.section)
         var opened = 0
         m.open(m.state.value.context, MediaRef(MediaType.Tv, 701), MobileNavigator { opened++ })
         m.toggleBiography(m.state.value.context)
@@ -209,6 +209,58 @@ class MobilePersonViewModelTest {
         m.setActive(true)
         assertEquals(1, f.readers); assertEquals(1, f.subscriptions); assertEquals(42, m.person()?.id)
         observer.cancel(); m.close()
+    }
+
+    @Test fun unconfinedGraphRecoveryDoesNotInstallTransientRawReaders() = runTest(UnconfinedTestDispatcher()) {
+        val f = MobilePersonComponentFixture(backgroundScope)
+        val m = f.model(); m.setActive(true)
+        f.store.fail = true; f.store.values.value = mapOf("language" to "fr-FR")
+        assertTrue(m.state.value.settingsFailed); assertEquals(0, f.readers)
+        f.store.fail = false; f.store.values.value = emptyMap()
+        m.retry(m.state.value.context)
+        assertEquals(2, f.subscriptions); assertEquals(1, f.readers); assertEquals(42, m.person()?.id)
+    }
+
+    @Test fun reentrantScrollWriteCannotOverwriteOffsetAfterRevocation() = runTest(UnconfinedTestDispatcher()) {
+        val f = MobilePersonComponentFixture(backgroundScope)
+        val saved = SavedStateHandle(mapOf("person.index" to 1, "person.offset" to 2))
+        val m = f.model(saved = saved); m.setActive(true)
+        val observer = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            saved.getStateFlow("person.index", 1).collect { if (it == 8) m.setActive(false) }
+        }
+        m.saveScroll(m.state.value.context, 8, 9)
+        assertEquals(8, saved.get<Int>("person.index")); assertEquals(2, saved.get<Int>("person.offset"))
+        assertEquals(0, f.readers); assertNull(m.person())
+        observer.cancel()
+    }
+
+    @Test fun reentrantBiographySaverCannotPublishIntoReplacementHolder() = runTest(UnconfinedTestDispatcher()) {
+        val f = MobilePersonComponentFixture(backgroundScope)
+        val saved = SavedStateHandle(mapOf("bioExpanded" to false))
+        val m = f.model(saved = saved); m.setActive(true)
+        val old = m.state.value.context
+        val observer = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            saved.getStateFlow("bioExpanded", false).collect { if (it) m.contextChanged() }
+        }
+        m.toggleBiography(old)
+        assertNotEquals(old, m.state.value.context)
+        assertTrue(m.state.value.expanded); assertEquals(42, m.person()?.id)
+        m.toggleBiography(old)
+        assertTrue(saved.get<Boolean>("bioExpanded") == true); assertEquals(1, f.readers)
+        observer.cancel()
+    }
+
+    @Test fun stubbornHiddenCompletionCannotPublishOrPersistAndReactivationReadsAgain() = runTest {
+        val f = MobilePersonComponentFixture(backgroundScope); runCurrent()
+        val gate = CompletableDeferred<Unit>(); f.api.gate = gate; f.api.stubborn = true
+        val saved = SavedStateHandle(mapOf("person.index" to 12, "person.offset" to 14))
+        val m = f.model(saved = saved); m.setActive(true); runCurrent()
+        val old = m.state.value.context
+        m.setActive(false); gate.complete(Unit); runCurrent()
+        m.saveScroll(old, 0, 0); m.toggleBiography(old)
+        assertNull(m.person()); assertEquals(12, saved.get<Int>("person.index")); assertNull(saved.get<Any>("bioExpanded"))
+        f.api.gate = null; m.setActive(true); runCurrent()
+        assertEquals(42, m.person()?.id); assertEquals(2, f.subscriptions)
     }
 
     @Test fun catalogRetryCreatesFreshHolderAndDoesNotRetryRawFailureImplicitly() = runTest {

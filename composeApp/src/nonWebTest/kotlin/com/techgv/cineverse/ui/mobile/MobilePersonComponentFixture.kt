@@ -48,6 +48,7 @@ internal class MobilePersonComponentApi : MobileUnusedTmdbApi() {
     var englishWrongId = false
     var blankLocalized = false
     var empty = false
+    var omitMetadata = false
     override suspend fun configuration() = ConfigurationDto()
     override suspend fun person(id: Int, language: String, append: String): PersonDetailDto {
         calls += "$id/$language"
@@ -57,8 +58,9 @@ internal class MobilePersonComponentApi : MobileUnusedTmdbApi() {
         if (failure) throw TmdbException(TmdbError.Network)
         return PersonDetailDto(if (wrong) id + 1 else id, name = "Person $language",
             biography = if (blankLocalized && language != "en-US") "" else "Actual biography. ".repeat(80),
-            birthday = "1970-01-02", deathday = "2020-03-04", placeOfBirth = "Actual birthplace",
-            knownForDepartment = "Acting", combinedCredits = CombinedCreditsDto(cast = if (empty) emptyList() else (1..30).map {
+            birthday = if (omitMetadata) null else "1970-01-02", deathday = if (omitMetadata) null else "2020-03-04",
+            placeOfBirth = if (omitMetadata) null else "Actual birthplace", knownForDepartment = if (omitMetadata) null else "Acting",
+            combinedCredits = CombinedCreditsDto(cast = if (empty) emptyList() else (1..30).map {
                 PersonCreditDto(id = 700 + it, mediaType = if (it == 1) "tv" else "movie", title = "Actual credit $it",
                     releaseDate = "2025-01-02", character = "Actual role $it", voteCount = 100 - it)
             }))
