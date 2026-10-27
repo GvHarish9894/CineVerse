@@ -254,6 +254,56 @@ class MobileDetailScreenTest {
         }
     }
 
+    @Test fun delayedRecoveryRestoresPendingSegmentWithRetainedHeaderOffscreenThenPersistsUserScrollAndDisposal() = runComposeUiTest {
+        val saved = savedOverview()
+        saved["mobileDetail.Cast.index"] = 1
+        saved["mobileDetail.Cast.offset"] = 37
+        val gate = CompletableDeferred<Unit>()
+        lateinit var model: MobileDetailViewModel
+        lateinit var f: MobileDetailComponentFixture
+        var shown by mutableStateOf(true)
+        setContent {
+            Box(Modifier.requiredSize(360.dp, 640.dp)) {
+                if (shown) MobileDetailUiFixture(savedState = saved, onReady = { m, fixture -> model = m; f = fixture })
+            }
+        }
+        onNodeWithText("Read less").assertExists()
+        runOnIdle { f.failSettings() }
+        waitUntil { model.state.value.stale && model.state.value.settingsFailed }
+        runOnIdle { model.selectSegment(MobileDetailSegment.Cast) }
+        runOnIdle {
+            f.catalog.invalidateTitle(MediaType.Movie, 42)
+            f.api.gate = gate
+            f.raw.value = Result.success(com.techgv.cineverse.data.settings.Settings())
+            model.retryReads()
+        }
+        waitUntil { f.api.calls.size == 2 }
+        val list = onNodeWithTag("mobile-detail")
+        // Retained topology: recovery, header, expanded summary, segments, cast, attribution.
+        list.performScrollToIndex(3)
+        onNodeWithText("2026 · PG-13 · 2h 8m").assertIsNotDisplayed()
+        runOnIdle {
+            assertTrue(model.state.value.stale)
+            assertFalse(gate.isCompleted)
+            assertEquals(MobileDetailScroll(1, 37), model.scroll(MobileDetailSegment.Cast))
+            gate.complete(Unit)
+        }
+        waitUntil { !model.state.value.stale && model.state.value.section is com.techgv.cineverse.presentation.SectionState.Content }
+        waitForIdle()
+        val restored = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        runOnIdle { assertEquals(MobileDetailScroll(1, 37), model.scroll(MobileDetailSegment.Cast)) }
+        // Healthy index 1 is the expanded summary, not the header; compare the actual restored offset.
+        list.performScrollToIndex(1)
+        assertEquals(37f, restored - list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        waitUntil { saved.get<Int>("mobileDetail.Cast.index") == 1 && saved.get<Int>("mobileDetail.Cast.offset") == 0 }
+        runOnIdle { shown = false }
+        onNodeWithTag("mobile-detail").assertDoesNotExist()
+        runOnIdle {
+            assertEquals(1, saved.get<Int>("mobileDetail.Cast.index"))
+            assertEquals(0, saved.get<Int>("mobileDetail.Cast.offset"))
+        }
+    }
+
     @Test fun invalidRouteOffersBackWithoutAnyTitleFetch() = runComposeUiTest {
         lateinit var f: MobileDetailComponentFixture
         var backs = 0
