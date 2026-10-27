@@ -156,7 +156,7 @@ class MobilePersonViewModelTest {
         m.open(token, MediaRef(MediaType.Movie, 701), nav)
         m.open(token, MediaRef(MediaType.Movie, 9999), nav)
         m.open(token, MediaRef(MediaType.Tv, 701), nav)
-        assertEquals(listOf(MobileDestination.Detail(MediaRef(MediaType.Tv, 701))), destinations)
+        assertEquals(listOf<MobileDestination>(MobileDestination.Detail(MediaRef(MediaType.Tv, 701))), destinations)
     }
 
     @Test fun savedScalarsRestorePerChildAndLoadingNeverClampsThem() = runTest {
