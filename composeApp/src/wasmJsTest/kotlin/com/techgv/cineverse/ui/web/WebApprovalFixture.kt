@@ -1,4 +1,4 @@
-@file:OptIn(io.ktor.utils.io.InternalAPI::class)
+@file:OptIn(io.ktor.utils.io.InternalAPI::class, kotlin.js.ExperimentalWasmJsInterop::class)
 
 package com.techgv.cineverse.ui.web
 
@@ -30,7 +30,8 @@ internal class WebApprovalFixture(ownerDispatcher: CoroutineDispatcher = Dispatc
         private var next = 0
         const val GUEST = """{"signedIn":false,"accountObjectId":null,"displayName":null,"sessionGeneration":"0"}"""
         const val SIGNED = """{"signedIn":true,"accountObjectId":"fixture-account","displayName":"Fixture viewer","sessionGeneration":"-9223372036854775808"}"""
-        const val APPROVAL = """{"approveUrl":"https://www.themoviedb.org/auth/access?request_token=isolated-fixture","attemptId":"server-fixture"}"""
+        const val APPROVE_URL = "https://www.themoviedb.org/auth/access?request_token=isolated-fixture"
+        const val APPROVAL = """{"approveUrl":"$APPROVE_URL","attemptId":"server-fixture"}"""
     }
     var sessionBody = GUEST
     var sessionStatus = HttpStatusCode.OK
@@ -38,8 +39,21 @@ internal class WebApprovalFixture(ownerDispatcher: CoroutineDispatcher = Dispatc
     var startStatus = HttpStatusCode.OK
     var cancelStatus = HttpStatusCode.NoContent
     var beforeReply: suspend (String) -> Unit = {}
+    /** Fails both openPending() and open(): a browser that cannot open any tab. */
     var throwOnOpen = false
+    var throwOnNavigate = false
+    /** Placeholder tabs from Continue to TMDB, in order; [opened] holds only Open TMDB again descriptors. */
+    val tabs = mutableListOf<Tab>()
     val opened = mutableListOf<WebApprovalAttempt>()
+    inner class Tab : WebApprovalOpener.PendingTab {
+        val navigated = mutableListOf<String>()
+        var closed = false
+        override fun navigate(url: String) {
+            if (throwOnNavigate) error("Fake navigate failure")
+            navigated += url
+        }
+        override fun close() { closed = true }
+    }
     val calls = mutableListOf<Pair<HttpMethod, String>>()
     val unexpected = mutableListOf<String>()
     private val gates = mutableListOf<CompletableDeferred<Unit>>()
@@ -93,9 +107,15 @@ internal class WebApprovalFixture(ownerDispatcher: CoroutineDispatcher = Dispatc
         } }
     }) }
     val runtime = app.koin.get<WebRuntime>()
-    val owner = WebApprovalOwner(runtime, WebApprovalOpener {
-        opened += it
-        if (throwOnOpen) error("Fake opener failure")
+    val owner = WebApprovalOwner(runtime, object : WebApprovalOpener {
+        override fun openPending(): WebApprovalOpener.PendingTab {
+            if (throwOnOpen) error("Fake opener failure")
+            return Tab().also { tabs += it }
+        }
+        override fun open(approval: WebApprovalAttempt) {
+            opened += approval
+            if (throwOnOpen) error("Fake opener failure")
+        }
     }, ownerScope)
 
     suspend fun start() {
@@ -122,3 +142,9 @@ internal class WebApprovalFixture(ownerDispatcher: CoroutineDispatcher = Dispatc
         runtime.close()
     }
 }
+
+/** The real window events BrowserChanges turns into runtime soft-read hints. */
+@JsFun("() => window.dispatchEvent(new Event('focus'))")
+internal external fun dispatchWindowFocus()
+@JsFun("() => { Object.defineProperty(document, 'visibilityState', {configurable:true,value:'visible'}); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; }")
+internal external fun dispatchPageVisible()

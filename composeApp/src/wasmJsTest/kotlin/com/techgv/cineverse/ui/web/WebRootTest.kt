@@ -12,6 +12,7 @@ import com.techgv.cineverse.ui.setThemedContent
 import com.techgv.cineverse.ui.theme.AppearanceSettings
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.*
+import com.techgv.cineverse.data.web.WebApprovalAttempt
 import com.techgv.cineverse.data.web.WebProxyHttp
 import com.techgv.cineverse.data.search.RecentQueryStore
 import com.techgv.cineverse.data.settings.*
@@ -147,7 +148,16 @@ class WebRootTest {
         val generation = app.koin.get<GenerationCounter>()
         val repository = app.koin.get<SettingsRepository>()
         val recent = RecentQueryStore(app.koin.get<SettingsStore>())
-        val opener = WebApprovalOpener { opened += "open" }
+        val opener = object : WebApprovalOpener {
+            override fun openPending(): WebApprovalOpener.PendingTab {
+                opened += "pending"
+                return object : WebApprovalOpener.PendingTab {
+                    override fun navigate(url: String) { opened += "navigate" }
+                    override fun close() { opened += "close" }
+                }
+            }
+            override fun open(approval: WebApprovalAttempt) { opened += "open" }
+        }
         override fun close() { sessionGate?.complete(Unit); runtime.stop(); app.close() }
         companion object { private var next = 0 }
     }
@@ -315,11 +325,11 @@ class WebRootTest {
             exists("web-settings")
             onNode(hasText("Sign in") and hasAnyAncestor(hasTestTag("settings-account"))).performClick()
             exists("web-approval-dialog")
-            onNodeWithText("Prepare sign-in").assertExists()
+            onNodeWithText("Continue to TMDB").assertExists()
             go(history, "/movie/1")
             exists("web-detail")
             onNodeWithTag("web-approval-dialog").assertExists()
-            onNodeWithText("Prepare sign-in").assertExists()
+            onNodeWithText("Continue to TMDB").assertExists()
             go(history, "/person/1")
             exists("web-person")
             onNodeWithTag("web-approval-dialog").assertExists()
