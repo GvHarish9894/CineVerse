@@ -27,7 +27,6 @@ import com.techgv.cineverse.ui.components.*
 import com.techgv.cineverse.ui.design.Tokens
 import com.techgv.cineverse.ui.theme.displayStyle
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 
 private val MobileYouTubeKey = Regex("[A-Za-z0-9_-]{11}")
 internal fun Detail.mobileDetailVideos(): List<Video> = videos.filter { MobileYouTubeKey.matches(it.key) }.distinctBy { it.key }
@@ -52,8 +51,7 @@ internal fun MobileDetailScreen(
         val persist by rememberUpdatedState(restored && topologyReady)
         LaunchedEffect(scroll, topologyReady) {
             if (!topologyReady || restored) return@LaunchedEffect
-            // Loading/error/retained rows must not consume the target before the real layout exists.
-            snapshotFlow { scroll.layoutInfo.visibleItemsInfo.any { it.key == "header" } }.first { it }
+            // scrollToItem remeasures the current composed provider without requiring a visible anchor.
             scroll.scrollToItem(position.index, position.offset)
             restored = true
         }
