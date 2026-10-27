@@ -179,6 +179,58 @@ class MobileDetailRootTest {
         }
     }
 
+    @Test fun sameOwnerContextRecoveryCannotCloseFreshPromptAcceptedDuringRecovery() = runComposeUiTest {
+        lateinit var root: MobileDetailRootBindingUiState
+        setContent { MobileDetailRootBindingUiFixture { root = it } }
+        waitForIdle()
+        waitUntil { root.entryA.lifecycle.currentState == Lifecycle.State.RESUMED }
+        runOnIdle {
+            root.fixture.guest.rows.value = listOf(GuestLibraryRow(title.ref, LibraryKind.RATING, 5.0, 0, "{}"))
+            root.activateA()
+            root.fixture.graph.actions.openRate(title, null)
+        }
+        waitUntil { root.modelA.state.value.authority != null && root.latestPrompt != null }
+        runOnIdle {
+            val oldPrompt = assertNotNull(root.latestPrompt)
+            val old = assertNotNull(root.binding.rateAuthority(oldPrompt))
+            val oldRead = assertNotNull(root.modelA.state.value.authority)
+            var revoked = false
+            var recovered = false
+            val observer = root.scope.launch {
+                root.modelA.state.collect {
+                    if (it.authority == null) revoked = true
+                    else if (revoked && !recovered) {
+                        recovered = true
+                        assertNotEquals(oldRead, it.authority)
+                        assertNull(root.binding.observePrompt(oldPrompt), "Same old prompt cannot recapture recovered authority")
+                        root.fixture.graph.actions.openRate(title, null)
+                    }
+                }
+            }
+            try {
+                root.binding.contextChanged()
+                assertTrue(revoked, "Actual owner must revoke its read during context refresh")
+                assertTrue(recovered, "Fresh prompt must open from the same owner's synchronous recovery observer")
+                val replacement = assertNotNull(root.latestPrompt, "Obsolete context-close continuation must not close the fresh prompt")
+                assertNotSame(oldPrompt, replacement)
+                val fresh = assertNotNull(root.binding.rateAuthority(replacement))
+                assertSame(root.entryA, fresh.entry)
+                assertSame(root.modelA, fresh.detailOwner)
+                assertEquals(root.modelA.state.value.authority, fresh.detailAuthority)
+                assertNull(root.binding.rateAuthority(oldPrompt))
+                val rows = root.fixture.guest.rows.value
+                root.binding.submit(old, 9.0); root.binding.remove(old); root.binding.dismiss(old)
+                assertEquals(rows, root.fixture.guest.rows.value, "Old submit/remove must not write after same-owner recovery")
+                assertSame(replacement, root.latestPrompt, "Old dismiss must not close the fresh prompt")
+                root.binding.submit(fresh, 8.0)
+                assertEquals(8.0, root.fixture.guest.rows.value.single { it.kind == LibraryKind.RATING }.value)
+                assertNull(root.latestPrompt)
+            } finally {
+                observer.cancel()
+            }
+        }
+    }
+
     @Test fun actualHomeTapMountsDetailAndOutboundIdsUseExistingNavigator() = runComposeUiTest {
         setContent { MobileDetailRootUiFixture { _, _ -> } }
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
