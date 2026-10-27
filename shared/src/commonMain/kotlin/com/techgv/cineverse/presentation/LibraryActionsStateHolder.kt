@@ -110,20 +110,30 @@ class LibraryActionsStateHolder(
         }
     }
 
-    fun submitRating(value: Double, expected: RatePrompt) = submitRating(value)
-
-    fun removeRating(expected: RatePrompt) = removeRating()
-
     fun submitRating(value: Double) {
         val p = prompt.value ?: return
+        submitRating(value, p)
+    }
+
+    /** Only the exact owned prompt may dispatch; a value-equal reopened prompt is a different intent. */
+    fun submitRating(value: Double, expected: RatePrompt) {
+        if (prompt.value !== expected) return
         closeRate()
-        write(p.title, LibraryWrite.Rate(value), p.identity) { repository.rate(p.title, value, p.identity) }
+        write(expected.title, LibraryWrite.Rate(value), expected.identity) {
+            repository.rate(expected.title, value, expected.identity)
+        }
     }
 
     fun removeRating() {
         val p = prompt.value ?: return
+        removeRating(p)
+    }
+
+    /** A stale callback must neither remove a rating nor close a replacement prompt. */
+    fun removeRating(expected: RatePrompt) {
+        if (prompt.value !== expected) return
         closeRate()
-        write(p.title, LibraryWrite.Unrate, p.identity) { repository.unrate(p.title, p.identity) }
+        write(expected.title, LibraryWrite.Unrate, expected.identity) { repository.unrate(expected.title, expected.identity) }
     }
 
     fun closeRate() {
