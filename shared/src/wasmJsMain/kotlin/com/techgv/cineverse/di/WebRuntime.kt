@@ -106,7 +106,9 @@ class WebRuntime internal constructor(
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             auth.session.drop(1).collect { identity ->
-                if (sessionState.value != WebSessionState.Checking && auth.isVerifiedSession(identity)) {
+                val state = sessionState.value
+                // A hard read that already rendered this identity applied it: a late collector must not bump again.
+                if (state != WebSessionState.Checking && state != WebSessionState.Ready(identity) && auth.isVerifiedSession(identity)) {
                     catalog.onAccountChanged()
                     invalidateLibrary()
                     cacheInvalidations.tryEmit(Unit)
