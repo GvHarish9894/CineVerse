@@ -54,14 +54,18 @@ internal class MobileDetailRootGuest : GuestLibraryStore {
     val rows = MutableStateFlow<List<GuestLibraryRow>>(emptyList())
     var gate: CompletableDeferred<Unit>? = null
     var reads = 0
+    var activeReads = 0
     var fail = false
     override fun observeTitle(ref: MediaRef) = flow {
         reads++
-        gate?.await()
-        emitAll(rows.map {
-            if (fail) throw StorageException("synthetic root library read")
-            it.filter { row -> row.ref == ref }
-        })
+        activeReads++
+        try {
+            gate?.await()
+            emitAll(rows.map {
+                if (fail) throw StorageException("synthetic root library read")
+                it.filter { row -> row.ref == ref }
+            })
+        } finally { activeReads-- }
     }
     override fun observeKind(kind: LibraryKind, media: MediaType) = rows.map { it.filter { row -> row.kind == kind && row.ref.mediaType == media } }
     override suspend fun all() = rows.value

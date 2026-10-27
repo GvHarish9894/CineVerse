@@ -10,12 +10,174 @@ import com.techgv.cineverse.data.tmdb.toDetail
 import com.techgv.cineverse.domain.LibraryKind
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlin.test.*
 
 /** Prepared integration cases only; source-only handoff does not claim native execution. */
 @OptIn(ExperimentalTestApi::class)
 class MobileDetailRootTest {
     private val title = MovieDetailDto(101, "Root rating title").toDetail("US").toTitle()
+
+    @Test fun detachPublicationCannotEraseReentrantReplacement() = reentrantDeactivation("detach")
+    @Test fun selectionPublicationCannotOverwriteReentrantReplacement() = reentrantDeactivation("selection")
+    @Test fun leavePublicationCannotCloseReentrantReplacementPrompt() = reentrantDeactivation("leave")
+    @Test fun backgroundPublicationCannotDeactivateReentrantReplacement() = reentrantDeactivation("background")
+    @Test fun attachPublicationCannotOverwriteReentrantReplacement() = reentrantDeactivation("attach")
+
+    private fun reentrantDeactivation(operation: String) = runComposeUiTest {
+        lateinit var root: MobileDetailRootBindingUiState
+        setContent { MobileDetailRootBindingUiFixture { root = it } }
+        waitForIdle()
+        waitUntil { root.entryA.lifecycle.currentState == Lifecycle.State.RESUMED &&
+            root.entryB.lifecycle.currentState == Lifecycle.State.RESUMED }
+        runOnIdle { root.activateA() }
+        waitUntil { root.modelA.state.value.authority != null }
+        runOnIdle { root.fixture.graph.actions.openRate(title, null) }
+        waitUntil { root.latestPrompt != null }
+        runOnIdle {
+            val old = assertNotNull(root.binding.rateAuthority(assertNotNull(root.latestPrompt)))
+            var reentered = false
+            val observer = root.scope.launch {
+                root.modelA.state.collect {
+                    if (!reentered && it.authority == null) {
+                        reentered = true
+                        root.binding.setResumed(true)
+                        root.activateB()
+                        root.fixture.graph.actions.openRate(MovieDetailDto(765, "Replacement").toDetail("US").toTitle(), null)
+                    }
+                }
+            }
+            when (operation) {
+                "detach" -> root.binding.detach(root.entryA, root.modelA)
+                "selection" -> root.binding.currentChanged(root.entryB)
+                "leave" -> root.binding.leave()
+                "background" -> root.binding.setResumed(false)
+                "attach" -> root.binding.attach(root.entryB, root.modelB)
+                else -> error("Unknown test operation")
+            }
+            assertTrue(reentered, "Must reenter from actual synchronous A deactivation")
+            observer.cancel()
+            root.binding.submit(old, 9.0); root.binding.remove(old); root.binding.dismiss(old)
+        }
+        waitUntil { root.modelB.state.value.authority != null && root.latestPrompt?.title?.ref?.id == 765 }
+        runOnIdle {
+            val replacement = assertNotNull(root.binding.rateAuthority(assertNotNull(root.latestPrompt)))
+            val action = assertNotNull(root.modelB.state.value.authority)
+            assertEquals(1, root.fixture.guest.activeReads)
+            if (operation == "background" || operation == "attach") root.binding.leave()
+            else root.binding.setResumed(false)
+            assertNull(root.modelB.state.value.authority)
+            assertEquals(0, root.fixture.guest.activeReads, "Replacement must remain registered for later revocation")
+            root.modelB.act(LibraryKind.FAVOURITE, action)
+            root.binding.submit(replacement, 9.0); root.binding.remove(replacement); root.binding.dismiss(replacement)
+            assertTrue(root.fixture.guest.rows.value.isEmpty())
+        }
+    }
+
+    @Test fun promptClosurePublicationCannotLetObsoleteSelectionDeactivateNewOwner() = runComposeUiTest {
+        lateinit var root: MobileDetailRootBindingUiState
+        setContent { MobileDetailRootBindingUiFixture { root = it } }
+        waitForIdle()
+        waitUntil { root.entryA.lifecycle.currentState == Lifecycle.State.RESUMED &&
+            root.entryB.lifecycle.currentState == Lifecycle.State.RESUMED }
+        runOnIdle { root.activateA(); root.fixture.graph.actions.openRate(title, null) }
+        waitUntil { root.latestPrompt != null }
+        runOnIdle {
+            var reentered = false
+            val observer = root.scope.launch {
+                root.fixture.graph.actions.ratePrompt.collect {
+                    if (!reentered && it == null) {
+                        reentered = true
+                        root.activateB()
+                        root.fixture.graph.actions.openRate(MovieDetailDto(765, "Replacement").toDetail("US").toTitle(), null)
+                    }
+                }
+            }
+            root.binding.currentChanged(null)
+            assertTrue(reentered)
+            observer.cancel()
+        }
+        waitUntil { root.modelB.state.value.authority != null && root.latestPrompt?.title?.ref?.id == 765 }
+        runOnIdle {
+            assertNotNull(root.binding.rateAuthority(assertNotNull(root.latestPrompt)))
+            root.binding.leave()
+            assertNull(root.modelB.state.value.authority)
+            assertEquals(0, root.fixture.guest.activeReads)
+        }
+    }
+
+    @Test fun delayedRootStatusCannotReauthorizeSamePromptAfterRealLocalFailureAndEqualRecovery() = runComposeUiTest {
+        lateinit var root: MobileDetailRootBindingUiState
+        setContent { MobileDetailRootBindingUiFixture { root = it } }
+        waitForIdle()
+        waitUntil { root.entryA.lifecycle.currentState == Lifecycle.State.RESUMED }
+        runOnIdle {
+            root.fixture.guest.rows.value = listOf(GuestLibraryRow(title.ref, LibraryKind.RATING, 5.0, 0, "{}"))
+            root.activateA()
+            root.fixture.graph.actions.openRate(title, null)
+        }
+        waitUntil { root.modelA.state.value.authority != null && root.latestPrompt != null }
+        runOnIdle {
+            val f = root.fixture
+            val prompt = assertNotNull(root.latestPrompt)
+            val old = assertNotNull(root.binding.rateAuthority(prompt))
+            val submit = { root.binding.submit(old, 9.0) }
+            val remove = { root.binding.remove(old) }
+            val dismiss = { root.binding.dismiss(old) }
+            val read = assertNotNull(root.modelA.state.value.authority)
+            val context = f.graph.contextChanges.value
+            val generation = f.generation.current
+            val identity = f.graph.identity.value
+            val releaseStatus = CompletableDeferred<Unit>()
+            val statuses = mutableListOf<Boolean>()
+            val status = root.scope.launch {
+                root.modelA.state.map { it.invalid || it.settingsFailed || it.libraryFailed || it.identityFailed }
+                    .distinctUntilChanged().collect {
+                        statuses += it
+                        releaseStatus.await()
+                        root.binding.detailReadsChanged(root.entryA, root.modelA)
+                    }
+            }
+            val rating = f.guest.rows.value
+            f.guest.fail = true
+            f.guest.rows.value = rating + GuestLibraryRow(MediaRef(MediaType.Movie, 765), LibraryKind.WATCHLIST, null, 0, "{}")
+            assertTrue(root.modelA.state.value.libraryFailed)
+            assertFalse(f.graph.storageFailed.value, "Failure must be local to the actual Detail origin reader")
+            f.guest.fail = false
+            root.modelA.retryReads()
+            assertFalse(root.modelA.state.value.libraryFailed)
+            assertNotEquals(read, assertNotNull(root.modelA.state.value.authority))
+            assertEquals(context, f.graph.contextChanges.value)
+            assertEquals(generation, f.generation.current)
+            assertEquals(identity, f.graph.identity.value)
+            assertEquals(listOf(false), statuses, "Subscribed root status collector must stay suspended across failure and recovery")
+            val recoveredRows = f.guest.rows.value
+            repeat(2) {
+                root.binding.observePrompt(prompt)
+                assertNull(root.binding.rateAuthority(prompt), "Same prompt must never capture recovered read authority")
+                submit(); remove(); dismiss()
+            }
+            assertEquals(recoveredRows, f.guest.rows.value)
+            assertSame(prompt, root.latestPrompt, "Rejected callbacks must not dismiss even the obsolete producer prompt")
+            f.graph.actions.closeRate()
+            f.graph.actions.openRate(title, null)
+            val replacement = assertNotNull(root.latestPrompt)
+            assertNotSame(prompt, replacement)
+            val fresh = assertNotNull(root.binding.rateAuthority(replacement))
+            submit(); remove(); dismiss()
+            assertSame(replacement, root.latestPrompt, "Old callbacks cannot close or retarget a replacement")
+            releaseStatus.complete(Unit)
+            assertEquals(listOf(false), statuses, "Transient true is deliberately unobserved")
+            root.binding.submit(fresh, 8.0)
+            assertEquals(8.0, f.guest.rows.value.single { it.kind == LibraryKind.RATING }.value)
+            assertNull(root.latestPrompt)
+            status.cancel()
+        }
+    }
 
     @Test fun actualHomeTapMountsDetailAndOutboundIdsUseExistingNavigator() = runComposeUiTest {
         setContent { MobileDetailRootUiFixture { _, _ -> } }
