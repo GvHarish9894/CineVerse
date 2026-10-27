@@ -34,7 +34,8 @@ fun parseWebRoute(url: String): WebRoute = try {
     fun positive(value: String) = value.takeIf { it.matches(Regex("[0-9]+")) }?.toIntOrNull()?.takeIf { it > 0 } ?: error("id")
     val parts = path.split('/')
     when {
-        path == "/" -> { only(); WebRoute.Home }
+        // Legacy sign-in callback URLs (/?signedIn=1) still land Home; the param is ignored, never proof of a session.
+        path == "/" -> { only("signedIn"); WebRoute.Home }
         path == "/movies" || path == "/tv" -> {
             only("list", "sort", "genres")
             val media = if (path == "/movies") "movie" else "tv"

@@ -318,7 +318,7 @@ private fun HomeHero(state: HomeUiState, select: (Hero) -> Unit, play: (Title) -
                 }
             }
             if (width > 1000.dp && picks.isNotEmpty()) Row(Modifier.align(Alignment.BottomEnd).padding(end = contentGutter(ShellStyle.Web, width), bottom = 34.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                picks.forEach { pick -> HeroPick(pick, pick.key == hero?.key, if (reduceMotion) 1f else progress.value) { select(pick) } }
+                picks.forEach { pick -> HeroPick(pick, pick.key == hero?.key) { select(pick) } }
             }
         }
     }
@@ -335,9 +335,9 @@ private fun HeroKicker(hero: Hero, index: Int, window: TrendingWindow) {
     }
 }
 
-/** `.pick`: 156×88 thumbnail (white ring when shown), title, and the auto-advance bar under the shown pick. */
+/** `.pick`: 156×88 thumbnail (white ring when shown) and title; auto-advance runs without a visible bar. */
 @Composable
-private fun HeroPick(pick: Hero, shown: Boolean, progress: Float, onClick: () -> Unit) {
+private fun HeroPick(pick: Hero, shown: Boolean, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val shape = RoundedCornerShape(12.dp)
@@ -346,9 +346,6 @@ private fun HeroPick(pick: Hero, shown: Boolean, progress: Float, onClick: () ->
         PaletteArt(webImage(when (pick) { is Hero.OfTitle -> pick.title.backdropPath; is Hero.OfPerson -> pick.person.profilePath }, "w300"), webPalette(pick.key), ArtStyle.Backdrop,
             Modifier.fillMaxWidth().height(88.dp).clip(shape).border(if (shown) 2.dp else 1.dp, if (shown) Color.White else Color.White.copy(alpha = 0.12f), shape))
         Text(pick.name(), Modifier.padding(top = 8.dp), style = bodyStyle(12.5.sp, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(3.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = 0.18f))) {
-            if (shown) Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(Tokens.Colors.Accent))
-        }
     }
 }
 

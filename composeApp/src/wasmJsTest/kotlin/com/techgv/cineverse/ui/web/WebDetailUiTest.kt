@@ -1,13 +1,18 @@
 package com.techgv.cineverse.ui.web
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.storage.BrowserStorageFailure
 import com.techgv.cineverse.data.tmdb.*
@@ -22,6 +27,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlin.math.abs
 import kotlin.test.*
 
 @OptIn(ExperimentalTestApi::class)
@@ -153,6 +159,38 @@ class WebDetailUiTest {
         onNodeWithTag("web-detail").performScrollToNode(hasTestTag("detail-aside"))
         onNodeWithText("Oct 1, 2026").assertExists()
         onNodeWithText("Genres").assertDoesNotExist()
+    }
+
+    @Test fun heroBandIsFullBleedAndSizedToTheBackdropSixteenByNineWithinTheCap() = runComposeUiTest {
+        var width by mutableStateOf(1440.dp)
+        var detail by mutableStateOf(movie().copy(backdropPath = "/backdrop.jpg"))
+        val entry = WebDetailOwnerTest.entry()
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            Box(Modifier.requiredSize(width, 900.dp).testTag("viewport")) {
+                WebDetailContent(entry, completed(detail), known, WebSessionState.Ready(null), true, null,
+                    {}, {}, { _, _, _ -> }, {}, {}, { _, _, _ -> })
+            }
+        }
+        fun band() = onNodeWithTag("detail-hero").getBoundsInRoot()
+        fun viewport() = onNodeWithTag("viewport").getBoundsInRoot()
+        fun near(expected: Dp, actual: Dp) = assertTrue(abs(expected.value - actual.value) < 0.5f, "expected $expected, was $actual")
+        // 1440 wide: 16:9 would be 810dp, so the band stops at the 760dp cap; it spans the viewport edge to edge.
+        near(viewport().left, band().left)
+        near(1440.dp, band().width)
+        near(760.dp, band().height)
+        // The poster/info row is centred in the band, not pinned under its 16dp top padding.
+        assertTrue(onNodeWithText("Fixture film (2026)").getBoundsInRoot().top - band().top > 100.dp, "hero content is vertically centred")
+        runOnIdle { width = 1200.dp }
+        near(1200.dp, band().width)
+        near(675.dp, band().height)
+        // Phone: the stacked content is taller than 16:9, so the band grows with it (the backdrop crops).
+        runOnIdle { width = 390.dp }
+        near(390.dp, band().width)
+        assertTrue(band().height > 390.dp * 9f / 16f + 100.dp, "phone band follows its content: ${band().height}")
+        // No backdrop: nothing to show at 16:9, so the band is only as tall as its content.
+        runOnIdle { width = 1440.dp; detail = movie() }
+        near(1440.dp, band().width)
+        assertTrue(band().height < 700.dp, "no-backdrop band stays content-height: ${band().height}")
     }
 
     @Test fun trailerCallbacksCarryTheFullValidatedVideoListAndTheClickedVideo() = runComposeUiTest {

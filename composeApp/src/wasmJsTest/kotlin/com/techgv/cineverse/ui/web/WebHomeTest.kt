@@ -2,10 +2,12 @@ package com.techgv.cineverse.ui.web
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
@@ -52,6 +54,26 @@ class WebHomeTest {
         onNodeWithTag("web-home").performScrollToNode(hasText("Sign in with TMDB"))
         onNodeWithText("Sign in with TMDB").performClick()
         assertEquals(1, signIns)
+    }
+
+    @Test fun shownHeroPickKeepsItsSelectionAndEndsAtItsTitleWithoutAnAutoAdvanceBar() = runComposeUiTest {
+        val second = title.copy(ref = MediaRef(MediaType.Movie, 8), title = "Second film")
+        val picks = PagedItems(listOf(Hero.OfTitle(title), Hero.OfTitle(second)), 1, false)
+        val selected = mutableListOf<Hero>()
+        val history = saver()
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            Box(Modifier.requiredSize(1440.dp, 900.dp)) {
+                WebHomeContent(state().copy(rows = state().rows + (HomeRow.Trending to SectionState.Content(picks))), history, WebSessionState.Ready(null),
+                    {}, { selected += it }, {}, {}, {}, {}, null, {})
+            }
+        }
+        val pick = onNode(isSelected() and hasText("Fixture film")).getBoundsInRoot()
+        val name = onNode(hasText("Fixture film") and hasAnyAncestor(isSelected()), useUnmergedTree = true).getBoundsInRoot()
+        // The shown pick ends at its title: no 3dp progress bar below it.
+        assertTrue(pick.bottom - name.bottom < 0.5.dp, "pick ${pick.bottom} vs title ${name.bottom}")
+        // The 1440dp fixture is wider than the 1024px test window, so the pick is invoked by its click action.
+        onNode(isNotSelected() and hasText("Second film")).performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(listOf<Hero>(Hero.OfTitle(second)), selected)
     }
 
     @Test fun titleKnownToHaveNoTrailerHidesPlayTrailerAndKeepsMoreInfo() = runComposeUiTest {
