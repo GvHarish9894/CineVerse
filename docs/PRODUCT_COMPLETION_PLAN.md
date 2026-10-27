@@ -37,6 +37,8 @@ This is MULTI-SEAM. Independent components have exclusive writers; parent merges
 | M2 remaining root prompt P1 | C5/6a5435f | MobileDetailEntry and root-specific regression/fixture only | Source/tests/commit ONLY while C1 builds | New real same-owner recovery opens prompt during context refresh; follow-up review/gates | Root continuation seam, no shared producer or component redesign |
 | M3 Season closure | C2/c9ae87d | Exact accepted scroll-fix follow-up | Read/search-only review, no builds/edits | Named P1 closure or exact correction; slot reused after handoff | Stable component independent of root/Person |
 
+Initial wave launched as workflow404cfb57: W1 web source, M1 corrected Person compilation (sole lease), M2 root fresh-prompt source correction, M3 Season targeted review. No background test polling. Parent runtime inventory only: no Android devices connected; existing `CineVerse_Phone_API36`, TV and tablet AVDs available; all iOS simulators shutdown, historical owned iPhone17Pro `1F4DFB14-7325-4855-BE5E-4DD01D97D168` available. Nothing booted/deployed/reset. `adb devices` started the standard adb daemon automatically; no emulator or personal device was used.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
