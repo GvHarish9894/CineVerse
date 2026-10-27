@@ -124,7 +124,7 @@ internal class MobileLibraryViewModel(
     }
 
     private fun storageFailure(token: Long) {
-        if (token != serial) return
+        if (!accepts(token)) return
         failed = true
         revoke()
     }
