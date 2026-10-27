@@ -173,37 +173,43 @@ internal class MobileDetailViewModel(
         return token
     }
 
-    private fun stopAccount() {
-        accountRevision++
+    private fun stopAccount(): Long {
+        val token = ++accountRevision
         snapshot = LibraryStateSnapshot(LibraryState.Unknown)
         val previous = accountJob
         accountJob = null
         previous?.cancel()
+        return token
     }
 
-    private fun restartAccount() {
-        stopAccount()
-        if (!active()) return
+    private fun accountCurrent(owner: Long, account: Long) = reading() && revision == owner && accountRevision == account
+
+    private fun restartAccount(owner: Long) {
+        if (!reading() || revision != owner) return
+        val token = stopAccount()
+        if (!accountCurrent(owner, token)) return
         accountFailed = false
-        val token = accountRevision
         publish()
+        if (!accountCurrent(owner, token)) return
         val next = scope.launch(start = CoroutineStart.LAZY) {
             val reader = currentCoroutineContext()[Job]!!
+            if (!accountCurrent(owner, token)) return@launch
             try {
                 libraryState.collect { value ->
-                    if (active() && reader.isActive && token == accountRevision) {
+                    if (accountCurrent(owner, token) && reader.isActive) {
                         snapshot = value
                         publish()
                     }
                 }
             } catch (_: StorageException) {
-                if (active() && reader.isActive && token == accountRevision) {
+                if (accountCurrent(owner, token) && reader.isActive) {
                     snapshot = LibraryStateSnapshot(LibraryState.Unknown)
                     accountFailed = true
                     publish()
                 }
             }
         }
+        if (!accountCurrent(owner, token)) { next.cancel(); return }
         accountJob = next
         next.start()
     }
@@ -212,7 +218,7 @@ internal class MobileDetailViewModel(
         if (!active() || revision != token || graph.settingsFailed.value) return
         readsAllowed = true
         holder?.retryStorage() // Re-collect the ACTUAL raw reader, even for equal settings.
-        if (active() && revision == token) restartAccount()
+        if (active() && revision == token) restartAccount(token)
         publish()
     }
 
@@ -221,7 +227,9 @@ internal class MobileDetailViewModel(
         visible = active
         if (entry == null) return // Invalid entries still allow their visible Back callback, never readers.
         val token = revoke()
+        if (revision != token) return
         stopAccount()
+        if (revision != token) return
         if (active) restart(token)
         publish()
     }
@@ -229,6 +237,7 @@ internal class MobileDetailViewModel(
     fun retryReads() {
         if (!active()) return
         val token = revoke()
+        if (revision != token) return
         stopAccount()
         if (!active() || revision != token) return
         graph.retrySettings()
@@ -242,6 +251,7 @@ internal class MobileDetailViewModel(
     fun contextChanged() {
         if (!active()) return
         val token = revoke()
+        if (revision != token) return
         stopAccount()
         restart(token)
     }

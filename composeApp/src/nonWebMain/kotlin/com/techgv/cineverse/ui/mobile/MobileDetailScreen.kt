@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -15,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -26,6 +27,7 @@ import com.techgv.cineverse.ui.components.*
 import com.techgv.cineverse.ui.design.Tokens
 import com.techgv.cineverse.ui.theme.displayStyle
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 
 private val MobileYouTubeKey = Regex("[A-Za-z0-9_-]{11}")
 internal fun Detail.mobileDetailVideos(): List<Video> = videos.filter { MobileYouTubeKey.matches(it.key) }.distinctBy { it.key }
@@ -42,13 +44,25 @@ internal fun MobileDetailScreen(
     key(model, state.segment) {
         val segment = state.segment
         val position = remember { model.scroll(segment) }
-        val scroll = rememberLazyListState(position.index, position.offset)
-        LaunchedEffect(scroll) {
-            snapshotFlow { MobileDetailScroll(scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
-                .distinctUntilChanged().collect { model.saveScroll(segment, it.index, it.offset) }
+        val scroll = remember { LazyListState() }
+        var restored by remember { mutableStateOf(false) }
+        val content = (state.section as? SectionState.Content)?.value
+        val topologyReady = content?.ref == model.ref && content != null && !state.stale &&
+            !state.settingsFailed && !state.libraryFailed && !state.identityFailed
+        val persist by rememberUpdatedState(restored && topologyReady)
+        LaunchedEffect(scroll, topologyReady) {
+            if (!topologyReady || restored) return@LaunchedEffect
+            // Loading/error/retained rows must not consume the target before the real layout exists.
+            snapshotFlow { scroll.layoutInfo.visibleItemsInfo.any { it.key == "header" } }.first { it }
+            scroll.scrollToItem(position.index, position.offset)
+            restored = true
+        }
+        LaunchedEffect(scroll, restored, topologyReady) {
+            if (persist) snapshotFlow { MobileDetailScroll(scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
+                .distinctUntilChanged().collect { if (persist) model.saveScroll(segment, it.index, it.offset) }
         }
         DisposableEffect(scroll) {
-            onDispose { model.saveScroll(segment, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
+            onDispose { if (persist) model.saveScroll(segment, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
         }
         MobileDetailContent(state, model.imageBase, scroll, model::selectSegment, model::setExpanded,
             onAct = { model.act(it, state.authority) }, onRetryReads = model::retryReads, onRetryDetail = model::retryDetail,
@@ -86,7 +100,13 @@ private fun MobileDetailContent(
                     if (detail != null) {
                         if (onShare != null) RoundIconButton(CvIcons.Share, "Share title", { onShare(detail.ref) })
                         RoundIconButton(if (state.account.favourite) CvIcons.HeartFilled else CvIcons.Heart, "Favourite title",
-                            { onAct(LibraryKind.FAVOURITE) }, content = if (state.account.favourite) Tokens.Colors.Accent else Color.White,
+                            { onAct(LibraryKind.FAVOURITE) }, modifier = Modifier.semantics {
+                                stateDescription = when {
+                                    !state.account.known -> "Favourite unknown"
+                                    state.account.favourite -> "Favourite"
+                                    else -> "Not favourite"
+                                }
+                            }, content = if (state.account.favourite) Tokens.Colors.Accent else Color.White,
                             enabled = state.authority != null && state.account.canToggle(LibraryKind.FAVOURITE))
                     }
                 })
