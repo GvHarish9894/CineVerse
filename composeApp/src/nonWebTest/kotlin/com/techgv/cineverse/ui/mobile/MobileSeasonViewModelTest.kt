@@ -250,6 +250,18 @@ class MobileSeasonViewModelTest {
         observer.cancel(); model.close(); f.graph.close()
     }
 
+    @Test fun oldRecoveryAndBackCallbacksCannotRetargetReactivatedEntry() = runTest {
+        val f = MobileSeasonComponentFixture(backgroundScope); val model = f.owner(backgroundScope)
+        model.setActive(true); runCurrent(); f.failSettings(); runCurrent()
+        val obsolete = model.state.value.revision
+        model.setActive(false); f.raw.value = Result.success(Settings()); model.setActive(true); runCurrent()
+        val fresh = assertNotNull(model.state.value.context); val subscriptions = f.subscriptions
+        var backs = 0
+        model.retryReads(obsolete); model.back(obsolete) { backs++ }; runCurrent()
+        assertSame(fresh, model.state.value.context); assertEquals(subscriptions, f.subscriptions); assertEquals(0, backs)
+        model.close(); f.graph.close()
+    }
+
     @Test fun reentrantReplacementDuringRevocationDoesNotGetCancelledByOuterRestart() = runTest {
         val f = MobileSeasonComponentFixture(backgroundScope); val model = f.owner(backgroundScope)
         model.setActive(true); runCurrent(); val subscriptions = f.subscriptions
