@@ -238,7 +238,7 @@ class MobileDetailScreenTest {
         setContent {
             if (shown) MobileDetailUiFixture(savedState = saved, onReady = { m, fixture -> model = m; f = fixture })
         }
-        onNodeWithText("Detail movie en-US").assertExists()
+        onNodeWithText("Read less").assertExists()
         runOnIdle { f.failSettings() }
         waitUntil { model.state.value.stale }
         runOnIdle { model.selectSegment(MobileDetailSegment.Cast) }
@@ -261,6 +261,18 @@ class MobileDetailScreenTest {
         onNodeWithText("Invalid title. Go back and choose a movie or TV show.").assertIsDisplayed()
         onNodeWithContentDescription("Back").performClick()
         runOnIdle { assertEquals(1, backs); assertTrue(f.api.calls.isEmpty()) }
+    }
+
+    @Test fun unknownIdentityMasksFavouriteSemanticsWithoutRemovingTheAccessibleButton() = runComposeUiTest {
+        lateinit var model: MobileDetailViewModel
+        setContent { MobileDetailUiFixture(knownGuest = false, configure = {
+            it.snapshots.value = com.techgv.cineverse.data.library.LibraryStateSnapshot(
+                LibraryState(true, false, true, null, emptySet()), true, null)
+        }, onReady = { m, _ -> model = m }) }
+        onNodeWithText("Detail movie en-US").assertExists()
+        onNodeWithContentDescription("Favourite title").assertIsNotEnabled().assertHasClickAction()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Favourite unknown"))
+        runOnIdle { assertNull(model.state.value.authority); assertEquals(LibraryState.Unknown, model.state.value.account) }
     }
 
     @Test fun unknownAccountDisablesPrivateActionsAndShareIsAbsentWithoutBinding() = runComposeUiTest {
