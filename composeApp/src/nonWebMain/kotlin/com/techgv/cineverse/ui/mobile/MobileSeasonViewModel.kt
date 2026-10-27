@@ -76,6 +76,7 @@ internal class MobileSeasonViewModel(
     private var readerJob: Job? = null
     private var capturedSettings: Settings? = null
     private var context: MobileSeasonContext? = null
+    private var observedGraph = graph.contextChanges.value to graph.settingsFailed.value
     private val mutableState = MutableStateFlow(MobileSeasonState(invalid = initial == null))
     val state = mutableState.asStateFlow()
 
@@ -84,8 +85,11 @@ internal class MobileSeasonViewModel(
             try { awaitCancellation() } finally { close() }
         }
         if (initial != null) scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            combine(graph.contextChanges, graph.settingsFailed) { _, failed -> failed }.collect {
-                if (active()) restartReader()
+            combine(graph.contextChanges, graph.settingsFailed) { revision, failed -> revision to failed }.collect { next ->
+                if (next != observedGraph) {
+                    observedGraph = next
+                    if (active()) restartReader()
+                }
             }
         }
     }
@@ -181,7 +185,7 @@ internal class MobileSeasonViewModel(
                     section.value.seasons.any { it.seasonNumber < 0 })) SectionState.Error(SectionErrorKind.NotAvailable) else section
         }
         val episodes = result.episodes.let { section ->
-            if (show is SectionState.Error && section !is SectionState.Error) SectionState.Error(SectionErrorKind.NotAvailable)
+            if (show is SectionState.Error && result.show is SectionState.Content) SectionState.Error(SectionErrorKind.NotAvailable)
             else if (section is SectionState.Content && (show !is SectionState.Content || result.selected != seasonNumber ||
                     section.value.seriesId != seriesId || section.value.seasonNumber != seasonNumber ||
                     section.value.episodes.any { it.seasonNumber != seasonNumber || it.episodeNumber < 0 } ||

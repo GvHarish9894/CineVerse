@@ -73,12 +73,13 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
         ?: state.retainedSeason.takeIf { state.current?.episodes != SectionState.Empty }
     val showReady = token != null && state.current?.show is SectionState.Content
     val episodesReady = token != null && state.current?.episodes is SectionState.Content
+    val seasonTitle = if (model.seasonNumber == 0) "Specials" else "Season ${model.seasonNumber}"
     val palette = mobilePalette("tv:${model.seriesId}")
     val solid = rememberTopBarSolid(scroll, 140.dp)
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))) {
         AmbientGlow(palette)
         Column {
-            GlassTopBar(solid, title = if (solid) "Season ${model.seasonNumber}" else null,
+            GlassTopBar(solid, title = seasonTitle.takeIf { solid },
                 navigation = { RoundIconButton(CvIcons.ChevronLeft, "Back", { model.back(onBack) }) })
             LazyColumn(Modifier.fillMaxSize().testTag("mobile-season"), state = scroll,
                 contentPadding = PaddingValues(bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -103,7 +104,7 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
                         }
                     }
                     item("title") {
-                        Text(if (model.seasonNumber == 0) "Specials" else "Season ${model.seasonNumber}",
+                        Text(seasonTitle,
                             Modifier.padding(horizontal = 20.dp).testTag("season-title").semantics { heading() }, style = displayStyle(34.sp))
                     }
                     if (show != null) item("options") {
@@ -131,7 +132,9 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
                                 SectionFailure(section.kind) { token?.let(model::retryEpisodes) }
                             }
                         }
-                        SectionState.Loading -> item("episodes-loading") { Text("Loading episodes…", Modifier.padding(20.dp)) }
+                        SectionState.Loading -> if (state.current?.show !is SectionState.Error) item("episodes-loading") {
+                            Text("Loading episodes…", Modifier.padding(20.dp))
+                        }
                         SectionState.Empty -> item("unavailable") { Text("This season is not available.", Modifier.padding(20.dp)) }
                         else -> Unit
                     }
