@@ -136,6 +136,8 @@ class LibraryActionsStateHolder(
         write(expected.title, LibraryWrite.Unrate, expected.identity) { repository.unrate(expected.title, expected.identity) }
     }
 
+    fun closeRate(expected: RatePrompt) = closeRate()
+
     fun closeRate() {
         rateRequest++
         prompt.value = null

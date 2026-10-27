@@ -115,6 +115,39 @@ class CapturedRatePromptTest {
         f.assertUntouched()
     }
 
+    @Test fun currentDismissClosesWithoutWriting() = runTest {
+        val f = Fixture(this, a)
+        val expected = f.open(movie)
+        f.holder.closeRate(expected)
+        assertNull(f.holder.ratePrompt.first())
+        f.holder.closeRate(expected)
+        runCurrent()
+        f.assertUntouched()
+    }
+
+    @Test fun staleDismissDoesNotCloseDifferentTitleReplacement() = runTest {
+        val f = Fixture(this, a)
+        val old = f.open(movie)
+        val replacement = f.open(other)
+        f.holder.closeRate(old)
+        runCurrent()
+        assertSame(replacement, f.holder.ratePrompt.first())
+        f.assertUntouched()
+    }
+
+    @Test fun valueEqualClosedAndReopenedPromptRejectsOldDismiss() = runTest {
+        val f = Fixture(this, a)
+        val old = f.open(movie)
+        f.holder.closeRate()
+        val replacement = f.open(movie)
+        assertEquals(old, replacement)
+        assertNotSame(old, replacement)
+        f.holder.closeRate(old)
+        runCurrent()
+        assertSame(replacement, f.holder.ratePrompt.first())
+        f.assertUntouched()
+    }
+
     @Test fun equalCopyIsNotTheOwnedPromptForEitherCallback() = runTest {
         val f = Fixture(this, a)
         val expected = f.open(movie)
