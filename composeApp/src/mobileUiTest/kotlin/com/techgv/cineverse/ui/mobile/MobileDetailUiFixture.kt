@@ -11,6 +11,7 @@ import com.techgv.cineverse.ui.theme.CineVerseTheme
 @Composable
 internal fun MobileDetailUiFixture(
     media: String = "movie",
+    savedState: SavedStateHandle = SavedStateHandle(),
     configure: (MobileDetailComponentFixture) -> Unit = {},
     onReady: (MobileDetailViewModel, MobileDetailComponentFixture) -> Unit = { _, _ -> },
     onNavigate: (MobileDestination) -> Unit = {},
@@ -19,7 +20,7 @@ internal fun MobileDetailUiFixture(
 ) {
     val scope = rememberCoroutineScope()
     val f = remember { MobileDetailComponentFixture(scope).also { it.guest(); configure(it) } }
-    val model = remember { MobileDetailViewModel(f.graph, media, 42, SavedStateHandle(), f.rawSettings, f.accountState, scope) }
+    val model = remember { MobileDetailViewModel(f.graph, media, 42, savedState, f.rawSettings, f.accountState, scope) }
     DisposableEffect(model) { model.setActive(true); onDispose { model.close(); f.graph.close() } }
     SideEffect { onReady(model, f) }
     CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = true)) {

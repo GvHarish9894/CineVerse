@@ -1,6 +1,13 @@
 package com.techgv.cineverse.ui.mobile
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import androidx.compose.ui.test.*
 import kotlinx.coroutines.flow.collect
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -123,15 +130,128 @@ class MobileDetailScreenTest {
         lateinit var f: MobileDetailComponentFixture
         val destinations = mutableListOf<MobileDestination>()
         setContent { MobileDetailUiFixture(onReady = { _, fixture -> f = fixture }, onNavigate = destinations::add) }
-        onNodeWithContentDescription("Favourite title").performClick()
+        onNodeWithContentDescription("Favourite title")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not favourite"))
+            .assertHasClickAction().performClick()
         waitForIdle()
         runOnIdle {
             assertEquals(LibraryKind.FAVOURITE, f.guest.rows.value.single().kind)
             assertEquals(MediaRef(MediaType.Movie, 42), f.guest.rows.value.single().ref)
         }
+        onNodeWithContentDescription("Favourite title")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Favourite"))
+            .assertHasClickAction().performClick()
+        waitForIdle()
+        onNodeWithContentDescription("Favourite title")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not favourite"))
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-trailer"))
         onNodeWithTag("detail-trailer").performClick()
         runOnIdle { assertEquals(MobileDestination.Trailer("aB3_dE5-gH7", "Detail movie en-US", "Detail trailer"), destinations.single()) }
+    }
+
+    private fun savedOverview() = SavedStateHandle(mapOf(
+        "mobileDetail.Overview.index" to 1, "mobileDetail.Overview.offset" to 37, "mobileDetail.expanded" to true))
+
+    private fun assertTarget(saved: SavedStateHandle) {
+        assertEquals(1, saved.get<Int>("mobileDetail.Overview.index"))
+        assertEquals(37, saved.get<Int>("mobileDetail.Overview.offset"))
+    }
+
+    @Test fun delayedCatalogRestoresActualExpandedOverviewAndDoesNotReapplyAfterUserScrollAndRetry() = runComposeUiTest {
+        val saved = savedOverview()
+        val gate = CompletableDeferred<Unit>()
+        lateinit var model: MobileDetailViewModel
+        lateinit var f: MobileDetailComponentFixture
+        setContent {
+            Box(Modifier.requiredSize(360.dp, 640.dp)) {
+                MobileDetailUiFixture(savedState = saved, configure = { it.api.gate = gate }, onReady = { m, fixture -> model = m; f = fixture })
+            }
+        }
+        onNodeWithText("Loading title…").assertIsDisplayed()
+        runOnIdle { assertTarget(saved); assertFalse(gate.isCompleted) }
+        runOnIdle { gate.complete(Unit) }
+        onNodeWithText("Read less").assertExists()
+        val list = onNodeWithTag("mobile-detail")
+        val restored = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        runOnIdle { assertTarget(saved); assertTrue(model.state.value.expanded) }
+        list.performScrollToIndex(1)
+        val indexOne = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals(37f, restored - indexOne)
+        waitUntil { saved.get<Int>("mobileDetail.Overview.offset") == 0 }
+        list.performScrollToIndex(0)
+        waitUntil { saved.get<Int>("mobileDetail.Overview.index") == 0 }
+        val userPosition = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        runOnIdle { f.catalog.invalidateTitle(MediaType.Movie, 42); model.retryDetail() }
+        waitUntil { f.api.calls.size == 2 && model.state.value.section is com.techgv.cineverse.presentation.SectionState.Content }
+        assertEquals(userPosition, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        runOnIdle {
+            assertEquals(0, saved.get<Int>("mobileDetail.Overview.index"))
+            assertEquals(0, saved.get<Int>("mobileDetail.Overview.offset"))
+        }
+    }
+
+    @Test fun navigationDisposalBeforeCatalogCompletionPreservesSavedTarget() = runComposeUiTest {
+        val saved = savedOverview()
+        val gate = CompletableDeferred<Unit>()
+        var shown by mutableStateOf(true)
+        setContent {
+            if (shown) MobileDetailUiFixture(savedState = saved, configure = { it.api.gate = gate }, onBack = { shown = false })
+        }
+        onNodeWithText("Loading title…").assertIsDisplayed()
+        runOnIdle { assertTarget(saved) }
+        onNodeWithContentDescription("Back").performClick()
+        onNodeWithTag("mobile-detail").assertDoesNotExist()
+        runOnIdle { assertTarget(saved); gate.complete(Unit) }
+        runOnIdle { assertTarget(saved) }
+    }
+
+    @Test fun initialErrorAndDelayedRetryPreserveTargetUntilActualContentRestores() = runComposeUiTest {
+        val saved = savedOverview()
+        lateinit var f: MobileDetailComponentFixture
+        setContent {
+            Box(Modifier.requiredSize(360.dp, 640.dp)) {
+                MobileDetailUiFixture(savedState = saved, configure = { it.api.failure = true }, onReady = { _, fixture -> f = fixture })
+            }
+        }
+        onNodeWithText("You're offline. Check your connection.").assertIsDisplayed()
+        runOnIdle { assertTarget(saved) }
+        val gate = CompletableDeferred<Unit>()
+        runOnIdle { f.api.failure = false; f.api.gate = gate }
+        onNodeWithText("Retry").performClick()
+        onNodeWithText("Loading title…").assertIsDisplayed()
+        runOnIdle { assertTarget(saved); gate.complete(Unit) }
+        onNodeWithText("Read less").assertExists()
+        val list = onNodeWithTag("mobile-detail")
+        val restored = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        runOnIdle { assertTarget(saved) }
+        list.performScrollToIndex(1)
+        assertEquals(37f, restored - list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+    }
+
+    @Test fun retainedUnverifiedLayoutCannotConsumePendingSegmentTargetEvenOnDisposal() = runComposeUiTest {
+        val saved = savedOverview()
+        saved["mobileDetail.Cast.index"] = 1
+        saved["mobileDetail.Cast.offset"] = 37
+        lateinit var model: MobileDetailViewModel
+        lateinit var f: MobileDetailComponentFixture
+        var shown by mutableStateOf(true)
+        setContent {
+            if (shown) MobileDetailUiFixture(savedState = saved, onReady = { m, fixture -> model = m; f = fixture })
+        }
+        onNodeWithText("Detail movie en-US").assertExists()
+        runOnIdle { f.failSettings() }
+        waitUntil { model.state.value.stale }
+        runOnIdle { model.selectSegment(MobileDetailSegment.Cast) }
+        onNodeWithTag("mobile-detail").assertExists()
+        runOnIdle {
+            assertEquals(MobileDetailScroll(1, 37), model.scroll(MobileDetailSegment.Cast))
+            shown = false
+        }
+        onNodeWithTag("mobile-detail").assertDoesNotExist()
+        runOnIdle {
+            assertEquals(1, saved.get<Int>("mobileDetail.Cast.index"))
+            assertEquals(37, saved.get<Int>("mobileDetail.Cast.offset"))
+        }
     }
 
     @Test fun invalidRouteOffersBackWithoutAnyTitleFetch() = runComposeUiTest {
@@ -144,11 +264,15 @@ class MobileDetailScreenTest {
     }
 
     @Test fun unknownAccountDisablesPrivateActionsAndShareIsAbsentWithoutBinding() = runComposeUiTest {
-        setContent { MobileDetailUiFixture(configure = { it.snapshots.value = com.techgv.cineverse.data.library.LibraryStateSnapshot(LibraryState.Unknown) }) }
+        setContent { MobileDetailUiFixture(configure = {
+            // A known private favourite from an unproven origin must not leak through semantics.
+            it.snapshots.value = com.techgv.cineverse.data.library.LibraryStateSnapshot(LibraryState(true, false, true, null, emptySet()))
+        }) }
         onNodeWithContentDescription("Share title").assertDoesNotExist()
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-watchlist"))
         onNodeWithTag("detail-watchlist").assertIsNotEnabled()
         onNodeWithTag("detail-rate").assertIsNotEnabled()
-        onNodeWithContentDescription("Favourite title").assertIsNotEnabled()
+        onNodeWithContentDescription("Favourite title").assertIsNotEnabled().assertHasClickAction()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Favourite unknown"))
     }
 }

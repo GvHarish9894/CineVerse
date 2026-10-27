@@ -36,13 +36,17 @@ internal class MobileDetailComponentFixture(scope: CoroutineScope) {
     }
     val snapshots = MutableStateFlow(LibraryStateSnapshot(LibraryState(true, false, false, null, emptySet()), true, null))
     var accountSubscriptions = 0
+    var activeAccountSubscriptions = 0
     var accountFailure = false
     val accountState: Flow<LibraryStateSnapshot> = flow {
         accountSubscriptions++
-        snapshots.collect {
-            if (accountFailure) throw StorageException("synthetic Detail library read")
-            emit(it)
-        }
+        activeAccountSubscriptions++
+        try {
+            snapshots.collect {
+                if (accountFailure) throw StorageException("synthetic Detail library read")
+                emit(it)
+            }
+        } finally { activeAccountSubscriptions-- }
     }
     fun guest() { auth.emissions.tryEmit(null) }
     fun failSettings() { raw.value = Result.failure(StorageException("synthetic Detail settings read")) }

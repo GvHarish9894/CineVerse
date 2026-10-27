@@ -142,6 +142,90 @@ class MobileDetailViewModelTest {
         model.close(); f.graph.close()
     }
 
+    @Test fun hidingSynchronouslyWhenLibraryFailureClearsCannotSubscribeWhileHidden() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest(); f.accountFailure = true
+        val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
+        assertTrue(model.state.value.libraryFailed)
+        val subscriptions = f.accountSubscriptions
+        var armed = true
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            model.state.collect {
+                if (armed && !it.libraryFailed) { armed = false; model.setActive(false) }
+            }
+        }
+        f.accountFailure = false; model.retryReads(); runCurrent()
+        assertFalse(armed)
+        assertEquals(subscriptions, f.accountSubscriptions)
+        assertEquals(0, f.activeAccountSubscriptions)
+        assertNull(model.state.value.authority)
+        assertEquals(LibraryState.Unknown, model.state.value.account)
+        observer.cancel(); model.close(); f.graph.close()
+    }
+
+    @Test fun disposalDuringAccountRestartCannotInstallAReader() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest(); f.accountFailure = true
+        val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
+        assertTrue(model.state.value.libraryFailed)
+        val subscriptions = f.accountSubscriptions
+        var armed = true
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            model.state.collect {
+                if (armed && !it.libraryFailed) { armed = false; model.close() }
+            }
+        }
+        f.accountFailure = false; model.retryReads(); runCurrent()
+        assertFalse(armed)
+        assertEquals(subscriptions, f.accountSubscriptions)
+        assertEquals(0, f.activeAccountSubscriptions)
+        assertNull(model.state.value.authority)
+        observer.cancel(); model.close(); f.graph.close()
+    }
+
+    @Test fun retryDuringAccountRestartLeavesOnlyTheNewestReader() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest(); f.accountFailure = true
+        val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
+        assertTrue(model.state.value.libraryFailed)
+        val subscriptions = f.accountSubscriptions
+        var armed = true
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            model.state.collect {
+                if (armed && !it.libraryFailed) { armed = false; model.retryReads() }
+            }
+        }
+        f.accountFailure = false; model.retryReads(); runCurrent()
+        assertFalse(armed)
+        assertEquals(subscriptions + 1, f.accountSubscriptions)
+        assertEquals(1, f.activeAccountSubscriptions)
+        f.snapshots.value = f.snapshots.value.copy(state = f.snapshots.value.state.copy(favourite = true)); runCurrent()
+        assertTrue(model.state.value.account.favourite)
+        observer.cancel(); model.close(); runCurrent()
+        assertEquals(0, f.activeAccountSubscriptions)
+        f.graph.close()
+    }
+
+    @Test fun reactivationDuringRevocationKeepsTheNewestAccountReaderAlive() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest()
+        val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
+        val rendered = assertNotNull(model.state.value.authority)
+        var armed = true
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            model.state.collect {
+                if (armed && it.authority == null) { armed = false; model.setActive(true) }
+            }
+        }
+        model.setActive(false); runCurrent()
+        assertFalse(armed)
+        assertEquals(1, f.activeAccountSubscriptions)
+        f.snapshots.value = f.snapshots.value.copy(state = f.snapshots.value.state.copy(favourite = true)); runCurrent()
+        assertTrue(model.state.value.account.favourite)
+        assertNotEquals(rendered.lifetime, assertNotNull(model.state.value.authority).lifetime)
+        model.act(LibraryKind.WATCHLIST, rendered); runCurrent()
+        assertTrue(f.guest.rows.value.isEmpty())
+        observer.cancel(); model.close(); runCurrent()
+        assertEquals(0, f.activeAccountSubscriptions)
+        f.graph.close()
+    }
+
     @Test fun capturedContextAndGenerationAreCheckedSynchronouslyAtDispatch() = runTest {
         val f = MobileDetailComponentFixture(backgroundScope); f.guest()
         val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
