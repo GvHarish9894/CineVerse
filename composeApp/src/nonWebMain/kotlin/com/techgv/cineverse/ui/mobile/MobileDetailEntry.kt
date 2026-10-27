@@ -21,6 +21,8 @@ internal data class MobileRootRateAuthority(
     val entry: NavBackStackEntry,
     val context: Long,
     val generation: Long,
+    val detailOwner: MobileDetailViewModel?,
+    val detailAuthority: MobileDetailAuthority?,
 )
 
 /** Synchronous root revocation, independent of the next composition/Flow collection frame. */
@@ -31,6 +33,9 @@ internal class MobileDetailRootBinding(private val graph: MobileApplication) {
     private var resumed = false
     private var visible = false
     private var prompt: RatePrompt? = null
+    private var lastObservedPrompt: RatePrompt? = null
+    private var capturedAuthority: MobileRootRateAuthority? = null
+    private var operation = 0L
     private var lifetime by mutableLongStateOf(0L)
 
     private fun entryVisible() = resumed && current?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) == true
@@ -42,97 +47,126 @@ internal class MobileDetailRootBinding(private val graph: MobileApplication) {
         graph.settings.value != null && !graph.settingsFailed.value && graph.identity.value != null &&
         !graph.identityFailed.value && !graph.storageFailed.value && !detailReadsFailed()
 
-    private fun revoke() {
+    private fun revoke(token: Long, owner: MobileDetailViewModel? = detail) {
         visible = false
         lifetime++
         prompt = null
-        detail?.setActive(false)
-        graph.actions.closeRate()
+        capturedAuthority = null
+        owner?.setActive(false)
+        if (operation == token) graph.actions.closeRate()
     }
 
     fun leave() {
+        val token = ++operation
         current = null
-        revoke()
+        revoke(token)
     }
 
     fun setResumed(value: Boolean) {
+        val token = ++operation
         resumed = value
-        if (!value) revoke() else reconcile()
+        if (!value) revoke(token) else reconcile(token)
     }
 
     fun currentChanged(entry: NavBackStackEntry?) {
+        val token = ++operation
         if (current !== entry) {
-            revoke()
             current = entry
+            revoke(token)
+            if (operation != token) return
         }
         graph.actions.setPlayerActive(entry?.destination?.hasRoute<MobileTrailerRoute>() == true)
-        reconcile()
+        if (operation == token) reconcile(token)
     }
 
     fun clearCurrent(entry: NavBackStackEntry?) { if (current === entry) leave() }
 
-    fun entryStateChanged(entry: NavBackStackEntry) { if (current === entry) reconcile() }
+    fun entryStateChanged(entry: NavBackStackEntry) { if (current === entry) reconcile(++operation) }
 
-    private fun reconcile() {
+    private fun reconcile(token: Long) {
         if (!entryVisible()) {
-            if (visible) revoke() else detail?.setActive(false)
+            if (visible) revoke(token) else detail?.setActive(false)
             return
         }
         visible = true
         detail?.setActive(detailEntry === current)
-        if (!rateAllowed()) { prompt = null; graph.actions.closeRate() }
+        if (operation != token) return
+        if (!rateAllowed()) { prompt = null; capturedAuthority = null; graph.actions.closeRate() }
     }
 
     fun attach(entry: NavBackStackEntry, model: MobileDetailViewModel) {
-        if (detail !== model) detail?.setActive(false)
+        val token = ++operation
+        val previous = detail
         detailEntry = entry
         detail = model
-        reconcile()
+        if (previous !== model) previous?.setActive(false)
+        if (operation == token) reconcile(token)
     }
 
     fun detach(entry: NavBackStackEntry, model: MobileDetailViewModel) {
         if (detailEntry !== entry || detail !== model) return
-        model.setActive(false)
+        val token = ++operation
         detail = null
         detailEntry = null
-        if (current === entry) revoke()
+        if (current === entry) revoke(token, model) else model.setActive(false)
     }
 
     fun detailReadsChanged(entry: NavBackStackEntry, model: MobileDetailViewModel) {
         if (detailEntry === entry && detail === model && detailReadsFailed()) {
+            operation++
             lifetime++
             prompt = null
+            capturedAuthority = null
             graph.actions.closeRate()
         }
     }
 
     fun contextChanged() {
+        val token = ++operation
+        val owner = detail
         lifetime++
         prompt = null
-        graph.actions.closeRate()
-        detail?.contextChanged()
+        capturedAuthority = null
+        owner?.contextChanged()
+        if (operation == token) graph.actions.closeRate()
     }
 
     fun observePrompt(next: RatePrompt?): RatePrompt? {
-        if (prompt !== next) lifetime++
+        if (next == null) {
+            if (prompt != null) lifetime++
+            prompt = null
+            capturedAuthority = null
+            return null
+        }
+        // A missed local failure/recovery must never rebind the same producer prompt to a new read.
+        if (lastObservedPrompt === next) return next.takeIf { rateAuthority(it) != null }
+        lastObservedPrompt = next
+        lifetime++
         prompt = next
-        if (next != null && (!rateAllowed() || next.identity != graph.identity.value?.session)) {
+        val identity = graph.identity.value
+        val entry = current
+        val owner = detail.takeIf { detailEntry === entry }
+        val read = owner?.state?.value?.authority
+        capturedAuthority = if (rateAllowed() && identity != null && identity.session == next.identity && entry != null &&
+            (entry.destination.hasRoute<MobileDetailRoute>() == false || (owner != null && read != null))) {
+            MobileRootRateAuthority(next, identity, lifetime, entry, graph.contextChanges.value, graph.generation.current, owner, read)
+        } else null
+        if (capturedAuthority == null) {
             prompt = null
             graph.actions.closeRate(next)
+            return null
         }
-        return prompt
+        return next
     }
 
-    fun rateAuthority(rendered: RatePrompt): MobileRootRateAuthority? {
-        if (!rateAllowed() || prompt !== rendered) return null
-        val identity = graph.identity.value ?: return null
-        if (identity.session != rendered.identity) return null
-        return MobileRootRateAuthority(rendered, identity, lifetime, current!!, graph.contextChanges.value, graph.generation.current)
-    }
+    fun rateAuthority(rendered: RatePrompt): MobileRootRateAuthority? =
+        capturedAuthority?.takeIf { it.prompt === rendered && owns(it) }
 
     private fun owns(authority: MobileRootRateAuthority) = rateAllowed() && prompt === authority.prompt &&
         current === authority.entry && lifetime == authority.lifetime && graph.identity.value == authority.identity &&
-        graph.contextChanges.value == authority.context && graph.generation.current == authority.generation
+        graph.contextChanges.value == authority.context && graph.generation.current == authority.generation &&
+        detail.takeIf { detailEntry === current } === authority.detailOwner &&
+        authority.detailOwner?.state?.value?.authority == authority.detailAuthority
 
     fun submit(authority: MobileRootRateAuthority, value: Double) {
         if (owns(authority)) graph.actions.submitRating(value, authority.prompt)
@@ -146,7 +180,12 @@ internal class MobileDetailRootBinding(private val graph: MobileApplication) {
         if (owns(authority)) graph.actions.closeRate(authority.prompt)
     }
 
-    fun close() { leave(); graph.actions.setPlayerActive(false) }
+    fun close() {
+        val token = ++operation
+        current = null
+        revoke(token)
+        if (operation == token) graph.actions.setPlayerActive(false)
+    }
 }
 
 @Composable
