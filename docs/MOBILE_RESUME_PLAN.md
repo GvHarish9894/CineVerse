@@ -48,4 +48,10 @@ C1 Detail clean f3ef59801cebb08e0b1aeac9a1284759fa1d81ce fixes all three origina
 
 Library reviewer1be85c19 BLOCK atc558c3c: P1 revoke publishes before detaching child and reconcile/restore dispatch fail to recheck context, permitting hidden subscriptions/cancellation of newer reader; P1 global scrollReady blocks healthy TV pagination after unrelated movie error. Parent inspected and accepts both. C2 same five-file boundary receives tests-first correction+sole scoped native host/compile lease; C1 follow-up read-only review runs in parallel. No root/shared changes, no new source implementation, no broad prior-suite repetition.
 
+## Second bounded follow-ups
+
+Library corrections clean8fb7c18a9c2107aa81ed1d5191278fd711790915: two owned files +236/-29; new-method red7/6 intended assertions, corrected full Library20/0, five native compile targets. Original13 cases retained. Exact fix SHA5c7b5b9ed181693320cd494431e52d310e227505fc26623346e261b73e29ac1c; cumulative SHAffa51d7735a3503368edc33792dabbfb82d68730e2495b8951d285817110c7a4. Read-only follow-up review next.
+
+Detail follow-up7995e6e3 closes reader-ownership P1 and accessibility P2 but BLOCKS remaining scroll P1: readiness waits for header in visibleItemsInfo; after scrolling retained content during pending recovery the header can remain offscreen forever, so restore/persistence never enables. Parent inspected and accepts viewport-dependent gate defect. C1 same source/UI-test seam receives minimal readiness correction+focused regression/compilation only, no previously closed issue reopening. Runtime emulator/simulator permission requested from operator; until answered no platform runtime authority added. No new implementation or integration; web off.
+
 Parent integrates only reviewed work, assigns bounded component writers after these handoffs, and owns publication. One writer per worktree; one serialized CineVerse Gradle/test lease; no competing builds or changes to unrelated Zuper processes. Author/committer for every commit remains GvHarish9894 <hariharangv9894@gmail.com>. Main owner staging/IDE/app files remain untouched. No push while GitHub identity remains unverified/wrong.
