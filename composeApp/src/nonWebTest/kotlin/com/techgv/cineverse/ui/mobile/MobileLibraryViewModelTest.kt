@@ -6,6 +6,8 @@ import com.techgv.cineverse.data.tmdb.AccountObjectId
 import com.techgv.cineverse.domain.*
 import com.techgv.cineverse.presentation.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
 import kotlinx.coroutines.flow.*
@@ -101,6 +103,196 @@ class MobileLibraryViewModelTest {
         assertTrue(f.calls.none { it.third > 500 })
         assertEquals(0, f.writes)
         f.base.graph.close()
+    }
+
+    @Test fun healthyGroupPagesAfterOtherGroupsInitialFailureWithoutRetryingIt() = runTest {
+        MediaType.entries.forEach { failedMedia ->
+            val healthyMedia = MediaType.entries.single { it != failedMedia }
+            val f = MobileLibraryFixture(backgroundScope)
+            f.identity(account)
+            f.failPage = failedMedia to 1
+            val model = MobileLibraryViewModel(f.base.graph, f.repository, SavedStateHandle(), backgroundScope)
+            model.setActive(true); runCurrent()
+            assertTrue(model.state.value.library?.group(failedMedia)?.section is SectionState.Error)
+            val failedCalls = f.calls.count { it.second == failedMedia }
+            model.loadMore(model.state.value.context, healthyMedia); runCurrent()
+            assertEquals(2, model.state.value.library?.group(healthyMedia)?.loadedPage)
+            assertEquals(listOf(1, 2), f.calls.filter { it.second == healthyMedia }.map { it.third })
+            assertEquals(failedCalls, f.calls.count { it.second == failedMedia })
+            assertFalse(model.state.value.scrollReady)
+            model.close(); f.base.graph.close()
+        }
+    }
+
+    @Test fun healthyGroupPagesAfterOtherGroupsPageTwoFailureWithoutRetryingIt() = runTest {
+        MediaType.entries.forEach { failedMedia ->
+            val healthyMedia = MediaType.entries.single { it != failedMedia }
+            val f = MobileLibraryFixture(backgroundScope)
+            f.identity(account)
+            val model = MobileLibraryViewModel(f.base.graph, f.repository, SavedStateHandle(), backgroundScope)
+            model.setActive(true); runCurrent()
+            f.failPage = failedMedia to 2
+            model.loadMore(model.state.value.context, failedMedia); runCurrent()
+            assertNotNull(model.state.value.library?.group(failedMedia)?.moreError)
+            val failedCalls = f.calls.count { it.second == failedMedia }
+            model.loadMore(model.state.value.context, healthyMedia); runCurrent()
+            assertEquals(2, model.state.value.library?.group(healthyMedia)?.loadedPage)
+            assertEquals(listOf(1, 2), f.calls.filter { it.second == healthyMedia }.map { it.third })
+            assertEquals(failedCalls, f.calls.count { it.second == failedMedia })
+            assertFalse(model.state.value.scrollReady)
+            model.close(); f.base.graph.close()
+        }
+    }
+
+    @Test fun settingsRevocationObserverCanHideWithoutStartingHiddenSubscription() = runTest {
+        val f = MobileLibraryFixture(backgroundScope)
+        f.identity(account)
+        val model = MobileLibraryViewModel(f.base.graph, f.repository, SavedStateHandle(), backgroundScope)
+        model.setActive(true); runCurrent()
+        val reads = f.sessionReads
+        var hidden = false
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            model.state.collect {
+                if (!hidden && it.library == null) {
+                    hidden = true
+                    model.setActive(false)
+                }
+            }
+        }
+        f.base.settings.update { it.copy(language = "hi-IN") }; runCurrent()
+        assertTrue(hidden)
+        assertEquals(reads, f.sessionReads)
+        assertEquals(0, f.source.subscriptionCount.value)
+        assertNull(model.state.value.library)
+        observer.cancel(); model.close(); f.base.graph.close()
+    }
+
+    @Test fun refreshTabAndStorageRevocationObserverCanHideWithoutStartingHiddenSubscription() = runTest {
+        listOf("refresh", "tab", "storage").forEach { action ->
+            val f = MobileLibraryFixture(backgroundScope)
+            f.identity(account); runCurrent()
+            val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+            val model = MobileLibraryViewModel(f.base.graph, f.repository, SavedStateHandle(), scope)
+            model.setActive(true); runCurrent()
+            val token = model.state.value.context
+            val reads = f.sessionReads
+            var hidden = false
+            val observer = scope.launch {
+                model.state.collect {
+                    if (!hidden && it.library == null) {
+                        hidden = true
+                        model.setActive(false)
+                    }
+                }
+            }
+            when (action) {
+                "refresh" -> model.refresh(token)
+                "tab" -> model.selectTab(token, LibraryTab.Rated)
+                else -> model.retryStorage(token)
+            }
+            runCurrent()
+            assertTrue(hidden, action)
+            assertEquals(reads, f.sessionReads, action)
+            assertEquals(0, f.source.subscriptionCount.value, action)
+            assertNull(model.state.value.library, action)
+            observer.cancel(); model.close(); f.base.graph.close()
+        }
+    }
+
+    @Test fun hideReactivateDuringRevocationRetainsNewestReaderAndItsLiveUpdates() = runTest {
+        listOf("hide", "refresh", "tab", "storage").forEach { action ->
+            val f = MobileLibraryFixture(backgroundScope)
+            f.identity(account); runCurrent()
+            val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+            val model = MobileLibraryViewModel(f.base.graph, f.repository, SavedStateHandle(), scope)
+            model.setActive(true); runCurrent()
+            val token = model.state.value.context
+            val reads = f.sessionReads
+            var replaced = false
+            val observer = scope.launch {
+                model.state.collect {
+                    if (!replaced && it.library == null) {
+                        replaced = true
+                        model.setActive(false)
+                        model.setActive(true)
+                    }
+                }
+            }
+            when (action) {
+                "hide" -> model.setActive(false)
+                "refresh" -> model.refresh(token)
+                "tab" -> model.selectTab(token, LibraryTab.Rated)
+                else -> model.retryStorage(token)
+            }
+            runCurrent()
+            assertTrue(replaced, action)
+            assertEquals(reads + 1, f.sessionReads, action)
+            assertEquals(1, f.source.subscriptionCount.value, action)
+            assertNotNull(model.state.value.library, action)
+            f.source.tryEmit(null); runCurrent()
+            assertNull(model.state.value.library, action)
+            f.source.tryEmit(account); runCurrent()
+            assertEquals(account, model.state.value.library?.sourceIdentity, action)
+            observer.cancel(); model.close(); f.base.graph.close()
+        }
+    }
+
+    @Test fun stateObserverChangingIdentityBeforeRestoreDispatchCannotPageReplacementHolder() = runTest {
+        val f = MobileLibraryFixture(backgroundScope)
+        f.identity(account)
+        val model = MobileLibraryViewModel(f.base.graph, f.repository, SavedStateHandle(), backgroundScope)
+        model.setActive(true); runCurrent()
+        model.loadMore(model.state.value.context, MediaType.Movie)
+        model.loadMore(model.state.value.context, MediaType.Tv); runCurrent()
+        model.saveScroll(model.state.value.context, 5, 11)
+        model.setActive(false)
+        val next = account.copy(sessionGeneration = 2)
+        var replaced = false
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            model.state.collect {
+                if (!replaced && it.library?.movies?.loadedPage == 1 && it.position.moviePage == 2) {
+                    replaced = true
+                    model.setActive(false)
+                    f.identity(next)
+                    // Finish the replacement before returning to the old payload's restoration dispatch.
+                    runCurrent()
+                    model.setActive(true)
+                    runCurrent()
+                    assertEquals(next, model.state.value.library?.sourceIdentity)
+                }
+            }
+        }
+        model.setActive(true); runCurrent()
+        assertTrue(replaced)
+        assertTrue(f.calls.filter { it.first == next }.all { it.third == 1 })
+        assertEquals(1, model.state.value.library?.movies?.loadedPage)
+        assertEquals(1, model.state.value.library?.tv?.loadedPage)
+        assertEquals(0, model.state.value.position.index)
+        observer.cancel(); model.close(); f.base.graph.close()
+    }
+
+    @Test fun closeDuringRevocationCannotBeFollowedByAHiddenSubscription() = runTest {
+        val f = MobileLibraryFixture(backgroundScope)
+        f.identity(account)
+        val model = MobileLibraryViewModel(f.base.graph, f.repository, SavedStateHandle(), backgroundScope)
+        model.setActive(true); runCurrent()
+        val reads = f.sessionReads
+        var closed = false
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            model.state.collect {
+                if (!closed && it.library == null) {
+                    closed = true
+                    model.close()
+                }
+            }
+        }
+        f.base.settings.update { it.copy(language = "hi-IN") }; runCurrent()
+        assertTrue(closed)
+        assertEquals(reads, f.sessionReads)
+        assertEquals(0, f.source.subscriptionCount.value)
+        model.setActive(true); model.retryStorage(); runCurrent()
+        assertNull(model.state.value.library)
+        observer.cancel(); f.base.graph.close()
     }
 
     @Test fun reentryAndTabReturnRestoreActualPageTargetsBeforeSavedScrollWithoutWrites() = runTest {
