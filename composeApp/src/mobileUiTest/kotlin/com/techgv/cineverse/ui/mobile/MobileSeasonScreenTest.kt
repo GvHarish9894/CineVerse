@@ -162,6 +162,84 @@ class MobileSeasonScreenTest {
         waitUntil { saved.get<Int>("mobileSeason.index") == 0 }
     }
 
+    @Test fun disposedScreenRemountsLatestSavedScrollOnSameRetainedOwner() = runComposeUiTest {
+        val saved = SavedStateHandle(); var shown by mutableStateOf(true)
+        lateinit var model: MobileSeasonViewModel
+        setContent { Box(Modifier.requiredSize(360.dp, 640.dp)) {
+            SeasonFixture(saved = saved, showScreen = shown, onReady = { owner, _ -> model = owner })
+        } }
+        onNodeWithTag("mobile-season").performScrollToIndex(8)
+        waitUntil { saved.get<Int>("mobileSeason.index") == 8 }
+        val deep = onNodeWithTag("mobile-season").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val retained = model
+        runOnIdle { shown = false }
+        onNodeWithTag("mobile-season").assertDoesNotExist()
+        runOnIdle {
+            assertEquals(8, saved.get<Int>("mobileSeason.index"))
+            model.setActive(false); model.setActive(true); shown = true
+        }
+        waitForIdle()
+        runOnIdle { assertSame(retained, activeModel) }
+        assertEquals(deep, onNodeWithTag("mobile-season").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        runOnIdle { assertEquals(8, saved.get<Int>("mobileSeason.index")) }
+    }
+
+    @Test fun shorterContentSettingsReplacementAndDisposalPreserveDeepSavedTarget() = replacementClampPreservesDeepTarget(false)
+
+    @Test fun unavailableContentSettingsReplacementAndDisposalPreserveDeepSavedTarget() = replacementClampPreservesDeepTarget(true)
+
+    private fun replacementClampPreservesDeepTarget(unavailable: Boolean) = runComposeUiTest {
+        val saved = SavedStateHandle(); var shown by mutableStateOf(true)
+        lateinit var f: MobileSeasonComponentFixture
+        setContent { Box(Modifier.requiredSize(360.dp, 640.dp)) {
+            SeasonFixture(saved = saved, showScreen = shown, actualSettings = true, onReady = { _, fixture -> f = fixture })
+        } }
+        onNodeWithTag("mobile-season").performScrollToIndex(8)
+        waitUntil { saved.get<Int>("mobileSeason.index") == 8 }
+        val seasons = f.api.seasons
+        val gate = CompletableDeferred<Unit>()
+        runOnIdle {
+            f.api.showGate = gate
+            if (unavailable) f.api.seasons = emptyList() else f.api.episodeCount = 1
+            f.store.values.value = mapOf("language" to "hi-IN")
+        }
+        waitUntil { activeModel!!.state.value.context?.settings?.language == "hi-IN" && !activeModel!!.state.value.bodyReady }
+        runOnIdle { assertEquals(8, saved.get<Int>("mobileSeason.index")); gate.complete(Unit) }
+        waitUntil { activeModel!!.state.value.bodyReady }
+        waitForIdle()
+        runOnIdle {
+            assertEquals(8, saved.get<Int>("mobileSeason.index")); assertEquals(0, saved.get<Int>("mobileSeason.offset"))
+            shown = false
+        }
+        onNodeWithTag("mobile-season").assertDoesNotExist()
+        runOnIdle {
+            assertEquals(8, saved.get<Int>("mobileSeason.index")); assertEquals(0, saved.get<Int>("mobileSeason.offset"))
+            shown = true
+        }
+        waitForIdle()
+        runOnIdle {
+            assertEquals(8, saved.get<Int>("mobileSeason.index"))
+            f.api.showGate = null; f.api.seasons = seasons; f.api.episodeCount = 16
+            f.store.values.value = mapOf("language" to "ta-IN")
+        }
+        waitUntil { activeModel!!.state.value.context?.settings?.language == "ta-IN" && activeModel!!.state.value.bodyReady }
+        waitForIdle()
+        runOnIdle { assertEquals(8, saved.get<Int>("mobileSeason.index")) }
+        onNodeWithTag("mobile-season").performScrollToIndex(0)
+        waitUntil { saved.get<Int>("mobileSeason.index") == 0 && saved.get<Int>("mobileSeason.offset") == 0 }
+    }
+
+    @Test fun inlineExpansionDoesNotRestartCompletedTopologyRestoration() = runComposeUiTest {
+        val saved = SavedStateHandle()
+        setContent { Box(Modifier.requiredSize(360.dp, 640.dp)) { SeasonFixture(saved = saved) } }
+        onNodeWithTag("mobile-season").performScrollToIndex(8)
+        waitUntil { saved.get<Int>("mobileSeason.index") == 8 }
+        val deep = onNodeWithTag("mobile-season").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        onNodeWithContentDescription("Expand episode 6 details").performClick()
+        onNodeWithTag("season-episode-6").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Expanded"))
+        assertEquals(deep, onNodeWithTag("mobile-season").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+    }
+
     @Test fun invalidEntryStillOffersBackWithoutLoading() = runComposeUiTest {
         var backs = 0
         setContent { SeasonFixture(number = -1, onBack = { backs++ }) }
@@ -178,14 +256,15 @@ class MobileSeasonScreenTest {
     private fun SeasonFixture(number: Int = 3, saved: SavedStateHandle = SavedStateHandle(),
         configure: (MobileSeasonComponentFixture) -> Unit = {},
         onReady: (MobileSeasonViewModel, MobileSeasonComponentFixture) -> Unit = { _, _ -> },
-        onNavigate: (MobileDestination) -> Unit = {}, onBack: () -> Unit = {}) {
+        onNavigate: (MobileDestination) -> Unit = {}, onBack: () -> Unit = {},
+        showScreen: Boolean = true, actualSettings: Boolean = false) {
         val scope = rememberCoroutineScope()
         val f = remember { MobileSeasonComponentFixture(scope).also(configure) }
-        val model = remember { MobileSeasonViewModel(f.graph, 42, number, saved, f.rawSettings, scope) }
+        val model = remember { MobileSeasonViewModel(f.graph, 42, number, saved, if (actualSettings) f.graph.settingsFlow else f.rawSettings, scope) }
         DisposableEffect(model) { model.setActive(true); onDispose { model.close(); f.graph.close() } }
         SideEffect { activeModel = model; onReady(model, f) }
         CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = true)) {
-            ProvideWindowClass { MobileSeasonScreen(model, MobileNavigator(onNavigate), onBack) }
+            ProvideWindowClass { if (showScreen) MobileSeasonScreen(model, MobileNavigator(onNavigate), onBack) }
         }
     }
 }

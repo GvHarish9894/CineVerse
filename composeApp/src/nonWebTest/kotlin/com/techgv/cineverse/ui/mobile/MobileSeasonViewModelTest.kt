@@ -226,6 +226,32 @@ class MobileSeasonViewModelTest {
         model.close(); f.graph.close()
     }
 
+    @Test fun scrollTargetReadsLatestSavedPositionAcrossSameOwnerReactivation() = runTest {
+        val f = MobileSeasonComponentFixture(backgroundScope); val saved = SavedStateHandle()
+        val model = f.owner(backgroundScope, saved)
+        assertEquals(MobileSeasonScroll(), model.scrollTarget)
+        model.setActive(true); runCurrent()
+        model.saveScroll(assertNotNull(model.state.value.context), 8, 37)
+        assertEquals(MobileSeasonScroll(8, 37), model.scrollTarget)
+        model.setActive(false); model.setActive(true); runCurrent()
+        assertEquals(MobileSeasonScroll(8, 37), model.scrollTarget)
+        model.close(); f.graph.close()
+    }
+
+    @Test fun scrollTargetNeverSubstitutesDefaultsForInvalidSavedScalars() = runTest {
+        val f = MobileSeasonComponentFixture(backgroundScope)
+        val invalid = SavedStateHandle(mapOf("mobileSeason.index" to "8"))
+        val rejected = f.owner(backgroundScope, invalid)
+        assertNull(rejected.scrollTarget); rejected.setActive(true); runCurrent()
+        assertTrue(f.api.calls.isEmpty()); assertEquals("8", invalid.get<Any?>("mobileSeason.index"))
+        val saved = SavedStateHandle(); val model = f.owner(backgroundScope, saved)
+        saved["mobileSeason.offset"] = -1
+        assertNull(model.scrollTarget); model.setActive(true); runCurrent()
+        assertTrue(model.state.value.invalid); assertTrue(f.api.calls.isEmpty())
+        assertEquals(-1, saved.get<Int>("mobileSeason.offset"))
+        rejected.close(); model.close(); f.graph.close()
+    }
+
     @Test fun hidingRejectsEveryCallbackAndReentryCreatesNewReaderAndToken() = runTest {
         val f = MobileSeasonComponentFixture(backgroundScope); val model = f.owner(backgroundScope)
         model.setActive(true); runCurrent(); val token = assertNotNull(model.state.value.context)
