@@ -2,6 +2,7 @@ package com.techgv.cineverse.ui.mobile
 
 import androidx.lifecycle.SavedStateHandle
 import com.techgv.cineverse.data.auth.AuthSession
+import com.techgv.cineverse.data.tmdb.AccountObjectId
 import com.techgv.cineverse.data.tmdb.MovieDetailDto
 import com.techgv.cineverse.data.tmdb.toDetail
 import com.techgv.cineverse.domain.*
@@ -42,7 +43,7 @@ class MobileDetailRootFactoryTest {
 
     @Test fun factoryForwardsFullAccountOriginAndNeverRetargetsOldAuthority() = runTest {
         val f = MobileDetailRootFixture(backgroundScope)
-        val first = AuthSession("root-account", "Same label", 9_007_199_254_740_993L)
+        val first = AuthSession(AccountObjectId("synthetic-root-account"), "Same label", 9_007_199_254_740_993L)
         f.auth.emissions.emit(first); runCurrent()
         val model = f.graph.detail("movie", 765, SavedStateHandle(), backgroundScope)
         model.setActive(true); runCurrent()
