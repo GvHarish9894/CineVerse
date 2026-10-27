@@ -110,6 +110,10 @@ class LibraryActionsStateHolder(
         }
     }
 
+    fun submitRating(value: Double, expected: RatePrompt) = submitRating(value)
+
+    fun removeRating(expected: RatePrompt) = removeRating()
+
     fun submitRating(value: Double) {
         val p = prompt.value ?: return
         closeRate()
