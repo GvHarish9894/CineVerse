@@ -1,5 +1,8 @@
 package com.techgv.cineverse.ui.mobile
 
+import androidx.datastore.core.CorruptionException
+import androidx.datastore.core.IOException as DataStoreIOException
+import okio.IOException
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
 import com.techgv.cineverse.data.tmdb.SearchFacet
@@ -12,6 +15,87 @@ import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MobileSearchViewModelTest {
+    @Test fun nativeAdapterReadFailuresRetainUnknownAndKnownStateUntilExplicitEqualRecovery() = runTest {
+        val f = NativeMobileStorageBoundaryFixture(backgroundScope)
+        f.native.readFailure = DataStoreIOException("owned-fixture disk read")
+        val model = MobileSearchViewModel(f.graph, SavedStateHandle(mapOf("productSearch.query" to "fixture")), backgroundScope)
+        val search = assertNotNull(model.search)
+        runCurrent()
+        assertTrue(f.graph.settingsFailed.value)
+        assertFalse(search.uiState.value.settingsKnown)
+        assertNotNull(search.uiState.value.settingsError)
+        assertNotNull(search.uiState.value.recentReadError)
+        assertNull(search.uiState.value.recentQueries)
+        assertNull(search.uiState.value.results)
+        f.native.readFailure = null
+        runCurrent()
+        assertFalse(search.uiState.value.settingsKnown)
+        assertNull(search.uiState.value.recentQueries)
+        model.retrySettings(); search.retryRecentRead(); runCurrent()
+        assertTrue(search.uiState.value.settingsKnown)
+        assertFalse(f.graph.settingsFailed.value)
+        assertNull(search.uiState.value.settingsError)
+        assertNull(search.uiState.value.recentReadError)
+        model.submit(); runCurrent()
+        search.loadMore(); runCurrent()
+        val retained = search.uiState.value.results
+        val settings = f.graph.settings.value
+        assertEquals(listOf("fixture"), search.uiState.value.recentQueries)
+        f.native.readFailure = CorruptionException("owned-fixture corrupt read")
+        runCurrent()
+        assertTrue(f.graph.settingsFailed.value)
+        assertNotNull(search.uiState.value.settingsError)
+        assertNotNull(search.uiState.value.recentReadError)
+        assertEquals(listOf("fixture"), search.uiState.value.recentQueries)
+        assertEquals(retained, search.uiState.value.results)
+        assertEquals(settings, f.graph.settings.value)
+        f.native.readFailure = null
+        runCurrent()
+        assertNotNull(search.uiState.value.settingsError)
+        model.retrySettings(); search.retryRecentRead(); runCurrent()
+        assertSame(search, model.search)
+        assertFalse(f.graph.settingsFailed.value)
+        assertNull(search.uiState.value.settingsError)
+        assertNull(search.uiState.value.recentReadError)
+        assertEquals(retained, search.uiState.value.results)
+        assertEquals(listOf("fixture"), search.uiState.value.recentQueries)
+        assertEquals(1, f.native.edits)
+        search.setQuery("usable"); advanceTimeBy(300); runCurrent()
+        assertTrue(search.uiState.value.results is SectionState.Content)
+        assertEquals(1, f.native.edits)
+        f.graph.close()
+    }
+
+    @Test fun nativeAdapterWriteFailureReportsFailedKeepsOwnerUsableAndNeverReplays() = runTest {
+        val f = NativeMobileStorageBoundaryFixture(backgroundScope)
+        val model = MobileSearchViewModel(f.graph, SavedStateHandle(mapOf("productSearch.query" to "fixture")), backgroundScope)
+        val search = assertNotNull(model.search)
+        runCurrent()
+        f.native.writeFailure = IOException("owned-fixture disk write")
+        model.submit(); runCurrent()
+        assertEquals(RecentMutationStatus.Failed, search.uiState.value.recentMutation)
+        assertEquals(emptyList(), search.uiState.value.recentQueries)
+        assertEquals(1, f.native.edits)
+        f.native.writeFailure = null
+        f.native.readFailure = CorruptionException("owned-fixture corrupt read")
+        runCurrent()
+        assertNotNull(search.uiState.value.recentReadError)
+        f.native.readFailure = null
+        search.retryRecentRead(); model.retrySettings(); model.retry(); runCurrent()
+        assertEquals(1, f.native.edits)
+        assertEquals(RecentMutationStatus.Failed, search.uiState.value.recentMutation)
+        assertEquals(emptyList(), search.uiState.value.recentQueries)
+        search.setQuery("usable"); advanceTimeBy(300); runCurrent()
+        assertTrue(search.uiState.value.results is SectionState.Content)
+        assertEquals(1, f.native.edits)
+        model.submit(); runCurrent()
+        assertSame(search, model.search)
+        assertEquals(2, f.native.edits)
+        assertEquals(RecentMutationStatus.Succeeded, search.uiState.value.recentMutation)
+        assertEquals(listOf("usable"), search.uiState.value.recentQueries)
+        f.graph.close()
+    }
+
     @Test fun fourFacetsUseTypedSourcesLoadedOnlyCountsAndRealDestinations() = runTest {
         val f = MobileFixture(backgroundScope)
         val model = MobileSearchViewModel(f.graph, SavedStateHandle(mapOf("productSearch.query" to "  dune  ")), backgroundScope)

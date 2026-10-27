@@ -1,5 +1,7 @@
 package com.techgv.cineverse.ui.mobile
 
+import androidx.datastore.core.CorruptionException
+import okio.IOException
 import androidx.lifecycle.SavedStateHandle
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.settings.HapticStrength
@@ -18,6 +20,37 @@ import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MobileApplicationTest {
+    @Test fun nativeAdapterReadFailureKeepsUnknownOrLastGoodUntilExplicitEqualRecovery() = runTest {
+        val f = NativeMobileStorageBoundaryFixture(backgroundScope)
+        f.native.readFailure = CorruptionException("owned-fixture corruption")
+        runCurrent()
+        assertTrue(f.graph.settingsFailed.value)
+        assertNull(f.graph.settings.value)
+        f.native.readFailure = null
+        runCurrent()
+        assertTrue(f.graph.settingsFailed.value)
+        assertNull(f.graph.settings.value)
+        f.graph.retrySettings(); runCurrent()
+        val previous = assertNotNull(f.graph.settings.value)
+        assertFalse(f.graph.settingsFailed.value)
+        val generation = f.graph.generation.current
+        f.native.readFailure = IOException("owned-fixture disk read")
+        runCurrent()
+        assertTrue(f.graph.settingsFailed.value)
+        assertEquals(previous, f.graph.settings.value)
+        f.native.readFailure = null
+        runCurrent()
+        assertTrue(f.graph.settingsFailed.value)
+        f.graph.retrySettings(); runCurrent()
+        assertFalse(f.graph.settingsFailed.value)
+        assertEquals(previous, f.graph.settings.value)
+        assertEquals(generation, f.graph.generation.current)
+        assertEquals(0, f.native.edits)
+        f.settings.update { it.copy(haptics = false) }; runCurrent()
+        assertEquals(false, f.graph.settings.value?.haptics)
+        f.graph.close()
+    }
+
     @Test fun settingsAreUnknownUntilReadAndFailuresRetainLastGoodWithExplicitRetry() = runTest {
         val f = MobileFixture(backgroundScope)
         assertNull(f.graph.settings.value)
