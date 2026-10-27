@@ -410,6 +410,170 @@ class MobileLibraryViewModelTest {
         f.base.graph.close()
     }
 
+    @Test fun oneUnconfinedRetryRestartsAllFailedGraphReadersWithEqualValuesAndLiveUpdates() = runTest {
+        listOf(null, account).forEach { initial ->
+            val f = MobileLibraryFixture(backgroundScope)
+            f.base.graph.close()
+            var identityFailure = false
+            var identityReads = 0
+            val auth = object : com.techgv.cineverse.data.auth.AuthRepository by f.base.auth {
+                override val session = flow {
+                    identityReads++
+                    f.base.auth.session.collect {
+                        if (identityFailure) throw com.techgv.cineverse.data.storage.StorageException("owned identity read")
+                        emit(it)
+                    }
+                }
+            }
+            val graph = MobileApplication(f.base.catalog, f.base.generation, f.base.settings, auth,
+                f.repository, f.base.recent, backgroundScope)
+            f.identity(initial); runCurrent()
+            val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+            val model = MobileLibraryViewModel(graph, f.repository, SavedStateHandle(), scope)
+            model.setActive(true); runCurrent()
+            val preferences = graph.settings.value
+            assertEquals(initial, assertNotNull(model.state.value.library).sourceIdentity)
+            f.sessionFailure = true
+            graph.actions.openRate(libraryFixtureEntry(MediaType.Movie).title, initial); runCurrent()
+            f.sessionFailure = false
+            assertTrue(graph.storageFailed.value)
+            identityFailure = true
+            f.base.auth.emissions.tryEmit(account.copy(sessionGeneration = 2))
+            f.base.store.fail = true
+            f.base.store.values.value = mapOf("owned" to "failure")
+            runCurrent()
+            assertTrue(graph.settingsFailed.value)
+            assertTrue(graph.identityFailed.value)
+            assertNull(model.state.value.library)
+            assertEquals(0, f.base.store.activeSubscriptions)
+            assertEquals(0, f.base.auth.emissions.subscriptionCount.value)
+            assertEquals(0, f.source.subscriptionCount.value)
+            val settingsReads = f.base.store.subscriptions
+            val authReads = identityReads
+            val libraryReads = f.sessionReads
+            identityFailure = false
+            f.base.store.fail = false
+            f.base.auth.emissions.tryEmit(initial); runCurrent()
+            assertEquals(settingsReads, f.base.store.subscriptions)
+            assertEquals(authReads, identityReads)
+            model.retryStorage(); runCurrent()
+            assertEquals(settingsReads + 1, f.base.store.subscriptions)
+            assertEquals(authReads + 1, identityReads)
+            assertEquals(libraryReads + 1, f.sessionReads)
+            assertEquals(1, f.base.store.activeSubscriptions)
+            assertEquals(1, f.base.auth.emissions.subscriptionCount.value)
+            assertEquals(1, f.source.subscriptionCount.value)
+            assertFalse(graph.settingsFailed.value)
+            assertFalse(graph.identityFailed.value)
+            assertFalse(graph.storageFailed.value)
+            assertFalse(model.state.value.failed)
+            assertEquals(preferences, graph.settings.value)
+            assertEquals(initial, assertNotNull(model.state.value.library).sourceIdentity)
+            f.identity(null); runCurrent()
+            f.guest.rows.value = listOf(com.techgv.cineverse.data.library.GuestLibraryRow(
+                MediaRef(MediaType.Movie, 42), LibraryKind.WATCHLIST, null, 0, """{"title":"Recovered guest"}"""))
+            runCurrent()
+            val guest = assertNotNull(model.state.value.library).movies.section as SectionState.Content
+            assertEquals("Recovered guest", guest.value.single().title.title)
+            val next = account.copy(displayName = "Recovered account", sessionGeneration = 3)
+            f.identity(next); runCurrent()
+            assertEquals(next, assertNotNull(model.state.value.library).sourceIdentity)
+            val movies = model.state.value.library!!.movies.section as SectionState.Content
+            assertEquals("Recovered account Movie 1", movies.value.single().title.title)
+            f.base.store.values.value = mapOf("language" to "hi-IN"); runCurrent()
+            assertEquals("hi-IN", graph.settings.value?.language)
+            assertEquals(next, assertNotNull(model.state.value.library).sourceIdentity)
+            assertEquals(0, f.writes)
+            assertEquals(0, f.guest.writes)
+            assertEquals(0, f.base.store.edits)
+            model.close(); graph.close()
+        }
+    }
+
+    @Test fun graphRetryFlagReentryStillHonorsHideCloseAndExplicitSupersession() = runTest {
+        listOf("hide", "close", "retry").forEach { action ->
+            val f = MobileLibraryFixture(backgroundScope)
+            f.base.graph.close()
+            var identityFailure = false
+            var identityReads = 0
+            val auth = object : com.techgv.cineverse.data.auth.AuthRepository by f.base.auth {
+                override val session = flow {
+                    identityReads++
+                    f.base.auth.session.collect {
+                        if (identityFailure) throw com.techgv.cineverse.data.storage.StorageException("owned identity read")
+                        emit(it)
+                    }
+                }
+            }
+            val graph = MobileApplication(f.base.catalog, f.base.generation, f.base.settings, auth,
+                f.repository, f.base.recent, backgroundScope)
+            f.identity(account); runCurrent()
+            val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
+            val model = MobileLibraryViewModel(graph, f.repository, SavedStateHandle(), scope)
+            model.setActive(true); runCurrent()
+            f.sessionFailure = true
+            graph.actions.openRate(libraryFixtureEntry(MediaType.Movie).title, account); runCurrent()
+            f.sessionFailure = false
+            identityFailure = true
+            f.base.auth.emissions.tryEmit(account.copy(sessionGeneration = 2))
+            f.base.store.fail = true
+            f.base.store.values.value = mapOf("owned" to "failure"); runCurrent()
+            assertTrue(graph.settingsFailed.value)
+            assertTrue(graph.identityFailed.value)
+            assertTrue(graph.storageFailed.value)
+            val authReads = identityReads
+            val libraryReads = f.sessionReads
+            identityFailure = false
+            f.base.store.fail = false
+            f.base.auth.emissions.tryEmit(account)
+            var reentered = false
+            val flag = if (action == "retry") graph.storageFailed else graph.settingsFailed
+            val observer = scope.launch {
+                flag.collect {
+                    if (!it && !reentered) {
+                        reentered = true
+                        when (action) {
+                            "hide" -> model.setActive(false)
+                            "close" -> model.close()
+                            else -> model.retryStorage()
+                        }
+                        assertNull(model.state.value.library)
+                    }
+                }
+            }
+            model.retryStorage(); runCurrent()
+            assertTrue(reentered, action)
+            if (action == "retry") {
+                assertEquals(authReads + 1, identityReads)
+                assertEquals(libraryReads + 1, f.sessionReads)
+                assertEquals(1, f.source.subscriptionCount.value)
+                assertEquals(account, assertNotNull(model.state.value.library).sourceIdentity)
+                f.identity(null); runCurrent()
+                assertFalse(assertNotNull(model.state.value.library).signedIn)
+            } else {
+                assertEquals(authReads, identityReads, action)
+                assertEquals(libraryReads, f.sessionReads, action)
+                assertEquals(0, f.source.subscriptionCount.value, action)
+                assertTrue(graph.identityFailed.value, action)
+                assertTrue(graph.storageFailed.value, action)
+                assertNull(model.state.value.library, action)
+                model.setActive(true)
+                model.retryStorage(); runCurrent()
+                if (action == "hide") {
+                    assertEquals(authReads + 1, identityReads)
+                    assertEquals(account, assertNotNull(model.state.value.library).sourceIdentity)
+                } else {
+                    assertEquals(authReads, identityReads)
+                    assertNull(model.state.value.library)
+                }
+            }
+            assertEquals(0, f.writes)
+            assertEquals(0, f.guest.writes)
+            assertEquals(0, f.base.store.edits)
+            observer.cancel(); model.close(); graph.close()
+        }
+    }
+
     @Test fun equalSettingsRecoveryRecreatesReaderAndBackgroundCompletionNeverPublishes() = runTest {
         val f = MobileLibraryFixture(backgroundScope)
         f.identity(account)
