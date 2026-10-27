@@ -46,6 +46,7 @@ internal class MobileLibraryViewModel(
     private var closed = false
     private var failed = false
     private var serial = 0L
+    private var storageRetry: Long? = null
     private var child: Job? = null
     private var holder: LibraryStateHolder? = null
     private var context: ReadContext? = null
@@ -57,7 +58,7 @@ internal class MobileLibraryViewModel(
 
     private val observer = ownerScope.launch {
         combine(graph.identity, graph.settings, graph.identityFailed, graph.settingsFailed, graph.storageFailed) { _, _, _, _, _ -> Unit }
-            .collect { reconcile() }
+            .collect { if (storageRetry == null) reconcile() }
     }
 
     fun setActive(value: Boolean) {
@@ -112,6 +113,7 @@ internal class MobileLibraryViewModel(
     /** Revoke both display and callback authority synchronously, then cancel only the detached old work. */
     private fun revoke(): Long {
         val token = ++serial
+        storageRetry = null
         val previous = child
         child = null
         context = null
@@ -204,11 +206,17 @@ internal class MobileLibraryViewModel(
         val revision = revoke()
         if (revision != serial || !active || closed) return
         failed = false
-        graph.retrySettings()
-        if (revision != serial || !active || closed) return
-        graph.retryIdentity()
-        if (revision != serial || !active || closed) return
-        graph.retryLibraryStorage()
+        // Only defer graph reconciliation while all readers are revoked; explicit revocation still wins.
+        storageRetry = revision
+        try {
+            graph.retrySettings()
+            if (revision != serial || !active || closed) return
+            graph.retryIdentity()
+            if (revision != serial || !active || closed) return
+            graph.retryLibraryStorage()
+        } finally {
+            if (storageRetry == revision) storageRetry = null
+        }
         reconcile(revision) // Equal recovered values must restart this repository's actual session/guest readers.
     }
 
