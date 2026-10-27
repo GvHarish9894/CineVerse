@@ -41,6 +41,13 @@ class MobileSeasonViewModelTest {
         model.close(); f.graph.close()
     }
 
+    @Test fun initialGraphObservationIsNotAnAutomaticRawFailureRetry() = runTest {
+        val f = MobileSeasonComponentFixture(backgroundScope); runCurrent(); f.failSettings()
+        val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
+        assertTrue(model.state.value.settingsFailed); assertEquals(1, f.subscriptions)
+        model.close(); f.graph.close()
+    }
+
     @Test fun unsupportedActualSettingsFailWithoutFetchingOrInventingSettings() = runTest {
         val f = MobileSeasonComponentFixture(backgroundScope); f.raw.value = Result.success(Settings(language = "xx"))
         val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
@@ -83,10 +90,11 @@ class MobileSeasonViewModelTest {
     @Test fun equalRawRecoveryRecollectsAndCreatesNewAuthorityWithImmutableSettings() = runTest {
         val f = MobileSeasonComponentFixture(backgroundScope); val model = f.owner(backgroundScope)
         model.setActive(true); runCurrent(); val old = assertNotNull(model.state.value.context)
+        val subscriptions = f.subscriptions
         f.failSettings(); runCurrent()
         assertTrue(model.state.value.settingsFailed); assertTrue(model.state.value.stale); assertNull(model.state.value.context)
         f.raw.value = Result.success(Settings()); model.retryReads(); runCurrent()
-        assertEquals(2, f.subscriptions); assertNotSame(old, model.state.value.context); assertFalse(model.state.value.stale)
+        assertEquals(subscriptions + 1, f.subscriptions); assertNotSame(old, model.state.value.context); assertFalse(model.state.value.stale)
         assertEquals(Settings(), old.settings)
         model.close(); f.graph.close()
     }
@@ -95,18 +103,21 @@ class MobileSeasonViewModelTest {
         val f = MobileSeasonComponentFixture(backgroundScope); f.failSettings()
         val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
         assertTrue(model.state.value.settingsFailed); assertTrue(f.api.calls.isEmpty())
+        val subscriptions = f.subscriptions
         f.raw.value = Result.success(Settings()); model.retryReads(); runCurrent()
-        assertTrue(model.state.value.bodyReady); assertEquals(2, f.subscriptions)
+        assertTrue(model.state.value.bodyReady); assertEquals(subscriptions + 1, f.subscriptions)
         model.close(); f.graph.close()
     }
 
     @Test fun graphContentAdultAndIdentityInvalidationRecollectActualReader() = runTest {
-        val f = MobileSeasonComponentFixture(backgroundScope); val model = f.owner(backgroundScope)
+        val f = MobileSeasonComponentFixture(backgroundScope); val model = f.owner(backgroundScope, raw = f.graph.settingsFlow)
         model.setActive(true); runCurrent(); val first = assertNotNull(model.state.value.context)
-        f.store.values.value = mapOf("includeAdult" to true); runCurrent()
+        f.store.values.value = mapOf("include_adult" to true); runCurrent()
+        assertNotSame(first, model.state.value.context); assertTrue(assertNotNull(model.state.value.context).settings.includeAdult)
+        val beforeGeneration = assertNotNull(model.state.value.context)
         // Also exercise the explicit root seam for generation-only invalidation.
         f.generation.bump(); model.contextChanged(); runCurrent()
-        assertNotSame(first, model.state.value.context); assertTrue(f.subscriptions >= 2)
+        assertNotSame(beforeGeneration, model.state.value.context)
         val beforeIdentity = assertNotNull(model.state.value.context)
         f.auth.emissions.emit(null); runCurrent()
         assertNotSame(beforeIdentity, model.state.value.context)
@@ -225,6 +236,49 @@ class MobileSeasonViewModelTest {
         model.retryReads(); runCurrent()
         assertFalse(armed); assertEquals(subscriptions, f.subscriptions); assertNull(model.state.value.context)
         observer.cancel(); model.close(); f.graph.close()
+    }
+
+    @Test fun reentrantReplacementDuringRevocationDoesNotGetCancelledByOuterRestart() = runTest {
+        val f = MobileSeasonComponentFixture(backgroundScope); val model = f.owner(backgroundScope)
+        model.setActive(true); runCurrent(); val subscriptions = f.subscriptions
+        var armed = true
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            model.state.collect {
+                if (armed && it.context == null) { armed = false; model.contextChanged() }
+            }
+        }
+        model.retryReads(); runCurrent()
+        assertFalse(armed); assertEquals(subscriptions + 1, f.subscriptions)
+        assertTrue(model.state.value.bodyReady); assertEquals(1, f.activeSubscriptions)
+        observer.cancel(); model.close(); f.graph.close()
+    }
+
+    @Test fun cancelledRawReaderLateFailureCannotRevokeReplacement() = runTest {
+        val f = MobileSeasonComponentFixture(backgroundScope); val release = CompletableDeferred<Unit>()
+        var reads = 0
+        val raw = flow {
+            val read = ++reads
+            if (read == 1) {
+                withContext(NonCancellable) { release.await() }
+                throw StorageException("obsolete raw reader")
+            }
+            emit(Settings(language = "hi-IN")); awaitCancellation()
+        }
+        val model = f.owner(backgroundScope, raw = raw); model.setActive(true); runCurrent()
+        model.retryReads(); runCurrent(); val fresh = assertNotNull(model.state.value.context)
+        release.complete(Unit); runCurrent()
+        assertSame(fresh, model.state.value.context); assertFalse(model.state.value.settingsFailed)
+        assertTrue(model.state.value.bodyReady)
+        model.close(); f.graph.close()
+    }
+
+    @Test fun sameReaderEqualEmissionsStillCreateDistinctImmutableHolderTokens() = runTest {
+        val f = MobileSeasonComponentFixture(backgroundScope); val raw = MutableSharedFlow<Settings>()
+        val model = f.owner(backgroundScope, raw = raw); model.setActive(true); runCurrent()
+        raw.emit(Settings()); runCurrent(); val first = assertNotNull(model.state.value.context)
+        raw.emit(Settings()); runCurrent(); val second = assertNotNull(model.state.value.context)
+        assertNotSame(first, second); assertEquals(first.settings, second.settings)
+        model.close(); f.graph.close()
     }
 
     @Test fun normalRawReaderCompletionRevokesAuthorityInsteadOfLeavingActionableCachedData() = runTest {
