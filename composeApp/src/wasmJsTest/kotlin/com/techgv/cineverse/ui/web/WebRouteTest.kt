@@ -22,6 +22,13 @@ class WebRouteTest {
             "/search?q=" + "a".repeat(8192)).forEach { assertEquals(WebRoute.NotFound, parseWebRoute(it), it.take(100)) }
     }
 
+    @Test fun legacySignedInCallbackHintRoutesHomeButOtherHomeParamsStayNotFound() {
+        assertEquals(WebRoute.Home, parseWebRoute("/?signedIn=1"))
+        assertEquals("/", parseWebRoute("/?signedIn=1").url())
+        listOf("/?other=1", "/?signedIn=1&other=1", "/?signedIn=1&signedIn=1", "/movie/550?signedIn=1")
+            .forEach { assertEquals(WebRoute.NotFound, parseWebRoute(it), it) }
+    }
+
     @Test fun searchDoesNotInheritTvTwentyEightCharacterPolicy() {
         val query = "a long web search query ".repeat(5)
         assertEquals(WebRoute.Search(query), parseWebRoute(WebRoute.Search(query).url()))
@@ -91,6 +98,14 @@ class WebNavigationTest {
         assertEquals(WebRoute.Search("a b"), nav.entry.value.route)
         nav.navigate(WebRoute.Settings)
         assertEquals(1, history.pushes)
+    }
+
+    @Test fun legacySignedInCallbackUrlIsCanonicalisedToHomeInHistory() {
+        val history = FakeHistory("/?signedIn=1")
+        val nav = WebNavigation(history)
+        assertEquals(WebRoute.Home, nav.entry.value.route)
+        assertEquals("/", history.url)
+        nav.close()
     }
 
     @Test fun corruptSavedStateIsNotATrustedHolderEnumOrNegativeScroll() {

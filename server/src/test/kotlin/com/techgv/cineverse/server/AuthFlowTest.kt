@@ -38,7 +38,7 @@ class AuthFlowTest {
             fake.approve(requestToken, "A")
             val callback = browser.callback(attemptId)
             assertEquals(HttpStatusCode.Found, callback.status)
-            assertEquals("$ORIGIN/?signedIn=1", callback.headers[HttpHeaders.Location])
+            assertEquals("$ORIGIN/", callback.headers[HttpHeaders.Location], "plain Home: no signedIn hint the SPA router would reject")
             assertTrue(callback.headers.getAll(HttpHeaders.SetCookie)!!.none { "\$x-enc" in it }, "standard cookie attributes only")
             val sessionCookie = browser.lastSetCookies.single { it.name == SESSION_COOKIE }
             assertTrue(sessionCookie.httpOnly && sessionCookie.secure)

@@ -2,6 +2,7 @@ package com.techgv.cineverse.ui.web
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -52,6 +53,27 @@ class WebHomeTest {
         onNodeWithTag("web-home").performScrollToNode(hasText("Sign in with TMDB"))
         onNodeWithText("Sign in with TMDB").performClick()
         assertEquals(1, signIns)
+    }
+
+    @Test fun heroPicksShowTheSelectionRingWithoutAnAutoAdvanceBarAndStillAdvanceAfterEightSeconds() = runComposeUiTest {
+        val second = title.copy(ref = MediaRef(MediaType.Movie, 8), title = "Second film")
+        val picks = PagedItems(listOf(Hero.OfTitle(title), Hero.OfTitle(second)), 1, false)
+        val selected = mutableListOf<Hero>()
+        val history = saver()
+        mainClock.autoAdvance = false
+        setThemedContent(ShellStyle.Web) {
+            Box(Modifier.requiredSize(1440.dp, 900.dp)) {
+                WebHomeContent(state().copy(rows = state().rows + (HomeRow.Trending to SectionState.Content(picks))), history, WebSessionState.Ready(null),
+                    {}, { selected += it }, {}, {}, {}, {}, null, {})
+            }
+        }
+        val pick = onNode(isSelected() and hasText("Second film").not() and hasClickAction()).getBoundsInRoot()
+        val name = onNode(hasText("Fixture film") and hasAnyAncestor(isSelected()), useUnmergedTree = true).getBoundsInRoot()
+        // The shown pick ends at its title: no 3dp progress bar below it.
+        assertTrue(pick.bottom - name.bottom < 0.5.dp, "pick ${pick.bottom} vs title ${name.bottom}")
+        assertTrue(selected.isEmpty())
+        mainClock.advanceTimeBy(8_100)
+        assertEquals(listOf<Hero>(Hero.OfTitle(second)), selected)
     }
 
     @Test fun titleKnownToHaveNoTrailerHidesPlayTrailerAndKeepsMoreInfo() = runComposeUiTest {

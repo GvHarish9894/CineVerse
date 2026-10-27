@@ -194,23 +194,26 @@ private fun Detail.hasWebDetailBody() = webDetailCast().isNotEmpty() || webDetai
 @Composable
 private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boolean, act: (LibraryKind) -> Unit,
                           playTrailer: (Title, List<Video>, Video) -> Unit, openPerson: (Int) -> Unit) {
-    Box(Modifier.fillMaxWidth()) {
-        if (detail.backdropPath != null) PaletteArt(webImage(detail.backdropPath, "w1280"), detailPalette, ArtStyle.Backdrop, Modifier.matchParentSize())
-        Box(Modifier.matchParentSize().webDetailHeroScrim())
-        WebPage(Modifier.padding(top = 16.dp, bottom = 40.dp)) {
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val phone = maxWidth <= 640.dp
-                val side = maxWidth >= 300.dp + 44.dp + 440.dp
-                val posterShape = RoundedCornerShape(22.dp)
-                val poster = @Composable {
-                    if (detail.posterPath != null) PaletteArt(webImage(detail.posterPath, "w342"), detailPalette, ArtStyle.Poster,
-                        Modifier.width(if (phone) 200.dp else 300.dp).aspectRatio(2f / 3f)
-                            .dropShadow(posterShape, Shadow(60.dp, detailPalette.c1.copy(alpha = 0.55f), (-24).dp, DpOffset(0.dp, 40.dp)))
-                            .clip(posterShape))
+    // Full-bleed band at the backdrop's 16:9 (capped) so the whole image shows on desktop; Crop only once content is taller (phone).
+    BoxWithConstraints(Modifier.fillMaxWidth().testTag("detail-hero")) {
+        Box(Modifier.fillMaxWidth().heightIn(min = minOf(maxWidth * 9f / 16f, 760.dp)), contentAlignment = Alignment.CenterStart) {
+            if (detail.backdropPath != null) PaletteArt(webImage(detail.backdropPath, "w1280"), detailPalette, ArtStyle.Backdrop, Modifier.matchParentSize())
+            Box(Modifier.matchParentSize().webDetailHeroScrim())
+            WebPage(Modifier.padding(top = 16.dp, bottom = 40.dp)) {
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val phone = maxWidth <= 640.dp
+                    val side = maxWidth >= 300.dp + 44.dp + 440.dp
+                    val posterShape = RoundedCornerShape(22.dp)
+                    val poster = @Composable {
+                        if (detail.posterPath != null) PaletteArt(webImage(detail.posterPath, "w342"), detailPalette, ArtStyle.Poster,
+                            Modifier.width(if (phone) 200.dp else 300.dp).aspectRatio(2f / 3f)
+                                .dropShadow(posterShape, Shadow(60.dp, detailPalette.c1.copy(alpha = 0.55f), (-24).dp, DpOffset(0.dp, 40.dp)))
+                                .clip(posterShape))
+                    }
+                    val info = @Composable { modifier: Modifier -> WebDetailInfo(detail, account, actionable, act, playTrailer, openPerson, phone, modifier) }
+                    if (side) Row(horizontalArrangement = Arrangement.spacedBy(44.dp)) { poster(); info(Modifier.weight(1f)) }
+                    else Column(verticalArrangement = Arrangement.spacedBy(28.dp)) { poster(); info(Modifier.fillMaxWidth()) }
                 }
-                val info = @Composable { modifier: Modifier -> WebDetailInfo(detail, account, actionable, act, playTrailer, openPerson, phone, modifier) }
-                if (side) Row(horizontalArrangement = Arrangement.spacedBy(44.dp)) { poster(); info(Modifier.weight(1f)) }
-                else Column(verticalArrangement = Arrangement.spacedBy(28.dp)) { poster(); info(Modifier.fillMaxWidth()) }
             }
         }
     }
