@@ -22,6 +22,8 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.techgv.cineverse.data.library.LibraryWriteResult
 import com.techgv.cineverse.presentation.TrailerEvent
+import com.techgv.cineverse.presentation.LibraryWrite
+import com.techgv.cineverse.presentation.LibraryWriteOutcome
 import com.techgv.cineverse.ui.adaptive.ProvideWindowClass
 import com.techgv.cineverse.ui.adaptive.ShellStyle
 import com.techgv.cineverse.ui.components.*
@@ -72,15 +74,18 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
     val controller = controllers[selected.ordinal]
     val entry by controller.currentBackStackEntryAsState()
     val atRoot = entry?.destination?.hasRoute<MobileTabRoot>() == true
+    val detailBinding = rememberMobileDetailRootBinding(graph, controller)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var resumed by remember(lifecycle) { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
-    DisposableEffect(lifecycle) {
+    DisposableEffect(lifecycle, detailBinding) {
+        detailBinding.setResumed(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
         val observer = LifecycleEventObserver { _, _ ->
             resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            detailBinding.setResumed(resumed)
             if (!resumed) home.setActive(false)
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); home.setActive(false) }
+        onDispose { lifecycle.removeObserver(observer); detailBinding.setResumed(false); home.setActive(false) }
     }
     val active = resumed && selected == MobileTab.Home && atRoot
     DisposableEffect(active, home) {
@@ -88,6 +93,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
         onDispose { home.setActive(false) }
     }
     fun select(tab: MobileTab) {
+        detailBinding.leave()
         home.setActive(false)
         if (tab == selected) {
             if (!atRoot) controller.popBackStack<MobileTabRoot>(inclusive = false)
@@ -98,8 +104,15 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
         selected = tab
         // Re-select at the root does not change the active effect's key.
         if (resumed && tab == MobileTab.Home && controllers[tab.ordinal].currentDestination?.hasRoute<MobileTabRoot>() == true) home.setActive(true)
+        detailBinding.currentChanged(controllers[tab.ordinal].currentBackStackEntry)
+    }
+    fun back() {
+        detailBinding.leave()
+        home.setActive(false)
+        controller.popBackStack()
     }
     val navigator = MobileNavigator { destination ->
+        detailBinding.leave()
         home.setActive(false)
         if (destination is MobileDestination.Browse) {
             selected = MobileTab.Explore
@@ -111,10 +124,10 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
         val row = pendingBrowse
         if (selected == MobileTab.Explore && entry != null && row != null) {
             pendingBrowse = null
+            detailBinding.leave()
             controller.navigate(MobileBrowseRoute(row, pendingTrend))
         }
     }
-    MobileRootBackHandler(atRoot && selected != MobileTab.Home) { select(MobileTab.Home) }
     LaunchedEffect(active, controller) {
         if (active) home.events.collect { event ->
             when (event) {
@@ -126,11 +139,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
     }
     LaunchedEffect(graph, resumed) {
         if (resumed) graph.outcomes.collect { outcome ->
-            when (val result = outcome.result) {
-                is LibraryWriteResult.Done -> toasts.show(ToastMessage(if (result.state.watchlist) "Added to watchlist" else "Removed from watchlist"))
-                is LibraryWriteResult.Failed -> toasts.show(ToastMessage("Couldn't update watchlist. Not retried."))
-                LibraryWriteResult.Superseded -> Unit
-            }
+            mobileLibraryOutcomeMessage(outcome)?.let { toasts.show(ToastMessage(it)) }
         }
     }
     val stateHolder = rememberSaveableStateHolder()
@@ -149,29 +158,52 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
                     } else MobilePlaceholder(selected.name, "Internal placeholder · This tab is not implemented in M1.")
                 }
                 composable<MobileDetailRoute> { route ->
-                    val detail = route.toRoute<MobileDetailRoute>()
-                    MobilePlaceholder("Title detail", "Internal placeholder · ${detail.media} ${detail.id}", { controller.popBackStack() })
+                    MobileDetailRouteEntry(graph, route, detailBinding, navigator, ::back)
                 }
                 composable<MobilePersonRoute> { route ->
-                    MobilePlaceholder("Person", "Internal placeholder · Person ${route.toRoute<MobilePersonRoute>().id}", { controller.popBackStack() })
+                    MobilePlaceholder("Person", "Internal placeholder · Person ${route.toRoute<MobilePersonRoute>().id}", ::back)
                 }
                 composable<MobileSeasonRoute> { route ->
                     val season = route.toRoute<MobileSeasonRoute>()
-                    MobilePlaceholder("Season ${season.number}", "Internal placeholder · Series ${season.seriesId}", { controller.popBackStack() })
+                    MobilePlaceholder("Season ${season.number}", "Internal placeholder · Series ${season.seriesId}", ::back)
                 }
                 composable<MobileTrailerRoute> { route ->
                     val trailer = route.toRoute<MobileTrailerRoute>()
-                    MobilePlaceholder(trailer.title, "Internal placeholder · ${trailer.kicker}. Trailer playback is not implemented.", { controller.popBackStack() })
+                    MobilePlaceholder(trailer.title, "Internal placeholder · ${trailer.kicker}. Trailer playback is not implemented.", ::back)
                 }
                 composable<MobileBrowseRoute> { route ->
                     val selection = route.toRoute<MobileBrowseRoute>().selection()
                     val explore = viewModel { MobileExploreViewModel(graph, createSavedStateHandle(), selection) }
                     MobileExploreScreen(graph, explore, 0, navigator,
-                        onInvalidBack = { controller.popBackStack() }, onBack = { controller.popBackStack() })
+                        onInvalidBack = ::back, onBack = ::back)
                 }
             }
         }
         FloatingTabBar(CineVerseTabs, selected.ordinal, { select(MobileTab.entries[it]) })
+        MobileRootBackHandler(atRoot && selected != MobileTab.Home) { select(MobileTab.Home) }
+        MobileRootRateHost(graph, detailBinding)
+    }
+}
+
+internal fun mobileLibraryOutcomeMessage(outcome: LibraryWriteOutcome): String? = when (val result = outcome.result) {
+    LibraryWriteResult.Superseded -> null
+    is LibraryWriteResult.Failed -> when (outcome.write) {
+        LibraryWrite.ToggleWatchlist -> "Couldn't update watchlist. Not retried."
+        LibraryWrite.ToggleFavourite -> "Couldn't update favourites. Not retried."
+        is LibraryWrite.Rate -> "Couldn't save rating. Not retried."
+        LibraryWrite.Unrate -> "Couldn't remove rating. Not retried."
+    }
+    is LibraryWriteResult.Done -> if (!result.state.known) null else {
+        val operation = when (outcome.write) {
+            LibraryWrite.ToggleWatchlist -> if (result.state.watchlist) "Added to watchlist" else "Removed from watchlist"
+            LibraryWrite.ToggleFavourite -> if (result.state.favourite) "Added to favourites" else "Removed from favourites"
+            is LibraryWrite.Rate -> if (result.state.rating != null) "Rating saved" else null
+            LibraryWrite.Unrate -> if (result.state.rating == null) "Rating removed" else null
+        }
+        operation?.let {
+            "$it · ${if (result.synced) "Synced" else "Saved locally"}" +
+                if (result.removedFromWatchlist) " · Removed from watchlist" else ""
+        }
     }
 }
 
