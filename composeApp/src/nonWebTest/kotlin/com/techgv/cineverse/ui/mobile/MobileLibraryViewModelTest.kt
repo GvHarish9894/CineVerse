@@ -8,6 +8,7 @@ import com.techgv.cineverse.presentation.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
+import kotlinx.coroutines.flow.*
 import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -244,6 +245,91 @@ class MobileLibraryViewModelTest {
         f.base.settings.update { it.copy(language = "hi-IN") }; runCurrent()
         assertNotNull(model.state.value.library)
         assertEquals(0, f.writes)
+        f.base.graph.close()
+    }
+
+    @Test fun observableGuestChangesRemainLiveAcrossEntryWithoutComponentWrites() = runTest {
+        val f = MobileLibraryFixture(backgroundScope)
+        f.identity(null)
+        val model = MobileLibraryViewModel(f.base.graph, f.repository, SavedStateHandle(), backgroundScope)
+        model.setActive(true); runCurrent()
+        assertEquals(SectionState.Empty, model.state.value.library?.movies?.section)
+        f.guest.rows.value = listOf(com.techgv.cineverse.data.library.GuestLibraryRow(
+            MediaRef(MediaType.Movie, 42), LibraryKind.WATCHLIST, null, 0, """{"title":"Live guest"}"""))
+        runCurrent()
+        val entries = (assertNotNull(model.state.value.library).movies.section as SectionState.Content).value
+        assertEquals("Live guest", entries.single().title.title)
+        model.setActive(false)
+        f.guest.rows.value = emptyList()
+        model.setActive(true); runCurrent()
+        assertEquals(SectionState.Empty, model.state.value.library?.movies?.section)
+        model.close()
+        val reads = f.sessionReads
+        model.setActive(true); model.retryStorage(); runCurrent()
+        assertEquals(reads, f.sessionReads)
+        assertNull(model.state.value.library)
+        assertEquals(0, f.guest.writes)
+        f.base.graph.close()
+    }
+
+    @Test fun authoritativeIdentityFailureMasksGuestUntilActualEqualIdentityRecovery() = runTest {
+        val f = MobileLibraryFixture(backgroundScope)
+        f.base.graph.close()
+        var identityFailure = false
+        val auth = object : com.techgv.cineverse.data.auth.AuthRepository by f.base.auth {
+            override val session = flow {
+                f.base.auth.session.collect {
+                    if (identityFailure) throw com.techgv.cineverse.data.storage.StorageException("owned identity read")
+                    emit(it)
+                }
+            }
+        }
+        val graph = MobileApplication(f.base.catalog, f.base.generation, f.base.settings, auth,
+            f.repository, f.base.recent, backgroundScope)
+        f.identity(null)
+        val model = MobileLibraryViewModel(graph, f.repository, SavedStateHandle(), backgroundScope)
+        model.setActive(true); runCurrent()
+        val old = model.state.value.context
+        assertNotNull(model.state.value.library)
+        identityFailure = true
+        f.base.auth.emissions.tryEmit(account); runCurrent()
+        assertTrue(graph.identityFailed.value)
+        assertNull(model.state.value.library)
+        assertTrue(model.state.value.failed)
+        var signIns = 0
+        model.signIn(old) { signIns++ }
+        model.retryStorage(old)
+        assertEquals(0, signIns)
+        assertTrue(graph.identityFailed.value)
+        identityFailure = false
+        f.base.auth.emissions.tryEmit(null)
+        model.retryStorage(); runCurrent()
+        assertFalse(graph.identityFailed.value)
+        assertFalse(model.state.value.failed)
+        assertNotNull(model.state.value.library)
+        graph.close()
+    }
+
+    @Test fun nonCooperativeOldAccountCompletionCannotReplaceNewGenerationOrDispatch() = runTest {
+        val f = MobileLibraryFixture(backgroundScope)
+        f.identity(account)
+        val model = MobileLibraryViewModel(f.base.graph, f.repository, SavedStateHandle(), backgroundScope)
+        model.setActive(true); runCurrent()
+        val old = model.state.value.context
+        val pending = CompletableDeferred<Unit>()
+        f.nonCooperative = true
+        f.gate = pending
+        model.loadMore(old, MediaType.Movie); runCurrent()
+        f.gate = null
+        val next = account.copy(sessionGeneration = 2)
+        f.identity(next); runCurrent()
+        assertEquals(next, model.state.value.library?.sourceIdentity)
+        pending.complete(Unit); runCurrent()
+        assertEquals(next, model.state.value.library?.sourceIdentity)
+        assertEquals(1, model.state.value.library?.movies?.loadedPage)
+        var navigation = 0
+        model.open(old, libraryFixtureEntry(MediaType.Movie).title.ref, MobileNavigator { navigation++ })
+        assertEquals(0, navigation)
         f.base.graph.close()
     }
 

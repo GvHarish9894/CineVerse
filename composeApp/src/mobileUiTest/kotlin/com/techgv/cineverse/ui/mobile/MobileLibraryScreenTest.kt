@@ -63,7 +63,7 @@ class MobileLibraryScreenTest {
         onNodeWithTag("mobile-library").performScrollToNode(hasTestTag("library-Movie-retry"))
         assertTrue(more.isEmpty())
         assertTrue(retries.isEmpty())
-        onNodeWithTag("library-Movie-retry").performClick()
+        onNodeWithTag("library-Movie-retry").onChildren().filter(hasText("Retry")).onFirst().performClick()
         assertEquals(listOf(MediaType.Movie), retries)
         onNodeWithTag("mobile-library").performScrollToNode(hasText("Load more TV shows"))
         onNodeWithText("Load more TV shows").performClick()
@@ -80,7 +80,7 @@ class MobileLibraryScreenTest {
         onNodeWithText("Saved on this device · Guest").assertDoesNotExist()
         onNodeWithText("Explore movies").assertDoesNotExist()
         runOnIdle { state.value = state.value.copy(failed = true) }
-        onNodeWithTag("library-storage-retry").performClick()
+        onNodeWithTag("library-storage-retry").onChildren().filter(hasText("Retry")).onFirst().performClick()
         assertEquals(1, retries)
         onNodeWithText("Sign in with TMDB").assertDoesNotExist()
         runOnIdle { state.value = state.value.copy(invalid = true) }
@@ -98,7 +98,7 @@ class MobileLibraryScreenTest {
         onNodeWithText("Library fixture Movie 1").assertExists()
         onNodeWithTag("mobile-library").performScrollToNode(hasTestTag("library-Movie-retry"))
         assertEquals(0, retries)
-        onNodeWithTag("library-Movie-retry").performClick()
+        onNodeWithTag("library-Movie-retry").onChildren().filter(hasText("Retry")).onFirst().performClick()
         assertEquals(1, retries)
     }
 }

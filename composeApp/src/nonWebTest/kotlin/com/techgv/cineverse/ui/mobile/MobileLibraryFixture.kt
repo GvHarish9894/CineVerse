@@ -7,6 +7,8 @@ import com.techgv.cineverse.data.tmdb.*
 import com.techgv.cineverse.domain.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 
 /** Separate authoritative identity, repository identity and page gates exercise source proof, not UI labels. */
@@ -20,6 +22,7 @@ internal class MobileLibraryFixture(scope: CoroutineScope) {
     var failPage: Pair<MediaType, Int>? = null
     var storagePage: Pair<MediaType, Int>? = null
     var gate: CompletableDeferred<Unit>? = null
+    var nonCooperative = false
     var lastPage = 3
     var invalidations = 0
     var writes = 0
@@ -32,7 +35,8 @@ internal class MobileLibraryFixture(scope: CoroutineScope) {
     }, GuestLibrarySource(guest), object : AccountLibrarySource {
         override suspend fun page(session: AuthSession, kind: LibraryKind, media: MediaType, page: Int): LibraryPage {
             calls += Triple(session, media, page)
-            gate?.await()
+            val pending = gate
+            if (nonCooperative) withContext(NonCancellable) { pending?.await() } else pending?.await()
             if (storagePage == media to page) throw StorageException("owned library page read")
             if (failPage == media to page) throw TmdbException(TmdbError.Network)
             return LibraryPage(listOf(libraryFixtureEntry(media, page, session.displayName)), page, lastPage)

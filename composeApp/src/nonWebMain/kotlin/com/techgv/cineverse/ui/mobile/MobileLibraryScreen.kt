@@ -99,10 +99,8 @@ internal fun MobileLibraryContent(
                 when {
                     state.invalid -> item("invalid", span = { GridItemSpan(maxLineSpan) }) { Text("Invalid saved Library state. Leave it unchanged.") }
                     state.failed -> item("storage", span = { GridItemSpan(maxLineSpan) }) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Library unavailable. Saved preferences or account data could not be read.")
-                            PillButton("Retry Library reads", onStorageRetry, Modifier.testTag("library-storage-retry"))
-                        }
+                        ErrorState("Library unavailable. Saved preferences or account data could not be read.",
+                            onStorageRetry, Modifier.testTag("library-storage-retry"))
                     }
                     library == null -> item("unknown", span = { GridItemSpan(maxLineSpan) }) { Text("Loading Library…") }
                     else -> {
@@ -138,8 +136,7 @@ internal fun MobileLibraryContent(
                             }
                         }
                         if (library.movies.section == SectionState.Empty && library.tv.section == SectionState.Empty) item("browse", span = { GridItemSpan(maxLineSpan) }) {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text("Your ${library.tab.label.lowercase()} is empty. Find your next favourite.")
+                            EmptyState("Your ${library.tab.label.lowercase()} is empty", "Find your next favourite.") {
                                 PillButton("Explore movies", onExplore)
                             }
                         }
@@ -152,10 +149,7 @@ internal fun MobileLibraryContent(
 
 @Composable
 private fun LibraryGroupRetry(media: MediaType, message: String, onRetry: (MediaType) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(message)
-        PillButton(if (media == MediaType.Movie) "Retry movies" else "Retry TV shows", { onRetry(media) }, Modifier.testTag("library-${media.name}-retry"))
-    }
+    ErrorState(message, { onRetry(media) }, Modifier.testTag("library-${media.name}-retry"))
 }
 
 private fun LibraryGroup.loadedCount(): Int? = when (val value = section) {
