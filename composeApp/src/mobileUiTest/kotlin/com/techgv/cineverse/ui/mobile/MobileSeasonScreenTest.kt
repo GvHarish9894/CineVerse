@@ -35,6 +35,16 @@ class MobileSeasonScreenTest {
         onNodeWithTag("season-title").assertTextEquals("Season 3")
     }
 
+    @Test fun specialsZeroIsSelectedWithoutBecomingSeasonOne() = runComposeUiTest {
+        lateinit var f: MobileSeasonComponentFixture
+        setContent { SeasonFixture(number = 0, onReady = { _, fixture -> f = fixture }) }
+        onNodeWithTag("season-title").assertTextEquals("Specials")
+        onNodeWithTag("season-option-0").assertIsSelected()
+        onNodeWithTag("mobile-season").performScrollToNode(hasTestTag("season-episode-1"))
+        onNodeWithText("S0 · E1").assertExists()
+        runOnIdle { assertEquals(listOf("tv/42/en-US", "season/42/0/en-US"), f.api.calls) }
+    }
+
     @Test fun episodeMetadataIsActualAndExpansionIsAccessibleMetadataNotPlayback() = runComposeUiTest {
         setContent { SeasonFixture() }
         onNodeWithTag("mobile-season").performScrollToNode(hasTestTag("season-episode-1"))
@@ -80,6 +90,7 @@ class MobileSeasonScreenTest {
         lateinit var f: MobileSeasonComponentFixture
         setContent { SeasonFixture(configure = { it.api.showFailure = true }, onReady = { _, fixture -> f = fixture }) }
         onNodeWithTag("season-show-error").assertExists()
+        onNodeWithText("Loading episodes…").assertDoesNotExist()
         runOnIdle { f.api.showFailure = false }
         onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("season-show-error"))).performClick()
         onNodeWithText("Actual show en-US").assertExists()
@@ -89,6 +100,16 @@ class MobileSeasonScreenTest {
         runOnIdle { f.raw.value = Result.success(Settings()) }
         onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("season-read-recovery"))).performClick()
         onNodeWithTag("season-read-recovery").assertDoesNotExist()
+    }
+
+    @Test fun coldPreferencesFailureDoesNotInventShowMetadata() = runComposeUiTest {
+        lateinit var f: MobileSeasonComponentFixture
+        setContent { SeasonFixture(configure = { it.failSettings() }, onReady = { _, fixture -> f = fixture }) }
+        onNodeWithTag("season-read-recovery").assertExists()
+        onNodeWithTag("season-show").assertDoesNotExist()
+        runOnIdle { assertTrue(f.api.calls.isEmpty()); f.raw.value = Result.success(Settings()) }
+        onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("season-read-recovery"))).performClick()
+        onNodeWithTag("season-show").assertExists()
     }
 
     @Test fun showOnlyCompletionCannotClampSavedEpisodeScrollAndDisposalPreservesIt() = runComposeUiTest {

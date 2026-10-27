@@ -109,6 +109,18 @@ class MobileSeasonViewModelTest {
         model.close(); f.graph.close()
     }
 
+    @Test fun actualGraphStorageFailureRecoversEqualSettingsWithOneExplicitRetry() = runTest {
+        val f = MobileSeasonComponentFixture(backgroundScope); val model = f.owner(backgroundScope, raw = f.graph.settingsFlow)
+        model.setActive(true); runCurrent(); val first = assertNotNull(model.state.value.context)
+        f.store.fail = true; f.store.values.value = mapOf("probe" to true); runCurrent()
+        assertTrue(f.graph.settingsFailed.value); assertNull(model.state.value.context); assertTrue(model.state.value.settingsFailed)
+        f.store.fail = false; model.retryReads(); runCurrent()
+        assertFalse(f.graph.settingsFailed.value); assertTrue(model.state.value.bodyReady)
+        val recovered = assertNotNull(model.state.value.context)
+        assertNotSame(first, recovered); assertEquals(first.settings, recovered.settings); assertEquals(0, f.store.edits)
+        model.close(); f.graph.close()
+    }
+
     @Test fun graphContentAdultAndIdentityInvalidationRecollectActualReader() = runTest {
         val f = MobileSeasonComponentFixture(backgroundScope); val model = f.owner(backgroundScope, raw = f.graph.settingsFlow)
         model.setActive(true); runCurrent(); val first = assertNotNull(model.state.value.context)
