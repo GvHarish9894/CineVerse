@@ -1,6 +1,6 @@
 package com.techgv.cineverse.ui.mobile
 
-import com.techgv.cineverse.data.auth.AuthSession
+import com.techgv.cineverse.data.auth.*
 import com.techgv.cineverse.data.library.*
 import com.techgv.cineverse.data.settings.*
 import com.techgv.cineverse.data.storage.StorageException
@@ -16,7 +16,7 @@ internal class MobileDetailComponentFixture(scope: CoroutineScope) {
     val generation = GenerationCounter()
     val settings = SettingsRepository(MobileSettingsStore())
     val catalog = CatalogRepository(api, generation, settings::current)
-    val auth = MobileAuth()
+    val auth = MobileDetailComponentAuth()
     val guest = MobileGuestStore()
     val accountWrites = mutableListOf<AuthSession>()
     val library = LibraryRepository(auth.session, GuestLibrarySource(guest), object : AccountLibrarySource {
@@ -48,6 +48,20 @@ internal class MobileDetailComponentFixture(scope: CoroutineScope) {
     fun failSettings() { raw.value = Result.failure(StorageException("synthetic Detail settings read")) }
 }
 
+internal class MobileDetailComponentAuth : AuthRepository {
+    val emissions = MutableSharedFlow<AuthSession?>(replay = 1)
+    var fail = false
+    override val session = emissions.map {
+        if (fail) throw StorageException("synthetic Detail identity read")
+        it
+    }
+    override val sessionExpired = emptyFlow<Unit>()
+    override suspend fun createRequestCode(): RequestCode = error("No sign-in")
+    override suspend fun awaitApproval(code: RequestCode): SignInOutcome = error("No sign-in")
+    override suspend fun signOut(onSignedOutLocally: () -> Unit): Unit = error("No sign-out")
+    override suspend fun expireSession(failed: AuthSession): Unit = error("No account changes")
+}
+
 internal class MobileDetailComponentApi : MobileUnusedTmdbApi() {
     val calls = mutableListOf<String>()
     var gate: CompletableDeferred<Unit>? = null
@@ -64,6 +78,7 @@ internal class MobileDetailComponentApi : MobileUnusedTmdbApi() {
         before("movie", id, language)
         return MovieDetailDto(if (wrongId) id + 1 else id, title = "Detail movie $language", tagline = "Fixture tagline", overview = "Fixture overview. ".repeat(40),
             releaseDate = "2026-02-03", runtime = 128, voteAverage = 8.1, voteCount = 30,
+            releaseDates = ReleaseDatesDto(listOf(ReleaseDateCountryDto("IN", listOf(ReleaseDateDto("PG-13", 3))))),
             credits = CreditsDto(listOf(CastDto(431, "Detail actor", "Actual role")), listOf(CrewDto(432, "Detail director", "Director"))),
             videos = VideosDto(listOf(VideoDto(key = "aB3_dE5-gH7", name = "Detail trailer", site = "YouTube", type = "Trailer"))),
             recommendations = PageDto(1, listOf(MediaItemDto(765, title = "Detail recommendation", mediaType = "movie")), 1),

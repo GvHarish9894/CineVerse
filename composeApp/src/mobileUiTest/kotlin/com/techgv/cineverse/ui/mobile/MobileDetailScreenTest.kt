@@ -1,6 +1,8 @@
 package com.techgv.cineverse.ui.mobile
 
+import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
+import kotlinx.coroutines.flow.collect
 import androidx.compose.ui.test.v2.runComposeUiTest
 import com.techgv.cineverse.domain.*
 import kotlin.test.*
@@ -13,6 +15,7 @@ class MobileDetailScreenTest {
         setContent { MobileDetailUiFixture(onReady = { m, fixture -> model = m; f = fixture }) }
         onNodeWithText("Detail movie en-US").assertExists()
         onNodeWithContentDescription("User score 81 percent").assertExists()
+        onNodeWithText("2026 · PG-13 · 2h 8m").assertExists()
         onNodeWithTag("mobile-detail").performScrollToNode(hasText("Read more"))
         onNodeWithText("Read more").performClick()
         runOnIdle { assertTrue(model.state.value.expanded) }
@@ -83,16 +86,61 @@ class MobileDetailScreenTest {
     }
 
     @Test fun rateActionOpensExistingPromptAndShareAndBackAreBoundCallbacks() = runComposeUiTest {
-        lateinit var f: MobileDetailComponentFixture
+        var fixture by mutableStateOf<MobileDetailComponentFixture?>(null)
+        var prompt: com.techgv.cineverse.presentation.RatePrompt? = null
         var shared: MediaRef? = null
         var backs = 0
-        setContent { MobileDetailUiFixture(onReady = { _, fixture -> f = fixture }, onShare = { shared = it }, onBack = { backs++ }) }
+        setContent {
+            MobileDetailUiFixture(onReady = { _, f -> fixture = f }, onShare = { shared = it }, onBack = { backs++ })
+            LaunchedEffect(fixture) { fixture?.graph?.actions?.ratePrompt?.collect { prompt = it } }
+        }
         onNodeWithContentDescription("Share title").performClick()
         runOnIdle { assertEquals(MediaRef(MediaType.Movie, 42), shared) }
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-rate"))
         onNodeWithTag("detail-rate").performClick()
         onNodeWithContentDescription("Back").performClick()
-        runOnIdle { assertEquals(1, backs); assertTrue(f.guest.rows.value.isEmpty()) }
+        runOnIdle {
+            assertEquals(1, backs)
+            assertEquals(MediaRef(MediaType.Movie, 42), assertNotNull(prompt).title.ref)
+            assertTrue(assertNotNull(fixture).guest.rows.value.isEmpty())
+        }
+    }
+
+    @Test fun tvCastAndEmptyReviewsUseActualSections() = runComposeUiTest {
+        val destinations = mutableListOf<MobileDestination>()
+        setContent { MobileDetailUiFixture(media = "tv", onNavigate = destinations::add) }
+        onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-segments"))
+        onNodeWithText("Cast", substring = false).performClick()
+        onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-person-531"))
+        onNodeWithTag("detail-person-531").performClick()
+        runOnIdle { assertEquals(MobileDestination.Person(531), destinations.single()) }
+        onNodeWithText("Reviews", substring = false).performClick()
+        onNodeWithTag("mobile-detail").performScrollToNode(hasText("No reviews available."))
+        onNodeWithText("No reviews available.").assertIsDisplayed()
+    }
+
+    @Test fun favouriteAndPrimaryTrailerActionsUseTheActualTitle() = runComposeUiTest {
+        lateinit var f: MobileDetailComponentFixture
+        val destinations = mutableListOf<MobileDestination>()
+        setContent { MobileDetailUiFixture(onReady = { _, fixture -> f = fixture }, onNavigate = destinations::add) }
+        onNodeWithContentDescription("Favourite title").performClick()
+        waitForIdle()
+        runOnIdle {
+            assertEquals(LibraryKind.FAVOURITE, f.guest.rows.value.single().kind)
+            assertEquals(MediaRef(MediaType.Movie, 42), f.guest.rows.value.single().ref)
+        }
+        onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-trailer"))
+        onNodeWithTag("detail-trailer").performClick()
+        runOnIdle { assertEquals(MobileDestination.Trailer("aB3_dE5-gH7", "Detail movie en-US", "Detail trailer"), destinations.single()) }
+    }
+
+    @Test fun invalidRouteOffersBackWithoutAnyTitleFetch() = runComposeUiTest {
+        lateinit var f: MobileDetailComponentFixture
+        var backs = 0
+        setContent { MobileDetailUiFixture(media = "person", onReady = { _, fixture -> f = fixture }, onBack = { backs++ }) }
+        onNodeWithText("Invalid title. Go back and choose a movie or TV show.").assertIsDisplayed()
+        onNodeWithContentDescription("Back").performClick()
+        runOnIdle { assertEquals(1, backs); assertTrue(f.api.calls.isEmpty()) }
     }
 
     @Test fun unknownAccountDisablesPrivateActionsAndShareIsAbsentWithoutBinding() = runComposeUiTest {

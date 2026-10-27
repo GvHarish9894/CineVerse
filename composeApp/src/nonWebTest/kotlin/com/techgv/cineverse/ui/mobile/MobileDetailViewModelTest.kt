@@ -5,6 +5,8 @@ import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryStateSnapshot
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.tmdb.AccountObjectId
+import com.techgv.cineverse.data.tmdb.MovieDetailDto
+import com.techgv.cineverse.data.tmdb.toDetail
 import com.techgv.cineverse.domain.*
 import com.techgv.cineverse.presentation.*
 import kotlinx.coroutines.*
@@ -93,6 +95,18 @@ class MobileDetailViewModelTest {
         gate.complete(Unit); runCurrent()
         assertEquals("hi-IN", assertNotNull(model.state.value.authority).context.language)
         assertEquals("Detail movie hi-IN", (model.state.value.section as SectionState.Content).value.title)
+        model.close(); f.graph.close()
+    }
+
+    @Test fun realRepositoryOriginFlowUpdatesGuestDisplayAfterCapturedWrite() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest()
+        val model = MobileDetailViewModel(f.graph, "movie", 42, SavedStateHandle(), f.rawSettings,
+            f.library.stateWithOrigin(MediaRef(MediaType.Movie, 42)), backgroundScope)
+        model.setActive(true); runCurrent()
+        assertTrue(model.state.value.account.known); assertFalse(model.state.value.account.watchlist)
+        model.act(LibraryKind.WATCHLIST, assertNotNull(model.state.value.authority)); runCurrent()
+        assertTrue(model.state.value.account.watchlist)
+        assertEquals(MediaRef(MediaType.Movie, 42), f.guest.rows.value.single().ref)
         model.close(); f.graph.close()
     }
 
@@ -213,6 +227,55 @@ class MobileDetailViewModelTest {
         assertIs<SectionState.Error>(model.state.value.section); assertNull(model.state.value.authority)
         model.act(LibraryKind.WATCHLIST, null); runCurrent(); assertTrue(f.guest.rows.value.isEmpty())
         model.close(); f.graph.close()
+    }
+
+    @Test fun identityFailureIsUnknownNotGuestAndRetryResubscribesWithoutWriting() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest()
+        val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
+        val previous = assertNotNull(model.state.value.authority)
+        f.auth.fail = true; f.auth.emissions.emit(null); runCurrent()
+        assertTrue(model.state.value.identityFailed)
+        assertNull(f.graph.identity.value)
+        assertEquals(LibraryState.Unknown, model.state.value.account)
+        model.act(LibraryKind.WATCHLIST, previous); runCurrent(); assertTrue(f.guest.rows.value.isEmpty())
+        f.auth.fail = false; model.retryReads(); runCurrent()
+        assertEquals(MobileIdentity(null), f.graph.identity.value)
+        assertTrue(model.state.value.account.known); assertTrue(f.guest.rows.value.isEmpty())
+        model.close(); f.graph.close()
+    }
+
+    @Test fun queuedGuestIntentCannotWriteToANewSessionBeforeDispatchCoroutineRuns() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest()
+        val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
+        model.act(LibraryKind.WATCHLIST, assertNotNull(model.state.value.authority))
+        assertTrue(f.auth.emissions.tryEmit(AuthSession(AccountObjectId("synthetic-race"), "Synthetic", 11)))
+        runCurrent()
+        assertTrue(f.guest.rows.value.isEmpty()); assertTrue(f.accountWrites.isEmpty())
+        model.close(); f.graph.close()
+    }
+
+    @Test fun disposedEntryDropsCancellationResistantCatalogCompletion() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest()
+        val gate = CompletableDeferred<Unit>(); f.api.gate = gate; f.api.ignoreCancellation = true
+        val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
+        model.close(); gate.complete(Unit); runCurrent()
+        assertNull(model.state.value.authority); assertNull(model.state.value.retained)
+        assertFalse(model.state.value.section is SectionState.Content)
+        assertTrue(f.guest.rows.value.isEmpty()); f.graph.close()
+    }
+
+    @Test fun manualContentWithoutProducerCompletionNeverProvesAuthority() {
+        val ref = MediaRef(MediaType.Movie, 42)
+        val detail = MovieDetailDto(42, "Manual").toDetail("US")
+        val content = SectionState.Content(detail)
+        val context = DetailReadContext(ref, "en-US", "US", 1, 1)
+        val manual = DetailUiState(detail = content, settingsRead = DetailSettingsRead.Ready, request = context)
+        assertNull(manual.completedMobileDetail(ref, 1))
+        val completed = manual.copy(completion = DetailReadCompletion(context, content))
+        assertNull(completed.completedMobileDetail(ref, 1))
+        val real = completed.copy(retained = DetailReadContent(context, detail))
+        assertNotNull(real.completedMobileDetail(ref, 1))
+        assertNull(real.completedMobileDetail(ref, 2))
     }
 
     @Test fun graphFailureFlagsMaskPrivateDisplayAndRejectBeforeCollectorRuns() = runTest {

@@ -2,6 +2,7 @@ package com.techgv.cineverse.ui.mobile
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import com.techgv.cineverse.data.tmdb.toDetail
@@ -19,25 +20,37 @@ class MobileRateSheetTest {
     @Test fun halfStepAccessibilityButtonsSubmitExactValue() = runComposeUiTest {
         var submitted: Double? = null
         setContent { RateFixture(prompt, onSubmit = { submitted = it }) }
-        onNodeWithContentDescription("Increase rating by 0.5").performClick()
+        onNodeWithContentDescription("Increase rating by 0.5").performScrollTo().performClick()
         onNodeWithText("7.5").assertExists()
-        onNodeWithText("Submit rating").performClick()
+        onNodeWithText("Submit rating").performScrollTo().performClick()
         runOnIdle { assertEquals(7.5, submitted) }
     }
 
     @Test fun keyboardArrowsChangeRatingByHalfAndClampToRange() = runComposeUiTest {
         var submitted: Double? = null
         setContent { RateFixture(prompt.copy(initial = 10.0), onSubmit = { submitted = it }) }
+        onNodeWithTag("mobile-rating-slider").performScrollTo().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         onNodeWithTag("mobile-rating-slider").performKeyInput { keyDown(Key.DirectionRight); keyUp(Key.DirectionRight); keyDown(Key.DirectionLeft); keyUp(Key.DirectionLeft) }
-        onNodeWithText("Submit rating").performClick()
+        onNodeWithText("Submit rating").performScrollTo().performClick()
         runOnIdle { assertEquals(9.5, submitted) }
+    }
+
+    @Test fun repeatedStarTapSelectsWholeThenHalfStar() = runComposeUiTest {
+        var submitted: Double? = null
+        setContent { RateFixture(prompt, onSubmit = { submitted = it }) }
+        onNodeWithContentDescription("Rate 8.0 out of 10; tap again for 7.0").performClick()
+        onNodeWithText("8.0").assertExists()
+        onNodeWithContentDescription("Rate 8.0 out of 10; tap again for 7.0").performClick()
+        onNodeWithText("7.0").assertExists()
+        onNodeWithText("Submit rating").performScrollTo().performClick()
+        runOnIdle { assertEquals(7.0, submitted) }
     }
 
     @Test fun removeAndDismissAreDistinctRequiredCallbacks() = runComposeUiTest {
         var removed = 0; var dismissed = 0
         setContent { RateFixture(prompt, onRemove = { removed++ }, onDismiss = { dismissed++ }) }
-        onNodeWithText("Remove rating").performClick()
-        onNodeWithText("Cancel").performClick()
+        onNodeWithText("Remove rating").performScrollTo().performClick()
+        onNodeWithText("Cancel").performScrollTo().performClick()
         runOnIdle { assertEquals(1, removed); assertEquals(1, dismissed) }
     }
 
@@ -56,7 +69,7 @@ class MobileRateSheetTest {
     @Test fun newPromptResetsSelectionAndUnratedPromptHasNoRemove() = runComposeUiTest {
         var current by mutableStateOf(prompt)
         setContent { RateFixture(current) }
-        onNodeWithContentDescription("Decrease rating by 0.5").performClick()
+        onNodeWithContentDescription("Decrease rating by 0.5").performScrollTo().performClick()
         onNodeWithText("6.5").assertExists()
         runOnIdle { current = prompt.copy(title = prompt.title.copy(title = "Another title"), initial = null) }
         onNodeWithText("Another title").assertExists()
