@@ -110,4 +110,8 @@ C1 Person completed CLEANd8e3d0e053efef734203b556405f998cab959c89: five NEW file
 
 C2 Season completed CLEAN66a8205fe1e53fbc9c27c214c5d71a1880cd1092: five NEW files,27 host+13 UI PREPARED ONLY/uncompiled; patch same output/native-season-source.patch SHA9e4cdb323355a4e75fd9ff4e15f7c482a0e1ff8f3895ecbbc6736c526ccb4680. Independent source review read/search-only while Person builds/root fixes source-only. Each parent root binding remains separate. All privacy/project-only constraints unchanged, web off, native runtime permission pending, five old iOS failures untouched.
 
+## Explicit retry after three usage-limit failures
+
+Workfloweefded28's root-source correction5a773c7a, Person-first-gates17cbce8f and Season-reviewe79551b0 all failed with `You have hit your ChatGPT usage limit.` before producing required reports. Operator explicitly requested retry. Parent inspected all actual states: C1 still CLEANd8e3d0e Person source, C2 CLEAN66a8205 Season source, C5 CLEAN4d22812 reviewed-component integration; no partial changes/commits, CineVerse build jobs or web listener. Retry ONLY these same three unfinished scopes, same Codex model, C1 sole host+compile lease, C5 source-only, C2 read/search-only. No fallback/regeneration/successful-gate repeats, privacy boundaries and no-runtime permission unchanged.
+
 Parent integrates only reviewed work, assigns bounded component writers after these handoffs, and owns publication. One writer per worktree; one serialized CineVerse Gradle/test lease; no competing builds or changes to unrelated Zuper processes. Author/committer for every commit remains GvHarish9894 <hariharangv9894@gmail.com>. Main owner staging/IDE/app files remain untouched. No push while GitHub identity remains unverified/wrong.
