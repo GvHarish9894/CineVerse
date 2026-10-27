@@ -66,6 +66,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
     var scrollHome by rememberSaveable { mutableIntStateOf(0) }
     var pendingBrowse by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingTrend by rememberSaveable { mutableStateOf(com.techgv.cineverse.data.tmdb.TrendingWindow.Week.name) }
+    var scrollSearch by rememberSaveable { mutableIntStateOf(0) }
     var scrollExplore by rememberSaveable { mutableIntStateOf(0) }
     val controllers = MobileTab.entries.map { tab -> key(tab) { rememberNavController() } }
     val controller = controllers[selected.ordinal]
@@ -92,6 +93,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
             if (!atRoot) controller.popBackStack<MobileTabRoot>(inclusive = false)
             else if (tab == MobileTab.Home) scrollHome++
             else if (tab == MobileTab.Explore) scrollExplore++
+            else if (tab == MobileTab.Search) scrollSearch++
         }
         selected = tab
         // Re-select at the root does not change the active effect's key.
@@ -141,6 +143,9 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
                     else if (selected == MobileTab.Explore) {
                         val explore = viewModel { MobileExploreViewModel(graph, createSavedStateHandle()) }
                         MobileExploreScreen(graph, explore, scrollExplore, navigator, onInvalidBack = { select(MobileTab.Home) })
+                    } else if (selected == MobileTab.Search) {
+                        val search = viewModel { MobileSearchViewModel(graph, createSavedStateHandle()) }
+                        MobileSearchScreen(graph, search, scrollSearch, navigator, onInvalidBack = { select(MobileTab.Home) })
                     } else MobilePlaceholder(selected.name, "Internal placeholder · This tab is not implemented in M1.")
                 }
                 composable<MobileDetailRoute> { route ->

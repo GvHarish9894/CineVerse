@@ -1,6 +1,8 @@
 package com.techgv.cineverse.data.search
 
+import androidx.datastore.core.CorruptionException
 import com.techgv.cineverse.data.settings.DataStoreSettingsStore
+import com.techgv.cineverse.data.settings.NativeSettingsBoundaryDataStore
 import com.techgv.cineverse.data.storage.StorageException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -14,8 +16,32 @@ import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import okio.IOException
 
 class RecentQueryStoreDataStoreTest {
+    @Test
+    fun adapterReadAndWriteFailuresRequireExplicitRecoveryWithoutWriteReplay() = runTest {
+        val native = NativeSettingsBoundaryDataStore()
+        val settings = DataStoreSettingsStore(native)
+        val store = RecentQueryStore(settings)
+        store.record("retained")
+        native.readFailure = CorruptionException("owned-fixture corruption")
+        assertFailsWith<StorageException> { store.observe().first() }
+        assertEquals(1, native.edits)
+        native.readFailure = null
+        assertEquals(listOf("retained"), store.observe().first())
+        native.writeFailure = IOException("owned-fixture commit failed")
+        assertFailsWith<StorageException> { store.record("explicit") }
+        assertEquals(2, native.edits)
+        assertEquals(listOf("retained"), store.observe().first())
+        native.writeFailure = null
+        assertEquals(listOf("retained"), store.observe().first())
+        assertEquals(2, native.edits)
+        store.record("explicit")
+        assertEquals(listOf("explicit", "retained"), store.observe().first())
+        assertEquals(3, native.edits)
+    }
+
     @Test
     fun recentQueriesSurviveReopeningTheOwnedTemporaryFile() = runTest {
         val file = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "recent-queries-${Random.nextLong()}.preferences_pb"

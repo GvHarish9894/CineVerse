@@ -1,5 +1,6 @@
 package com.techgv.cineverse.di
 
+import com.techgv.cineverse.data.search.RecentQueryStore
 import com.techgv.cineverse.ui.mobile.MobileApplication
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -10,5 +11,5 @@ import org.koin.mp.KoinPlatform
 fun nativeMobileApplication(): MobileApplication = KoinPlatform.getKoin().get()
 
 fun mobileModule(): Module = module {
-    single(createdAtStart = true) { MobileApplication(get(), get(), get(), get(), get(), get(AppScope)) } onClose { it?.close() }
+    single(createdAtStart = true) { MobileApplication(get(), get(), get(), get(), get(), RecentQueryStore(get()), get(AppScope)) } onClose { it?.close() }
 }

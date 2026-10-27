@@ -4,6 +4,8 @@ import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.settings.Settings
+import com.techgv.cineverse.data.search.RecentQueryStore
+import com.techgv.cineverse.data.storage.StorageException
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.CatalogRepository
 import com.techgv.cineverse.presentation.LibraryActionsStateHolder
@@ -32,9 +34,11 @@ class MobileApplication(
     private val settingsRepository: SettingsRepository,
     private val auth: AuthRepository,
     library: LibraryRepository,
+    val recentQueries: RecentQueryStore,
     appScope: CoroutineScope,
 ) {
     private val scope = CoroutineScope(appScope.coroutineContext + SupervisorJob(appScope.coroutineContext[Job]))
+    val settingsFlow = settingsRepository.settings
     private val mutableSettings = MutableStateFlow<Settings?>(null)
     val settings = mutableSettings.asStateFlow()
     private val mutableSettingsFailed = MutableStateFlow(false)
@@ -68,7 +72,8 @@ class MobileApplication(
         if (settingsJob?.isActive == true) return
         mutableSettingsFailed.value = false
         settingsJob = scope.launch {
-            settingsRepository.settings.distinctUntilChanged().catch {
+            settingsFlow.distinctUntilChanged().catch {
+                if (it !is StorageException) throw it
                 mutableSettingsFailed.value = true // Keep the last good value, never invent persisted preferences.
             }.collect { next ->
                 val previous = mutableSettings.value

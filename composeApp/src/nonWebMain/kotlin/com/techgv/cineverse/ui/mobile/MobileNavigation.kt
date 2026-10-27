@@ -1,6 +1,7 @@
 package com.techgv.cineverse.ui.mobile
 
 import androidx.navigation.NavHostController
+import com.techgv.cineverse.domain.Hero
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.data.tmdb.TrendingWindow
 import com.techgv.cineverse.presentation.BrowseSelection
@@ -41,4 +42,9 @@ internal fun NavHostController.open(destination: MobileDestination) {
         is MobileDestination.Trailer -> navigate(MobileTrailerRoute(destination.key, destination.title, destination.kicker))
         is MobileDestination.Browse -> navigate(MobileBrowseRoute(destination.row.name, destination.trend.name))
     }
+}
+
+internal fun Hero.searchDestination(): MobileDestination = when (this) {
+    is Hero.OfTitle -> MobileDestination.Detail(title.ref)
+    is Hero.OfPerson -> MobileDestination.Person(person.id)
 }
