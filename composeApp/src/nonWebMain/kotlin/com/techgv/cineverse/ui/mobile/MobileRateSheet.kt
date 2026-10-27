@@ -63,7 +63,7 @@ internal fun MobileRateSheet(
                         contentAlignment = Alignment.Center) {
                         Icon(CvIcons.Star, null, Modifier.size(34.dp), tint = Tokens.Colors.Gold.copy(alpha = 0.4f))
                         Icon(CvIcons.StarFilled, null, Modifier.size(34.dp).drawWithContent {
-                            clipRect(right = size.width * fraction) { drawContent() }
+                            clipRect(right = size.width * fraction) { this@drawWithContent.drawContent() }
                         }, tint = Tokens.Colors.Gold)
                     }
                 }

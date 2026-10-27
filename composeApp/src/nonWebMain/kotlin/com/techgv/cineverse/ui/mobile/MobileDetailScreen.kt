@@ -256,6 +256,7 @@ private fun DetailHeader(detail: Detail, imageBase: String, onNavigate: (MobileD
 private fun DetailActions(detail: Detail, state: MobileDetailState, onAct: (LibraryKind) -> Unit, onNavigate: (MobileDestination) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         val account = state.account
+        val rating = account.rating
         ActionTile(when {
             LibraryKind.WATCHLIST in account.pending -> "Saving…"
             !account.known -> "Watchlist unknown"
@@ -268,10 +269,10 @@ private fun DetailActions(detail: Detail, state: MobileDetailState, onAct: (Libr
         ActionTile(when {
             LibraryKind.RATING in account.pending -> "Saving…"
             !account.known -> "Rating unknown"
-            account.rating != null -> "★ ${oneDecimal(account.rating)}"
+            rating != null -> "★ ${oneDecimal(rating)}"
             else -> "Rate"
         }, CvIcons.Star, { onAct(LibraryKind.RATING) }, Modifier.weight(1f).testTag("detail-rate"),
-            content = if (account.rating != null) Tokens.Colors.Gold else Tokens.Colors.TextPrimary,
+            content = if (rating != null) Tokens.Colors.Gold else Tokens.Colors.TextPrimary,
             enabled = state.authority != null && account.canToggle(LibraryKind.RATING))
         detail.mobileDetailVideos().firstOrNull()?.let { video ->
             ActionTile("Trailer", CvIcons.Play, { onNavigate(MobileDestination.Trailer(video.key, detail.title, video.name)) },
