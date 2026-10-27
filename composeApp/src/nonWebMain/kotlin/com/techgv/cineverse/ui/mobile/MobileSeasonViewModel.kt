@@ -66,7 +66,8 @@ internal class MobileSeasonViewModel(
     parentScope: CoroutineScope? = null,
 ) : ViewModel() {
     private val initial = validateMobileSeason(seriesId, seasonNumber, savedState)
-    val scrollTarget: MobileSeasonScroll = initial?.scroll ?: MobileSeasonScroll()
+    val scrollTarget: MobileSeasonScroll?
+        get() = if (initial == null) null else validateMobileSeason(seriesId, seasonNumber, savedState)?.scroll
     val imageBase: String get() = graph.catalog.imageBaseUrl()
     private val parent = parentScope ?: viewModelScope
     private val job = SupervisorJob(parent.coroutineContext[Job])

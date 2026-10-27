@@ -36,35 +36,41 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
     val state = model.visibleState(observed)
     val token = state.context
     val scroll = remember(model) { LazyListState() }
-    val target = remember(model) { model.scrollTarget }
-    var restored by remember(model) { mutableStateOf(false) }
-    var clamped by remember(model) { mutableStateOf<MobileSeasonScroll?>(null) }
-    val topologyReady = token != null && state.bodyReady && !state.settingsFailed && !state.stale
-    val ready by rememberUpdatedState(topologyReady && restored)
-    val currentToken by rememberUpdatedState(token)
-    LaunchedEffect(model, topologyReady) {
-        if (!topologyReady || restored) return@LaunchedEffect
+    // Expansion changes openEpisode, not the completed provider or its restoration authority.
+    val topology = token?.takeIf { state.bodyReady && !state.settingsFailed && !state.stale }
+        ?.let { it to state.current?.episodes }
+    val target = remember(model, topology) { topology?.let { model.scrollTarget } }
+    var restored by remember(model, topology) { mutableStateOf(false) }
+    var clamped by remember(model, topology) { mutableStateOf<MobileSeasonScroll?>(null) }
+    fun ownsTopology(): Boolean {
+        val latest = model.visibleState(model.state.value)
+        return topology != null && latest.context === topology.first && latest.bodyReady &&
+            !latest.settingsFailed && !latest.stale && latest.current?.episodes == topology.second
+    }
+    LaunchedEffect(model, topology) {
+        if (target == null || !ownsTopology()) return@LaunchedEffect
         // scrollToItem remeasures the actual completed provider; no visible-header prerequisite.
         scroll.scrollToItem(target.index, target.offset)
+        if (!ownsTopology()) return@LaunchedEffect
         val actual = MobileSeasonScroll(scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset)
         clamped = actual.takeIf { it != target }
         restored = true
     }
-    LaunchedEffect(model, topologyReady, restored) {
-        if (!ready) return@LaunchedEffect
+    LaunchedEffect(model, topology, restored) {
+        if (!restored || topology == null) return@LaunchedEffect
         snapshotFlow { MobileSeasonScroll(scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
             .distinctUntilChanged().collect { position ->
                 // Preserve an unreachable saved target until the user actually moves, never save an automatic clamp.
-                if (ready && position != clamped) {
+                if (ownsTopology() && position != clamped) {
                     clamped = null
-                    currentToken?.let { model.saveScroll(it, position.index, position.offset) }
+                    model.saveScroll(topology.first, position.index, position.offset)
                 }
             }
     }
-    DisposableEffect(model, scroll) {
+    DisposableEffect(model, scroll, topology) {
         onDispose {
-            if (ready && clamped == null) currentToken?.let {
-                model.saveScroll(it, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset)
+            if (restored && clamped == null && topology != null && ownsTopology()) {
+                model.saveScroll(topology.first, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset)
             }
         }
     }
