@@ -13,10 +13,14 @@ import com.techgv.cineverse.domain.LibraryState
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.Title
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -269,7 +273,87 @@ class CapturedRatePromptTest {
         assertEquals(1, f.outcomes.size)
     }
 
-    private class Fixture(private val scope: TestScope, initial: AuthSession?) {
+    @Test fun subscribedCollectorReceivesValueEqualReplacementAfterMissedClose() = runTest {
+        val f = Fixture(this, a, backgroundScope + UnconfinedTestDispatcher(testScheduler))
+        val rendered = mutableListOf<RatePrompt?>()
+        backgroundScope.launch { f.holder.ratePrompt.toList(rendered) }
+        val old = f.open(movie)
+        assertSame(old, rendered.last())
+
+        backgroundScope.launch {
+            // The UI finishes both operations before the subscribed collector can run.
+            f.holder.closeRate()
+            f.holder.openRate(movie)
+            assertSame(old, rendered.last())
+        }
+        runCurrent()
+        val current = f.holder.ratePrompt.first()!! // Independent snapshot, not the rendered instance.
+        assertEquals(old, current)
+        assertNotSame(old, current)
+        assertSame(current, rendered.last())
+
+        f.holder.submitRating(8.5, old)
+        f.holder.removeRating(old)
+        f.holder.closeRate(old)
+        runCurrent()
+        assertSame(current, rendered.last())
+        assertSame(current, f.holder.ratePrompt.first())
+        f.assertUntouched()
+        f.holder.submitRating(7.5, rendered.last()!!)
+        runCurrent()
+        assertNull(rendered.last())
+        assertEquals(listOf("rating/movie:1=7.5"), f.account.writes)
+
+        f.holder.openRate(movie)
+        runCurrent()
+        f.holder.closeRate(rendered.last()!!)
+        runCurrent()
+        assertNull(rendered.last())
+        assertEquals(1, f.account.writes.size)
+    }
+
+    @Test fun subscribedCollectorRevealsExactValueEqualReplacementAfterPlayerDeferral() = runTest {
+        val f = Fixture(this, a, backgroundScope + UnconfinedTestDispatcher(testScheduler))
+        val rendered = mutableListOf<RatePrompt?>()
+        backgroundScope.launch { f.holder.ratePrompt.toList(rendered) }
+        val old = f.open(movie)
+        assertSame(old, rendered.last())
+        f.holder.setPlayerActive(true)
+        runCurrent()
+        assertNull(rendered.last())
+
+        backgroundScope.launch {
+            f.holder.closeRate()
+            f.holder.openRate(movie)
+            assertNull(rendered.last())
+        }
+        runCurrent()
+        assertNull(rendered.last())
+        f.holder.setPlayerActive(false)
+        runCurrent()
+        val current = f.holder.ratePrompt.first()!!
+        assertEquals(old, current)
+        assertNotSame(old, current)
+        assertSame(current, rendered.last())
+
+        f.holder.submitRating(8.5, old)
+        f.holder.removeRating(old)
+        f.holder.closeRate(old)
+        runCurrent()
+        assertSame(current, rendered.last())
+        assertSame(current, f.holder.ratePrompt.first())
+        f.assertUntouched()
+        f.holder.removeRating(rendered.last()!!)
+        runCurrent()
+        assertNull(rendered.last())
+        assertEquals(listOf("rating/movie:1=null"), f.account.writes)
+    }
+
+    private class Fixture(
+        private val scope: TestScope,
+        initial: AuthSession?,
+        uiScope: CoroutineScope = scope.backgroundScope,
+    ) {
         val actual = MutableStateFlow(initial)
         val account = FakeAccountLibrary()
         val rows = InMemoryGuestLibraryStore()
@@ -290,7 +374,7 @@ class CapturedRatePromptTest {
             }
         }
         val repository = LibraryRepository(actual, GuestLibrarySource(guest), source)
-        val holder = LibraryActionsStateHolder(repository, scope.backgroundScope, scope.backgroundScope,
+        val holder = LibraryActionsStateHolder(repository, scope.backgroundScope, uiScope,
             { outcomes += it }, { failures += it }).also { it.onIdentity(initial) }
 
         suspend fun open(title: Title): RatePrompt {
