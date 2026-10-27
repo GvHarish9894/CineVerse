@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.*
 internal class MobileDetailComponentFixture(scope: CoroutineScope) {
     val api = MobileDetailComponentApi()
     val generation = GenerationCounter()
-    val settings = SettingsRepository(MobileSettingsStore())
+    private val settingsStore = MobileSettingsStore()
+    val settings = SettingsRepository(settingsStore)
     val catalog = CatalogRepository(api, generation, settings::current)
     val auth = MobileDetailComponentAuth()
     val guest = MobileGuestStore()
@@ -27,7 +28,8 @@ internal class MobileDetailComponentFixture(scope: CoroutineScope) {
             accountWrites += session
         }
     })
-    val graph = MobileApplication(catalog, generation, settings, auth, library, scope)
+    val graph = MobileApplication(catalog, generation, settings, auth, library,
+        com.techgv.cineverse.data.search.RecentQueryStore(settingsStore), scope)
     val raw = MutableStateFlow<Result<Settings>>(Result.success(Settings()))
     var settingsSubscriptions = 0
     val rawSettings: Flow<Settings> = flow {

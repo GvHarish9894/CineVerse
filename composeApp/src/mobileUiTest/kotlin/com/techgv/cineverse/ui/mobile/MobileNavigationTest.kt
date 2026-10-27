@@ -34,7 +34,7 @@ class MobileNavigationTest {
         setContent { MobileTestRoot(onReady = { model, fixture -> home = model.home; api = fixture.api }) }
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
         val retainedHome = home
-        onNodeWithText("Internal placeholder · movie 101").assertIsDisplayed()
+        onNodeWithText("Detail title 101").assertIsDisplayed()
         onNodeWithText("Explore", useUnmergedTree = true).performClick()
         onNodeWithText("Movies · Popular").assertIsDisplayed()
         onNodeWithText("Home", useUnmergedTree = true).onParent().performSemanticsAction(SemanticsActions.OnClick) { selectHome ->
@@ -42,7 +42,7 @@ class MobileNavigationTest {
             // A queued trailer press must be rejected even before navigation's next lifecycle frame.
             home.playTrailer((home.uiState.value.hero as Hero.OfTitle).title)
         }
-        onNodeWithText("Internal placeholder · movie 101").assertIsDisplayed()
+        onNodeWithText("Detail title 101").assertIsDisplayed()
         runOnIdle {
             assertSame(retainedHome, home)
             home.playTrailer((home.uiState.value.hero as Hero.OfTitle).title)
@@ -52,7 +52,7 @@ class MobileNavigationTest {
             assertEquals(emptyList(), api.calls.filter { it.startsWith("videos/") }, "Hidden retained Home must reject trailer lookup")
             assertNull(home.uiState.value.trailerLoading)
         }
-        onNodeWithText("Back").performClick()
+        onNodeWithContentDescription("Back").performClick()
         onNodeWithContentDescription("Details for week-en-US 1").assertIsDisplayed()
         runOnIdle { home.playTrailer((home.uiState.value.hero as Hero.OfTitle).title) }
         waitForIdle()
@@ -67,7 +67,7 @@ class MobileNavigationTest {
         restoration.emulateSaveAndRestore()
         onNodeWithText("Internal placeholder · This tab is not implemented in M1.").assertIsDisplayed()
         onNodeWithText("Home", useUnmergedTree = true).performClick()
-        onNodeWithText("Internal placeholder · movie 101").assertIsDisplayed()
+        onNodeWithText("Detail title 101").assertIsDisplayed()
         // Re-selecting the active tab pops its stack.
         onNodeWithText("Home", useUnmergedTree = true).performClick()
         onNodeWithContentDescription("Details for week-en-US 1").assertIsDisplayed()
