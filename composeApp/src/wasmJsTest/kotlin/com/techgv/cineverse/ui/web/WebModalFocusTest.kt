@@ -46,6 +46,27 @@ class WebModalFocusTest {
         onNodeWithText("Header fallback").assertIsNotFocused()
     }
 
+    @Test fun disabledTriggerUsesFallbackAfterDialogCloses() = runComposeUiTest {
+        val fallback = FocusRequester()
+        val returns = WebModalFocus(fallback)
+        var open by mutableStateOf(false)
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            CompositionLocalProvider(LocalWebModalFocus provides returns) {
+                Column {
+                    PillButton("Header fallback", {}, Modifier.focusRequester(fallback))
+                    val trigger = rememberWebModalTrigger(WebModalKind.Rate)
+                    PillButton("Rate trigger", { trigger.open { open = true } }, trigger.modifier, enabled = !open)
+                }
+                if (open) CvDialog({ open = false }, "Rate", onRestoreFocus = returns.restorer(WebModalKind.Rate)) {}
+            }
+        }
+        onNodeWithText("Rate trigger").performClick()
+        onNodeWithText("Rate trigger").assertIsNotEnabled()
+        onNodeWithContentDescription("Close").performClick()
+        onNodeWithText("Header fallback").assertIsFocused()
+        onNodeWithText("Rate trigger").assertIsNotFocused()
+    }
+
     @Test fun removedTriggerUsesFallbackAndOtherDialogCaptureCannotRetargetReturn() = runComposeUiTest {
         val fallback = FocusRequester()
         val returns = WebModalFocus(fallback)

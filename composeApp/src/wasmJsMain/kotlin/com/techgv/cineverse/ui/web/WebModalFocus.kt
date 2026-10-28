@@ -25,8 +25,9 @@ internal class WebModalFocus(private val fallback: FocusRequester) {
     fun restorer(kind: WebModalKind): () -> Unit {
         val trigger = triggers[kind]
         return {
-            if (trigger?.live == true) runCatching { trigger.requester.requestFocus() }
-            else runCatching { fallback.requestFocus() }
+            val restored = trigger?.live == true &&
+                runCatching { trigger.requester.requestFocus() }.getOrDefault(false)
+            if (!restored) runCatching { fallback.requestFocus() }
             Unit
         }
     }
