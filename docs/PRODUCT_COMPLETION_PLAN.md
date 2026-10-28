@@ -111,6 +111,14 @@ Font triage504c328b BLOCK runtime but concrete necessary harness fix: synchronou
 
 Resume W1 C3 SOURCE-ONLY from exact preservedbac2654 +17trackeddirty +WebModalFocus.kt untracked, not restart/regenerate. Existing snapshots checkpoints/web-accessibility-timeout/20261028T024642Z and web-quota-retry/20261028T020455Z retained. Finish approved existing23cumulativefiles/defaultnative hooks/sharedreadonly Home.canStartTrailer only, no fonts/account/business redesign, no Gradle/browser until sourcehandoff/review. All three children selectedcliproxyapi/gpt-6.1-sol, one writer/cwd; C5 exclusivelyexecution; C2/C3 sourceonly. Preview49272off, main docs only, physicaldeviceexcluded, no existingAVDuserdata reset or unrelated Zuperjob/daemon changes.
 
+### d9 quota partials recovered / retained-child retry
+
+All three d9be663a children eventually hit usage limit, but partial execution/source must not be discarded. Parent recovered C5e6626244 evidence at unchangedclean1b52c5c: 01-host exit0/fresh30unique passes (ViewModel24+RootFactory6);02-native-compile exit0/allfive selected targetsEXECUTED. Parent parsed preservedXML, inspected driver freshness checks/logs and matched both after-snapshot source manifests to currentfiles. CurrentRoot18 now COMPILED ONLY, not uncompiled; NO Root/Person runtime invocation yet. Worker left ownedQEMU PID89857/emulator5556 booted; parent visuallyread boot-screen, verifiedpscommand+consoleAVDname=CineVerse_Acceptance_API36_20261028, stopped ONLY that serial, then verifiedPIDgone/no5556/5557listeners. No physical-device command, reset or unrelatedprocessaction.
+
+C2 remains863e03a plusTWO dirty fonttestfiles60insertions8deletions; saved staticvalidation21prepared/existingassertions/budgets retained, patchSHAf04f2197aecebd23415e48fd291bd190ae3e4447f31d3938e9019695f2f5bc66. No commit/report/currentfix runtime yet; finish existingpartial not rewrite. C3 remainsbac2654+same17tracked/untrackedhelper; worker wrote initialcheckpointreport/snapshot but no finalsourcehandoff. Parent preserved both currentdirtysource tars/manifests/patches at checkpoints/resume-after-quota/20261028T171902Z; C3 trackedpatchSHA9176889a753c893ecd7cb41280cb4327489ab927b97f2ec76de2c90907d34c11. Recovery.json contains host/sourceparity and ownedshutdownproof.
+
+Operator explicitly requested retry. children.list confirms lateste6626244/87bad017/6350d4f7 resumable; revive SAME stored worker/modelcontracts cliproxyapi/gpt-6.1-sol, no fallback/newwriters. C5 continue runtime only after hosthealth/reownership; no replay of successfulhost/nativecompiles. C2/C3 source-only finish existingpartials, no executionlease. C5soleexecution, preview49272off, allhistoricAndroid5/iOS5 open until realexecutionsproveotherwise. Stop/report any newprovider/infrastructurefailure, no auto-retry.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
