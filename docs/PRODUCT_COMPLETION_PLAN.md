@@ -119,6 +119,12 @@ C2 remains863e03a plusTWO dirty fonttestfiles60insertions8deletions; saved stati
 
 Operator explicitly requested retry. children.list confirms lateste6626244/87bad017/6350d4f7 resumable; revive SAME stored worker/modelcontracts cliproxyapi/gpt-6.1-sol, no fallback/newwriters. C5 continue runtime only after hosthealth/reownership; no replay of successfulhost/nativecompiles. C2/C3 source-only finish existingpartials, no executionlease. C5soleexecution, preview49272off, allhistoricAndroid5/iOS5 open until realexecutionsproveotherwise. Stop/report any newprovider/infrastructurefailure, no auto-retry.
 
+### Fetch-failure retry under newly selected model
+
+Retained gpt-6.1-sol retry workflow9822bad1 failed all3 children with plain provider transport `fetch failed`, not product/build/test assertions. Metadata confirms requested/actualcliproxyapi/gpt-6.1-sol:high. Preserve work performed before failure: C2 worker committed source-only test wait fix cleanb22a0aa63deda62859f9884cf46cf64123f5b1fd (twofiles60+/8-, properidentity), so next is independentreview not rewrite. C5 no new runtime evidence beyond already recovered30host/fivenativecompile passes; retry worker rebooted ownedemulatorPID8064 but no Root/Person invocation/artifacts. Parent verifiedPIDcommand+consoleAVDname, then stopped onlyemulator5556 and verifiedPID/listenersgone. A physical OPD2203 phone is attached; NEVER target it. C3 remains samebac2654 dirtypartial, no new commit.
+
+Operator asked what failed and explicitly requested retry. Current environment nowPI_PROVIDER=cliproxyapi PI_MODEL=gpt-5.6-sol. This is an operator-selected model change; launch NEW children explicitlycliproxyapi/gpt-5.6-sol rather than retaining old6.1model. No fallback beyondthis selectedmodel. C5 runtime-only soleexecutionlease, no replayhost/nativecompiles; C2 read-only reviewb22a0aa; C3 source-only finish currentpartial. Persistentpreviewoff, exactprivacy/process/AVDownership rules unchanged. A new provider/infrastructure failure stops/reports without another automaticretry.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
