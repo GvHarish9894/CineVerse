@@ -11,14 +11,23 @@ import com.techgv.cineverse.domain.LibraryKind
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlin.test.*
 
+private class RenderedDetailAction(
+    val model: MobileDetailViewModel,
+    val authority: MobileDetailAuthority?,
+    val onAct: (LibraryKind) -> Unit,
+)
+
 /** Prepared integration cases only; source-only handoff does not claim native execution. */
-@OptIn(ExperimentalTestApi::class)
+@OptIn(ExperimentalTestApi::class, ExperimentalCoroutinesApi::class)
 class MobileDetailRootTest {
     private val title = MovieDetailDto(101, "Root rating title").toDetail("US").toTitle()
 
@@ -29,52 +38,144 @@ class MobileDetailRootTest {
     @Test fun attachPublicationCannotOverwriteReentrantReplacement() = reentrantDeactivation("attach")
 
     private fun reentrantDeactivation(operation: String) = runComposeUiTest {
+        val scheduler = TestCoroutineScheduler()
         lateinit var root: MobileDetailRootBindingUiState
-        setContent { MobileDetailRootBindingUiFixture { root = it } }
+        lateinit var replacement: MobileRootRateAuthority
+        setContent { MobileDetailRootBindingUiFixture(scheduler) { root = it } }
         waitForIdle()
         waitUntil { root.entryA.lifecycle.currentState == Lifecycle.State.RESUMED &&
             root.entryB.lifecycle.currentState == Lifecycle.State.RESUMED }
-        runOnIdle { root.activateA() }
+        runOnIdle {
+            scheduler.runCurrent()
+            assertNotNull(root.fixture.graph.settings.value)
+            assertTrue(root.fixture.auth.emissions.tryEmit(null))
+            scheduler.runCurrent()
+            assertEquals(MobileIdentity(null), root.fixture.graph.identity.value)
+            assertTrue(root.observedPrompts.isNotEmpty(), "Real prompt collector must be registered before activation")
+            assertNull(root.observedPrompts.first())
+            assertNull(root.latestPrompt)
+            assertTrue(root.fixture.store.subscriptions > 0)
+            root.activateA()
+            scheduler.runCurrent()
+        }
         waitUntil { root.modelA.state.value.authority != null }
-        runOnIdle { root.fixture.graph.actions.openRate(title, null) }
+        runOnIdle {
+            assertTrue(root.modelA.state.value.account.known)
+            root.fixture.graph.actions.openRate(title, null)
+            scheduler.runCurrent()
+        }
         waitUntil { root.latestPrompt != null }
         runOnIdle {
+            val f = root.fixture
             val old = assertNotNull(root.binding.rateAuthority(assertNotNull(root.latestPrompt)))
+            val aRead = assertNotNull(root.modelA.state.value.authority)
+            assertSame(root.entryA, old.entry)
+            assertSame(root.modelA, old.detailOwner)
+            assertEquals(aRead, old.detailAuthority)
+            assertEquals(title.ref, aRead.context.ref)
+            assertEquals(f.generation.current, aRead.context.appGeneration)
+            assertEquals(f.graph.identity.value, aRead.identity)
+            assertTrue(title.ref in f.guest.readStarts)
+            assertSame(old.prompt, root.observedPrompts.last())
+            val bRef = MediaRef(MediaType.Movie, 765)
+            assertTrue(f.guest.readStarts.none { it == bRef }, "B must still be cold")
+            assertTrue(f.api.detailCalls.none { it.startsWith("movie/765/") })
+            val subscriptionsBeforeB = f.store.subscriptions
             var reentered = false
-            val observer = root.scope.launch {
+            var outerReturned = false
+            var initialObservation: MobileDetailAuthority? = null
+            val observer = root.scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 root.modelA.state.collect {
+                    if (!reentered && it.authority != null) initialObservation = it.authority
                     if (!reentered && it.authority == null) {
                         reentered = true
+                        assertEquals(aRead, initialObservation, "Observer must first see actual A authority")
+                        assertFalse(outerReturned, "Replacement must be accepted inside synchronous revocation")
                         root.binding.setResumed(true)
                         root.activateB()
-                        root.fixture.graph.actions.openRate(MovieDetailDto(765, "Replacement").toDetail("US").toTitle(), null)
+                        scheduler.runCurrent()
+                        val bRead = assertNotNull(root.modelB.state.value.authority)
+                        val settings = assertNotNull(f.graph.settings.value)
+                        assertEquals(bRef, bRead.context.ref)
+                        assertEquals(settings.language, bRead.context.language)
+                        assertEquals(settings.region, bRead.context.region)
+                        assertEquals(f.generation.current, bRead.context.appGeneration)
+                        assertEquals(assertNotNull(f.graph.identity.value), bRead.identity)
+                        assertEquals(MobileIdentity(null), bRead.identity)
+                        assertFalse(f.graph.settingsFailed.value)
+                        assertFalse(f.graph.identityFailed.value)
+                        assertFalse(f.graph.storageFailed.value)
+                        assertTrue(root.modelB.state.value.account.known)
+                        assertFalse(root.modelB.state.value.libraryFailed)
+                        assertEquals(1, f.guest.readStarts.count { it == bRef }, "Actual B account cold read must start before openRate")
+                        assertTrue(f.store.subscriptions > subscriptionsBeforeB, "Actual B settings reader must start")
+                        assertTrue("movie/765/${settings.language}" in f.api.detailCalls)
+                        f.graph.actions.openRate(MovieDetailDto(765, "Replacement").toDetail("US").toTitle(), null)
+                        scheduler.runCurrent()
+                        val prompt = assertNotNull(root.latestPrompt)
+                        assertEquals(bRef, prompt.title.ref)
+                        assertSame(prompt, root.observedPrompts.last(), "Use the real producer emission")
+                        assertEquals(2, f.guest.readStarts.count { it == bRef }, "Real producer must read the rating too")
+                        replacement = assertNotNull(root.binding.rateAuthority(prompt))
+                        assertSame(root.entryB, replacement.entry)
+                        assertSame(root.modelB, replacement.detailOwner)
+                        assertEquals(bRead, replacement.detailAuthority)
+                        assertEquals(bRead, root.modelB.state.value.authority)
+                        assertFalse(outerReturned)
                     }
                 }
             }
-            when (operation) {
-                "detach" -> root.binding.detach(root.entryA, root.modelA)
-                "selection" -> root.binding.currentChanged(root.entryB)
-                "leave" -> root.binding.leave()
-                "background" -> root.binding.setResumed(false)
-                "attach" -> root.binding.attach(root.entryB, root.modelB)
-                else -> error("Unknown test operation")
+            try {
+                assertEquals(aRead, initialObservation, "UNDISPATCHED registration must complete before outer operation")
+                when (operation) {
+                    "detach" -> root.binding.detach(root.entryA, root.modelA)
+                    "selection" -> root.binding.currentChanged(root.entryB)
+                    "leave" -> root.binding.leave()
+                    "background" -> root.binding.setResumed(false)
+                    "attach" -> root.binding.attach(root.entryB, root.modelB)
+                    else -> error("Unknown test operation")
+                }
+                outerReturned = true
+                assertTrue(reentered, "Must reenter from actual synchronous A deactivation")
+                assertSame(replacement.prompt, root.latestPrompt)
+                assertSame(replacement, root.binding.rateAuthority(replacement.prompt))
+                assertSame(root.entryB, replacement.entry)
+                assertSame(root.modelB, replacement.detailOwner)
+                assertEquals(replacement.detailAuthority, root.modelB.state.value.authority)
+                root.binding.submit(old, 9.0); root.binding.remove(old); root.binding.dismiss(old)
+                assertTrue(f.guest.rows.value.isEmpty())
+                assertSame(replacement.prompt, root.latestPrompt, "Old callbacks must not close replacement immediately")
+                assertSame(replacement, root.binding.rateAuthority(replacement.prompt))
+                scheduler.runCurrent()
+                assertTrue(f.guest.rows.value.isEmpty())
+                assertSame(replacement.prompt, root.latestPrompt, "Old callbacks must not close replacement after drain")
+                assertSame(replacement, root.binding.rateAuthority(replacement.prompt))
+                assertEquals(replacement.detailAuthority, root.modelB.state.value.authority)
+            } finally {
+                observer.cancel()
+                scheduler.runCurrent()
             }
-            assertTrue(reentered, "Must reenter from actual synchronous A deactivation")
-            observer.cancel()
-            root.binding.submit(old, 9.0); root.binding.remove(old); root.binding.dismiss(old)
         }
         waitUntil { root.modelB.state.value.authority != null && root.latestPrompt?.title?.ref?.id == 765 }
         runOnIdle {
-            val replacement = assertNotNull(root.binding.rateAuthority(assertNotNull(root.latestPrompt)))
+            assertSame(replacement, root.binding.rateAuthority(assertNotNull(root.latestPrompt)))
             val action = assertNotNull(root.modelB.state.value.authority)
             assertEquals(1, root.fixture.guest.activeReads)
             if (operation == "background" || operation == "attach") root.binding.leave()
             else root.binding.setResumed(false)
-            assertNull(root.modelB.state.value.authority)
-            assertEquals(0, root.fixture.guest.activeReads, "Replacement must remain registered for later revocation")
+            assertNull(root.modelB.state.value.authority, "Logical authority is revoked synchronously")
+            scheduler.runCurrent()
+            assertEquals(0, root.fixture.guest.activeReads, "Physical reader cancellation completes after explicit drain")
             root.modelB.act(LibraryKind.FAVOURITE, action)
             root.binding.submit(replacement, 9.0); root.binding.remove(replacement); root.binding.dismiss(replacement)
             assertTrue(root.fixture.guest.rows.value.isEmpty())
+            assertNull(root.binding.rateAuthority(replacement.prompt))
+            assertNull(root.latestPrompt)
+            scheduler.runCurrent()
+            assertTrue(root.fixture.guest.rows.value.isEmpty())
+            assertNull(root.modelB.state.value.authority)
+            assertNull(root.binding.rateAuthority(replacement.prompt))
+            assertNull(root.latestPrompt)
         }
     }
 
@@ -256,30 +357,74 @@ class MobileDetailRootTest {
     @Test fun tabBackgroundAndRemovedEntrySynchronouslyRevokeCapturedDetailActions() = runComposeUiTest {
         lateinit var f: MobileDetailRootFixture
         lateinit var owner: MobileDetailRootUiOwner
-        setContent { MobileDetailRootUiFixture { fixture, lifecycle -> f = fixture; owner = lifecycle } }
+        val actions = mutableListOf<RenderedDetailAction>()
+        fun capture(): RenderedDetailAction = assertNotNull(actions.lastOrNull()).also {
+            assertNotNull(it.authority)
+            assertEquals(it.model.state.value.authority, it.authority)
+            assertEquals(MediaRef(MediaType.Movie, 101), it.model.ref)
+        }
+        setContent {
+            MobileDetailRootUiFixture(actionObserver = { model, authority, onAct ->
+                actions += RenderedDetailAction(model, authority, onAct)
+            }) { fixture, lifecycle -> f = fixture; owner = lifecycle }
+        }
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
-        val beforeBackground = onNodeWithContentDescription("Favourite title").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        onNodeWithContentDescription("Favourite title").assertIsEnabled()
+        lateinit var beforeBackground: RenderedDetailAction
         runOnIdle {
+            beforeBackground = capture()
             owner.lifecycle.currentState = Lifecycle.State.CREATED
-            beforeBackground()
+            beforeBackground.onAct(LibraryKind.FAVOURITE)
             assertTrue(f.guest.rows.value.isEmpty())
         }
+        waitForIdle()
+        runOnIdle { assertTrue(f.guest.rows.value.isEmpty()) }
         runOnIdle { owner.lifecycle.currentState = Lifecycle.State.RESUMED }
         onNodeWithContentDescription("Favourite title").assertIsEnabled()
-        runOnIdle { beforeBackground(); assertTrue(f.guest.rows.value.isEmpty()) }
-        val beforeTab = onNodeWithContentDescription("Favourite title").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
-        onNodeWithText("Explore", useUnmergedTree = true).onParent().performSemanticsAction(SemanticsActions.OnClick) {
-            it(); beforeTab()
+        runOnIdle {
+            val recovered = capture()
+            assertSame(beforeBackground.model, recovered.model)
+            assertNotEquals(beforeBackground.authority, recovered.authority, "Resume must publish genuinely different authority")
+            beforeBackground.onAct(LibraryKind.FAVOURITE)
+            assertTrue(f.guest.rows.value.isEmpty())
         }
+        waitForIdle()
+        runOnIdle {
+            assertTrue(f.guest.rows.value.isEmpty(), "Post-resume stale action must not write before tab action")
+        }
+        lateinit var beforeTab: RenderedDetailAction
+        runOnIdle { beforeTab = capture() }
+        onNodeWithText("Explore", useUnmergedTree = true).onParent().performSemanticsAction(SemanticsActions.OnClick) {
+            it()
+            beforeTab.onAct(LibraryKind.FAVOURITE)
+            assertTrue(f.guest.rows.value.isEmpty())
+        }
+        waitForIdle()
         runOnIdle { assertTrue(f.guest.rows.value.isEmpty()) }
         onNodeWithText("Home", useUnmergedTree = true).performClick()
         onNodeWithText("Root title 101 en-US").assertExists()
-        val beforeBack = onNodeWithContentDescription("Favourite title").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
-        onNodeWithContentDescription("Back").performSemanticsAction(SemanticsActions.OnClick) { it(); beforeBack() }
+        onNodeWithContentDescription("Favourite title").assertIsEnabled()
+        lateinit var beforeBack: RenderedDetailAction
+        runOnIdle {
+            beforeBack = capture()
+            assertSame(beforeBackground.model, beforeBack.model, "Home must retain the original Detail owner")
+        }
+        onNodeWithContentDescription("Back").performSemanticsAction(SemanticsActions.OnClick) {
+            it()
+            beforeBack.onAct(LibraryKind.FAVOURITE)
+            assertTrue(f.guest.rows.value.isEmpty())
+        }
+        waitForIdle()
         runOnIdle { assertTrue(f.guest.rows.value.isEmpty()) }
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
         onNodeWithContentDescription("Favourite title").assertIsEnabled()
-        runOnIdle { beforeBack(); assertTrue(f.guest.rows.value.isEmpty()) }
+        runOnIdle {
+            assertNotSame(beforeBack.model, capture().model, "Reopening must create a different entry owner")
+            beforeBack.onAct(LibraryKind.FAVOURITE)
+            assertTrue(f.guest.rows.value.isEmpty())
+        }
+        waitForIdle()
+        runOnIdle { assertTrue(f.guest.rows.value.isEmpty()) }
     }
 
     @Test fun oneRateHostUsesRealProducerAndClosesBeforeHonestSubmitOutcome() = runComposeUiTest {

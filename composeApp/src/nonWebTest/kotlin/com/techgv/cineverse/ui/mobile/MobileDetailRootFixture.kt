@@ -54,10 +54,12 @@ internal class MobileDetailRootGuest : GuestLibraryStore {
     val rows = MutableStateFlow<List<GuestLibraryRow>>(emptyList())
     var gate: CompletableDeferred<Unit>? = null
     var reads = 0
+    val readStarts = mutableListOf<MediaRef>()
     var activeReads = 0
     var fail = false
     override fun observeTitle(ref: MediaRef) = flow {
         reads++
+        readStarts += ref
         activeReads++
         try {
             gate?.await()

@@ -28,6 +28,10 @@ import com.techgv.cineverse.ui.design.Tokens
 import com.techgv.cineverse.ui.theme.displayStyle
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+internal val LocalMobileDetailActionObserver = staticCompositionLocalOf<
+    ((MobileDetailViewModel, MobileDetailAuthority?, (LibraryKind) -> Unit) -> Unit)?
+> { null }
+
 private val MobileYouTubeKey = Regex("[A-Za-z0-9_-]{11}")
 internal fun Detail.mobileDetailVideos(): List<Video> = videos.filter { MobileYouTubeKey.matches(it.key) }.distinctBy { it.key }
 
@@ -62,8 +66,11 @@ internal fun MobileDetailScreen(
         DisposableEffect(scroll) {
             onDispose { if (persist) model.saveScroll(segment, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
         }
+        val onAct: (LibraryKind) -> Unit = { model.act(it, state.authority) }
+        val actionObserver = LocalMobileDetailActionObserver.current
+        if (actionObserver != null) SideEffect { actionObserver(model, state.authority, onAct) }
         MobileDetailContent(state, model.imageBase, scroll, model::selectSegment, model::setExpanded,
-            onAct = { model.act(it, state.authority) }, onRetryReads = model::retryReads, onRetryDetail = model::retryDetail,
+            onAct = onAct, onRetryReads = model::retryReads, onRetryDetail = model::retryDetail,
             onNavigate = { target -> model.browse { navigator.open(target) } }, onBack = { model.browse(onBack) },
             onShare = onShare?.let { share -> { ref -> model.browse { share(ref) } } })
     }
