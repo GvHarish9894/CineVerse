@@ -152,7 +152,7 @@ class WebModalFocusTest {
         }
         onNodeWithContentDescription("CineVerse home").assertHasClickAction()
         waitUntil { webDocumentNode("#web-header") != null }
-        runOnIdle { webDocumentNode("canvas")!!.apply { blur(); focus() } }
+        runOnIdle { enterHeaderCanvas(webDocumentNode("canvas")!!) }
         onNodeWithContentDescription("CineVerse home").assertIsFocused()
         onNodeWithContentDescription("CineVerse home").performKeyInput { pressKey(Key.Enter) }
         runOnIdle { assertEquals(1, homes) }
@@ -165,3 +165,11 @@ class WebModalFocusTest {
     return false;
 }""")
 private external fun webNodeHidden(node: HTMLElement): Boolean
+
+/** Focus-entry event sequence only; native browser Tab traversal remains a production-document gate. */
+@JsFun("""(canvas) => {
+    canvas.blur();
+    document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,composed:true}));
+    canvas.focus();
+}""")
+private external fun enterHeaderCanvas(canvas: HTMLElement)

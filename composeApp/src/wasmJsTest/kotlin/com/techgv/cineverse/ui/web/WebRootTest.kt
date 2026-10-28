@@ -59,11 +59,11 @@ class WebRootTest {
                 calls += "videos:$id"
                 videoGate?.await()
                 return VideosDto(listOf(
-                VideoDto(key = "tEaSeR_0001", name = "Teaser", site = "YouTube", type = "Teaser", official = true),
-                VideoDto(key = WebTrailerHostFake.TRAILER.key, name = "Official Trailer", site = "YouTube", type = "Trailer", official = true),
+                    VideoDto(key = "tEaSeR_0001", name = "Teaser", site = "YouTube", type = "Teaser", official = true),
+                    VideoDto(key = WebTrailerHostFake.TRAILER.key, name = "Official Trailer", site = "YouTube", type = "Trailer", official = true),
                 ))
             }
-            // Home: one trending movie; every other row and the genre lists are empty.
+            // Default Home: one trending movie; optional upcoming fixtures exercise two pending trailer presses.
             override suspend fun trending(window: TrendingWindow, language: String, page: Int) =
                 PageDto(page, listOf(MediaItemDto(1, mediaType = "movie", title = "Root film", releaseDate = "2026-03-13")), 1, 1)
             override suspend fun movieList(list: MovieList, language: String, region: String, page: Int) =
