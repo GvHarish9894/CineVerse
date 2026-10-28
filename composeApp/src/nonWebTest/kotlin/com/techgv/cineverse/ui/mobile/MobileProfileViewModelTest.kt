@@ -207,6 +207,50 @@ class MobileProfileViewModelTest {
         model.close(); f.graph.close()
     }
 
+    @Test fun queuedToggleRejectsGenerationChangeAtTransactionAndNeverReplaysAfterRecovery() = runTest {
+        val f = MobileProfileComponentFixture(backgroundScope); val model = f.model()
+        f.auth.emissions.emit(null); model.setActive(true); runCurrent()
+        val rendered = model.state.value
+        val stored = f.store.values.value
+        model.setToggle(rendered.context, Toggle.Sounds, true)
+        f.generation.bump()
+        runCurrent()
+        assertEquals(1, f.store.edits) // The fixture counts attempts before running the transaction transform.
+        assertEquals(stored, f.store.values.value)
+        assertEquals(rendered.settings, f.settings.current())
+        assertFalse(model.state.value.writeFailed)
+        model.contextChanged(); runCurrent()
+        model.retryReads(model.state.value.context); runCurrent()
+        assertEquals(1, f.store.edits)
+        assertEquals(stored, f.store.values.value)
+        assertEquals(rendered.settings, f.settings.current())
+        assertEquals(rendered.settings, model.state.value.settings)
+        assertFalse(model.state.value.writeFailed)
+        model.close(); f.graph.close()
+    }
+
+    @Test fun queuedStrengthRejectsGenerationChangeAtTransactionAndNeverReplaysAfterRecovery() = runTest {
+        val f = MobileProfileComponentFixture(backgroundScope); val model = f.model()
+        f.auth.emissions.emit(null); model.setActive(true); runCurrent()
+        val rendered = model.state.value
+        val stored = f.store.values.value
+        model.cycleStrength(rendered.context, rendered.settings!!.strength)
+        f.generation.bump()
+        runCurrent()
+        assertEquals(1, f.store.edits) // The fixture counts attempts before running the transaction transform.
+        assertEquals(stored, f.store.values.value)
+        assertEquals(rendered.settings, f.settings.current())
+        assertFalse(model.state.value.writeFailed)
+        model.contextChanged(); runCurrent()
+        model.retryReads(model.state.value.context); runCurrent()
+        assertEquals(1, f.store.edits)
+        assertEquals(stored, f.store.values.value)
+        assertEquals(rendered.settings, f.settings.current())
+        assertEquals(rendered.settings, model.state.value.settings)
+        assertFalse(model.state.value.writeFailed)
+        model.close(); f.graph.close()
+    }
+
     @Test fun strictSavedScalarsAndPickerRejectMalformedValuesWithoutRepair() = runTest {
         for ((key, value) in listOf("profile.index" to -1, "profile.index" to 1L, "profile.offset" to "4", "profile.picker" to "Strength", "profile.picker" to 7, "profile.index" to null)) {
             val f = MobileProfileComponentFixture(backgroundScope)

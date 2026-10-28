@@ -169,11 +169,11 @@ internal class MobileProfileViewModel(
             readFailed = graph.settingsFailed.value, picker = null)
 
     fun setToggle(token: Long, toggle: Toggle, target: Boolean) {
-        if (editable(token) && state.value.settings!!.profileToggle(toggle) != target) holder?.toggle(toggle)
+        if (editable(token) && state.value.settings!!.profileToggle(toggle) != target) holder?.toggle(toggle) { editable(token) }
     }
 
     fun cycleStrength(token: Long, rendered: HapticStrength) {
-        if (editable(token) && state.value.settings!!.strength == rendered) holder?.cycle(Choice.Strength, 1)
+        if (editable(token) && state.value.settings!!.strength == rendered) holder?.cycle(Choice.Strength, 1) { editable(token) }
     }
 
     fun openPicker(token: Long, picker: MobilePreferencePicker) {
