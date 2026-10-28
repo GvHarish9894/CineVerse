@@ -11,6 +11,7 @@ import com.techgv.cineverse.data.settings.SettingsStore
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.util.GenerationCounter
 import com.techgv.cineverse.ui.web.WebApp
+import com.techgv.cineverse.ui.theme.ProvideWebBundledFonts
 import kotlinx.browser.document
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -22,7 +23,11 @@ fun main() {
     val generation = application.graph.koin.get<GenerationCounter>()
     val repository = application.graph.koin.get<SettingsRepository>()
     val recent = RecentQueryStore(application.graph.koin.get<SettingsStore>())
-    ComposeViewport(document.getElementById("cineverse-root")!!) { WebApp(application.runtime, catalog, generation, repository.settings, recent, settingsRepository = repository) }
+    ComposeViewport(document.getElementById("cineverse-root")!!) {
+        ProvideWebBundledFonts {
+            WebApp(application.runtime, catalog, generation, repository.settings, recent, settingsRepository = repository)
+        }
+    }
 }
 
 // A bfcache page retains its live graph and catches up via C3 visibility/focus signals when restored.
