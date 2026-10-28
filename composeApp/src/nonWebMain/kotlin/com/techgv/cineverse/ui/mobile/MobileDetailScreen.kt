@@ -39,7 +39,7 @@ internal fun MobileDetailScreen(
     onBack: () -> Unit,
     onShare: ((MediaRef) -> Unit)? = null,
 ) {
-    val state by model.state.collectAsState()
+    val state = model.state.collectAsState().value
     key(model, state.segment) {
         val segment = state.segment
         val position = remember { model.scroll(segment) }
