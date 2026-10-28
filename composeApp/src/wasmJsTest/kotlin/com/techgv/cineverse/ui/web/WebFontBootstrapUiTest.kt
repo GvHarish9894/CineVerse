@@ -12,7 +12,11 @@ import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.di.WebSessionState
 import com.techgv.cineverse.ui.theme.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.jetbrains.compose.resources.MissingResourceException
 import kotlin.test.*
 
@@ -54,7 +58,15 @@ class WebFontBootstrapUiTest {
                     WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history, repository)
                 }
             }
-            waitUntil(timeoutMillis = 10_000) { fontLoadFinished && f.catalogReads >= 7 }
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    while (!fontLoadFinished || f.catalogReads < 7) {
+                        delay(10)
+                        mainClock.advanceTimeByFrame()
+                        waitForIdle()
+                    }
+                }
+            }
             assertIs<WebSessionState.Ready>(f.runtime.session.value)
             assertNotNull(f.runtime.settingsHolder.state.value)
             onNodeWithText("Discover your next favourite").assertExists()
@@ -115,7 +127,15 @@ class WebFontBootstrapUiTest {
             val reads = f.catalogReads
             val generation = f.generation.current
             runOnIdle { update.value++; gate.complete(Unit) }
-            waitUntil(timeoutMillis = 10_000) { loaded?.body is FontListFontFamily }
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    while (loaded?.body !is FontListFontFamily) {
+                        delay(10)
+                        mainClock.advanceTimeByFrame()
+                        waitForIdle()
+                    }
+                }
+            }
             waitForIdle()
             assertEquals(1, loads)
             assertEquals(1, mounts)

@@ -13,11 +13,15 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import com.techgv.cineverse.ui.adaptive.ShellStyle
 import com.techgv.cineverse.ui.web.WebSearchFonts
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlinx.coroutines.test.runTest
 import org.jetbrains.compose.resources.MissingResourceException
@@ -139,13 +143,19 @@ class WebBundledFontsTest {
     @Test fun actualBundledBytesPreserveEveryFamilyAndWeight() = runComposeUiTest {
         val mapping = WebSearchFonts()
         var fonts: CvFonts? = null
+        var finished = false
+        var result: CvFonts? = null
         val reads = mutableListOf<String>()
         try {
             setContent {
-                ProvideWebBundledFonts(load = { loadWebBundledFonts { path ->
-                    reads += path
-                    readWebBundledFontBytes(path)
-                } }) {
+                ProvideWebBundledFonts(load = {
+                    result = loadWebBundledFonts { path ->
+                        reads += path
+                        readWebBundledFontBytes(path)
+                    }
+                    finished = true
+                    result
+                }) {
                     CineVerseTheme(ShellStyle.Web) {
                         val selected = LocalCvFonts.current
                         SideEffect { fonts = selected }
@@ -154,7 +164,21 @@ class WebBundledFontsTest {
                     }
                 }
             }
-            waitUntil(timeoutMillis = 10_000) { fonts?.body is FontListFontFamily }
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    while (!finished) {
+                        delay(10)
+                        mainClock.advanceTimeByFrame()
+                        waitForIdle()
+                    }
+                    assertNotNull(result, "Bundled font load returned null fallback")
+                    while (fonts?.body !is FontListFontFamily) {
+                        delay(10)
+                        mainClock.advanceTimeByFrame()
+                        waitForIdle()
+                    }
+                }
+            }
             waitForIdle()
             val loaded = assertNotNull(fonts)
             assertEquals(listOf(500, 700, 800), (loaded.display as FontListFontFamily).fonts.map { it.weight.weight })
@@ -192,7 +216,15 @@ class WebBundledFontsTest {
                     SideEffect { selected = fonts }
                 }
             }
-            waitUntil(timeoutMillis = 10_000) { finished }
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    while (!finished) {
+                        delay(10)
+                        mainClock.advanceTimeByFrame()
+                        waitForIdle()
+                    }
+                }
+            }
             assertNull(result)
             assertSame(WebFallbackFonts, selected)
             assertEquals(WebBundledFontAssets.map { it.path }, reads)
