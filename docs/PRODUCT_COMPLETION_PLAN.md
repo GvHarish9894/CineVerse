@@ -133,6 +133,14 @@ C2 committedb22a0aa two-test-file nativeyield correction reviewed7c9f12a3 CLEAR.
 
 C3 sourceclean4d8c9095863b59c48bbc250b4c513c0a42d5f6a2, 23cumulativefiles, correctidentity; deltaSHAeff80ca153468b2a9606273601f9f2798a7bb16a741c408018fa8f41a1bb6a3e, cumulativeSHA687a4d61a5c9faa3ab34c7af67178fcdcddc35b1dc98b5f89aebd1fbeb88b537, manifestSHA19effbcb0cc02a5c6b7b37354a46789e13086e61eb19c4f4b35b6db2bfc4b7a0. Header/modal/focusrestore/iframeguards/live ratingslider/traileradmission/native hooks and16new preparedcases+1strengthened implemented source-only. Independent source review next in parallel withC2lease; no W1 compile/runtime yet. Accessibility report's statement Android5open is stale relative to laterC5execution; doesnot invalidate W1 source. Previewoff.
 
+### 21-method font accounting / W1 focus P1 / evidence-review retry
+
+Workflow030f83c4: C2 currentb22a0aa exact21focused methods now allreported: loader13/13PASS (old2waits closed), bootstrap6/7PASS, Search0/1; total19pass2fail0skip0unreported, no disconnect. Currentfailures: lateSuccessfulFonts... reachedfontcompletion/lifetime assertions then savedState expectedonlylibrary.tab but actual additionally library.movie.index=0/library.movie.offset=0; laterURL/push/write/Backnotreached. SelectedunchangedSearch contract failed unchangedMocha2000ms, exactinternalstage unavailable. STOP no retry/nativecompiles. Independent readonlytriage before sourcechange; no timeout/assertionweakening. C2 remainscleanb22a0aa.
+
+C3 independentreviewfdaed329 BLOCK oneP1 only: WebModalFocus.restorer checks trigger.live but ignores requestFocus false/throw; live but disabled Detailrate trigger remainscomposed/nonfocusable afteridentity closesdialog, fallbackHome skipped/canvasleftwithoutvirtualtarget. Approvedsmallestfix: compute restored=trigger.live && runCatching(requestFocus).getOrDefault(false), fallback onfalse/throw. Add realCompose regression opening enabledPillButton, disable whiledialogopen, close, assertactualfallbackfocused; retainremoved-trigger/recompositiontests. Source/test correction thenreview before execution; exactscope WebModalFocus.kt+WebModalFocusTest.kt only unless compilationrequiresapproval.
+
+C5 runtimeevidence reviewer failed solely provider `auth_unavailable` with upstreamPROTOCOL_ERROR, no product/evidence defect and no source/runtimechange. Operator explicitlyrequestedretry. Retry readonlysameexact evidence; do not rerunAndroid. Root18/18+Person11/11 claims remainprovisional pendingreview, sourceclean1b52c5c. Use selectedcliproxyapi/gpt-5.6-sol; a new providerfailure stops/reports nofallback. All lanes source/read-only, no executionlease this round, previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
