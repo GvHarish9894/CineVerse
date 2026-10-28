@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.tmdb.TrendingWindow
 import com.techgv.cineverse.data.tmdb.VideoDto
+import com.techgv.cineverse.domain.Title
 import com.techgv.cineverse.domain.Hero
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +21,7 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -177,6 +179,38 @@ class HomeStateHolderTest {
         again.complete(Unit)
         advanceUntilIdle()
         assertEquals(emptyList(), events)
+    }
+
+    @Test fun canStartTrailerUsesSynchronousAdmissionThroughLoadingCompletionAndDeactivation() = runTest {
+        api.videosFor = { listOf(trailer()) }
+        val gate = api.gate("videos/7/en-US")
+        val holder = holder()
+        assertFalse(holder.canStartTrailer)
+        holder.setActive(true)
+        assertTrue(holder.canStartTrailer)
+        val accepted = mutableListOf<Title>()
+        val completionAdmission = mutableListOf<Boolean>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            holder.events.collect { completionAdmission += holder.canStartTrailer }
+        }
+        fun press(title: Title) { if (holder.canStartTrailer) { accepted += title; holder.playTrailer(title) } }
+        press(dune)
+        // No scheduler/recomposition between presses: uiState has not caught up with the private loading flag.
+        assertNull(holder.uiState.value.trailerLoading)
+        assertFalse(holder.canStartTrailer)
+        press(title(8))
+        advanceUntilIdle()
+        assertEquals(listOf(dune), accepted)
+        assertEquals(listOf("videos/7/en-US"), api.calls.filter { it.startsWith("videos/") })
+        assertFalse(holder.canStartTrailer)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf(false), completionAdmission) // Loading clears before the emitting job exits.
+        assertTrue(holder.canStartTrailer)
+        holder.setActive(false)
+        assertFalse(holder.canStartTrailer)
+        holder.setActive(true)
+        assertTrue(holder.canStartTrailer)
     }
 
     @Test fun trailerPressWhileInactiveIsIgnored() = runTest {
