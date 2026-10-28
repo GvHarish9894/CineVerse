@@ -97,6 +97,8 @@ class WebModalFocusTest {
         waitUntil { hasNamedModal("Modal 0") && webDocumentNode("#modal-background")?.let(::webNodeHidden) == true }
         onNodeWithText("Real dialog action").assertExists()
         runOnIdle {
+            assertTrue(webDocumentNode("[role=dialog] [aria-label=Close]") != null)
+            assertTrue(webDocumentNode("[role=dialog] [role=button]") != null)
             // The installed listener can rewrite role during a sync; annotation must repair the same live node.
             webDocumentNode("[role=dialog]")!!.removeAttribute("role")
         }
@@ -108,6 +110,18 @@ class WebModalFocusTest {
         waitUntil { !hasNamedModal("Modal 1") && webDocumentNode("#modal-background")?.let { !webNodeHidden(it) } == true }
         onNodeWithText("Background action").performClick()
         runOnIdle { assertEquals(1, actions) }
+    }
+
+    @Test fun removingFocusedAsyncActionKeepsKeyboardFocusInsideTheSameModal() = runComposeUiTest {
+        var action by mutableStateOf(true)
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            CvDialog({}, "Async modal") {
+                if (action) PillButton("Temporary action", { action = false })
+            }
+        }
+        onNodeWithContentDescription("Close").performKeyInput { pressKey(Key.Tab) }
+        onNodeWithText("Temporary action").assertIsFocused().performClick()
+        onNodeWithContentDescription("Close").assertIsFocused()
     }
 
     @Test fun headerSearchTabHasOneActionableSignInStopAndReverseReturnsToInput() = runComposeUiTest {
