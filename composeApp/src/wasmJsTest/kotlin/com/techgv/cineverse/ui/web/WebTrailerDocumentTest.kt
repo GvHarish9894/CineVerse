@@ -10,7 +10,6 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import com.techgv.cineverse.ui.adaptive.ShellStyle
 import com.techgv.cineverse.ui.setThemedContent
 import com.techgv.cineverse.ui.theme.AppearanceSettings
-import kotlinx.browser.document
 import org.w3c.dom.HTMLElement
 import kotlin.test.*
 
@@ -29,20 +28,31 @@ class WebTrailerDocumentTest {
             if (open) WebTrailerDialog(listOf(WebTrailerHostFake.TRAILER, WebTrailerHostFake.TEASER), WebTrailerHostFake.TRAILER,
                 false, { open = false }, remember { FocusRequester() }, host)
         }
-        waitUntil { document.querySelector("iframe[data-cv-trailer]") != null && hasNamedModal("Official Trailer") }
+        waitUntil { webDocumentNode("iframe[data-cv-trailer]") != null && hasNamedModal("Official Trailer") }
+        runOnIdle {
+            val iframe = webDocumentNode("iframe[data-cv-trailer]")!!
+            assertTrue(iframe.getAttribute("title")!!.contains("Official Trailer"))
+            assertTrue(webDocumentNode("[role=dialog]")!!.getAttribute("aria-owns")!!.split(" ").contains(iframe.id))
+            assertTrue(sameDomRoot(iframe, webDocumentNode("[role=dialog]")!!))
+            assertNull(webDocumentNode("[aria-hidden=true] [data-cv-trailer-before], [aria-hidden=true] [data-cv-trailer-after]"))
+        }
         onNodeWithContentDescription("Close").performKeyInput { pressKey(Key.Tab) }
-        runOnIdle { assertEquals(document.querySelector("iframe[data-cv-trailer]"), document.activeElement) }
+        runOnIdle { assertEquals(webDocumentNode("iframe[data-cv-trailer]"), webActiveElement()) }
         // Simulates the browser reaching the boundary AFTER native player controls; does not invent player key handling.
-        runOnIdle { (document.querySelector("[data-cv-trailer-after]") as HTMLElement).focus() }
+        runOnIdle { (webDocumentNode("[data-cv-trailer-after]") as HTMLElement).focus() }
+        onNodeWithText("Teaser One · Teaser").assertIsFocused()
+        onNodeWithText("Teaser One · Teaser").performKeyInput { pressKey(Key.Tab) }
+        onNodeWithContentDescription("Close").assertIsFocused()
+        onNodeWithContentDescription("Close").performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) } }
         onNodeWithText("Teaser One · Teaser").assertIsFocused()
         onNodeWithText("Teaser One · Teaser").performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) } }
-        runOnIdle { assertEquals(document.querySelector("iframe[data-cv-trailer]"), document.activeElement) }
-        runOnIdle { (document.querySelector("[data-cv-trailer-before]") as HTMLElement).focus() }
+        runOnIdle { assertEquals(webDocumentNode("iframe[data-cv-trailer]"), webActiveElement()) }
+        runOnIdle { (webDocumentNode("[data-cv-trailer-before]") as HTMLElement).focus() }
         onNodeWithContentDescription("Close").assertIsFocused()
         onNodeWithContentDescription("Close").performClick()
         runOnIdle {
-            assertNull(document.querySelector("iframe[data-cv-trailer]"))
-            assertNull(document.querySelector("[data-cv-trailer-before], [data-cv-trailer-after]"))
+            assertNull(webDocumentNode("iframe[data-cv-trailer]"))
+            assertNull(webDocumentNode("[data-cv-trailer-before], [data-cv-trailer-after]"))
         }
         waitUntil { !hasNamedModal("Official Trailer") }
     }
@@ -53,13 +63,13 @@ class WebTrailerDocumentTest {
             if (open) WebTrailerDialog(listOf(WebTrailerHostFake.TRAILER), WebTrailerHostFake.TRAILER,
                 false, { open = false }, remember { FocusRequester() }, host)
         }
-        waitUntil { document.querySelector("iframe[data-cv-trailer]") != null }
+        waitUntil { webDocumentNode("iframe[data-cv-trailer]") != null }
         onNodeWithContentDescription("Close").performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) } }
-        runOnIdle { assertEquals(document.querySelector("iframe[data-cv-trailer]"), document.activeElement) }
-        runOnIdle { (document.querySelector("[data-cv-trailer-after]") as HTMLElement).focus() }
+        runOnIdle { assertEquals(webDocumentNode("iframe[data-cv-trailer]"), webActiveElement()) }
+        runOnIdle { (webDocumentNode("[data-cv-trailer-after]") as HTMLElement).focus() }
         onNodeWithContentDescription("Close").assertIsFocused()
         runOnIdle { open = false }
-        runOnIdle { assertNull(document.querySelector("[data-cv-trailer], [data-cv-trailer-before], [data-cv-trailer-after]")) }
+        runOnIdle { assertNull(webDocumentNode("[data-cv-trailer], [data-cv-trailer-before], [data-cv-trailer-after]")) }
     }
 }
 
@@ -74,3 +84,23 @@ class WebTrailerDocumentTest {
     return find(document);
 }""")
 internal external fun hasNamedModal(name: String): Boolean
+
+/** Only the owned top-level document/shadow roots, never the remote iframe document. */
+@JsFun("""(selector) => {
+    function find(root) {
+        const match=root.querySelector(selector); if(match) return match;
+        for(const n of root.querySelectorAll('*')) if(n.shadowRoot) { const found=find(n.shadowRoot); if(found) return found; }
+        return null;
+    }
+    return find(document);
+}""")
+internal external fun webDocumentNode(selector: String): HTMLElement?
+@JsFun("""() => {
+    let active=document.activeElement;
+    while(active && active.shadowRoot && active.shadowRoot.activeElement) active=active.shadowRoot.activeElement;
+    return active;
+}""")
+internal external fun webActiveElement(): HTMLElement?
+
+@JsFun("(a,b) => a.getRootNode() === b.getRootNode()")
+private external fun sameDomRoot(a: HTMLElement, b: HTMLElement): Boolean

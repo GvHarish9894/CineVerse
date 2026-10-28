@@ -331,6 +331,21 @@ class WebRootTest {
         } finally { f.close() }
     }
 
+    @Test fun settingsSignOutCancelRestoresTheOpeningButtonWithoutLogout() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        try {
+            root(f, FakeHistory("/settings"))
+            exists("web-settings")
+            val trigger = hasText("Sign out") and hasAnyAncestor(hasTestTag("settings-account"))
+            onNode(trigger).performClick()
+            exists("web-sign-out-dialog")
+            onNodeWithContentDescription("Close").performClick()
+            onNode(trigger).assertIsFocused()
+            assertEquals(setOf("GET /api/session"), f.http.toSet())
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
     @Test fun settingsImportOpensTheOwnerDialogWithoutWritesOrLogout() = runComposeUiTest {
         val f = Fixture(signedIn = true)
         val history = FakeHistory("/settings")
@@ -341,6 +356,8 @@ class WebRootTest {
             exists("web-import-dialog")
             onNodeWithText("Nothing to import").assertExists() // The fake offer is complete: the owner reports it honestly.
             onNodeWithTag("web-sign-out-dialog").assertDoesNotExist()
+            onNodeWithContentDescription("Close").performClick()
+            onNodeWithText("Import guest library").assertIsFocused()
             assertEquals(setOf("GET /api/session"), f.http.toSet())
             assertEquals(emptyList(), f.writes)
         } finally { f.close() }
