@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -86,6 +88,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     // Return hints are the runtime's soft session reads; forwarding them to the approval owner would busy it on every tab switch.
     val signInFocus = remember { FocusRequester() }
     val homeFocus = remember { FocusRequester() }
+    val modalFocus = remember { WebModalFocus(homeFocus) }
+    val approvalState by approval.state.collectAsState()
     // Identity follows the authoritative session (openRate requires holder identity == the rendered session).
     val libraryOutcomes = remember(runtime) { MutableSharedFlow<LibraryWriteOutcome>(extraBufferCapacity = 8) }
     val libraryActions = remember(runtime) { runtime.libraryActions(uiScope) { libraryOutcomes.tryEmit(it) } }
@@ -148,7 +152,7 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                 }
                 // Page-level ambient glow (Settings › Ambient glow); the Home hero paints its own backdrop over it.
                 WebAmbientGlow()
-                CompositionLocalProvider(LocalFooterLinks provides footerLinks) {
+                CompositionLocalProvider(LocalFooterLinks provides footerLinks, LocalWebModalFocus provides modalFocus) {
                 Column(Modifier.fillMaxSize().onPreviewKeyEvent {
                     if (searchEnabled && !searchFocused && !mainSearchFocused && it.type == KeyEventType.KeyDown && it.key == Key.Slash && !it.isCtrlPressed && !it.isMetaPressed) {
                         searchFocus.requestFocus(); true
@@ -161,7 +165,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                                 navigation.navigate(WebRoute.Search(it))
                                 headerSubmission = navigation.entry.value
                             }
-                        }, searchEnabled = searchEnabled, signIn = approval::show, signInFocus = signInFocus, homeFocus = homeFocus)
+                        }, searchEnabled = searchEnabled, signIn = approval::show, signInFocus = signInFocus, homeFocus = homeFocus,
+                        modalOpen = trailerOpen || accountDialog || ratePrompt != null || approvalState.phase != WebApprovalPhase.Closed)
                     WebStatus(session, storage.takeUnless { settings != null && entry.route.ownsStorageNotice(session, settingsRepository != null) }, runtime::revalidateSession, runtime::retryStorage)
                     if (settings == null) {
                         if (storage == null) WebLoadingSkeleton("Reading saved settings…")
@@ -198,16 +203,22 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                         }
                     }
                 }
-                }
                 // One root dialog at a time: trailer, then account (sign-out/import), then rate, then approval.
-                // shortcut: rate/account focus returns to the header logo; Detail/Settings do not expose their trigger requesters.
                 if (shownTrailer != null) key(entry, shownTrailer.third) {
-                    WebTrailerDialog(shownTrailer.second, shownTrailer.third, autoplay = false, onClose = { trailer = null }, restoreFocus = homeFocus, host = trailerHost, maxWidth = trailerDialogMaxWidth)
+                    val restore = remember { modalFocus.restorer(WebModalKind.Trailer) }
+                    WebTrailerDialog(shownTrailer.second, shownTrailer.third, autoplay = false, onClose = { trailer = null }, restoreFocus = homeFocus, host = trailerHost, maxWidth = trailerDialogMaxWidth, onRestoreFocus = restore)
                 } else if (accountDialog) {
-                    WebSignOutDialog(account, homeFocus)
-                    WebImportDialog(account, homeFocus) // Hides itself while the sign-out dialog is open.
-                } else if (ratePrompt != null) WebRateDialog(libraryActions, homeFocus)
-                else WebApprovalDialog(approval, signInFocus)
+                    val restore = remember { modalFocus.restorer(WebModalKind.Account) }
+                    WebSignOutDialog(account, homeFocus, restore)
+                    WebImportDialog(account, homeFocus, restore) // Hides itself while the sign-out dialog is open.
+                } else if (ratePrompt != null) {
+                    val restore = remember { modalFocus.restorer(WebModalKind.Rate) }
+                    WebRateDialog(libraryActions, homeFocus, restore)
+                } else if (approvalState.phase != WebApprovalPhase.Closed) {
+                    val restore = remember { modalFocus.restorer(WebModalKind.Approval) }
+                    WebApprovalDialog(approval, signInFocus, restore)
+                }
+                }
             }
         }
     }
@@ -271,7 +282,9 @@ internal fun WebStorageNotice(failure: BrowserStorageFailure, retry: () -> Unit,
 @Composable
 internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: FocusRequester, navigate: (WebRoute, Boolean) -> Unit,
                        searchFocused: (Boolean) -> Unit = {}, searchQuery: String? = null, searchChange: (String) -> Unit = {}, searchSubmit: (String) -> Unit = {}, searchEnabled: Boolean = true,
-                       signIn: () -> Unit = { navigate(WebRoute.Settings, false) }, signInFocus: FocusRequester? = null, homeFocus: FocusRequester? = null) {
+                       signIn: () -> Unit = { navigate(WebRoute.Settings, false) }, signInFocus: FocusRequester? = null, homeFocus: FocusRequester? = null, modalOpen: Boolean = false) {
+    val focus = LocalFocusManager.current
+    var fieldFocused by remember { mutableStateOf(false) }
     var query by remember(route) { mutableStateOf((route as? WebRoute.Search)?.query.orEmpty()) }
     var edited by remember(route) { mutableStateOf(false) }
     val displayed = searchQuery ?: query
@@ -289,7 +302,13 @@ internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: F
         }
     }
     val submit = { if (searchEnabled && !invalid) searchSubmit(displayed) }
-    BoxWithConstraints(Modifier.fillMaxWidth().background(HeaderFill).drawBehind {
+    BoxWithConstraints(webHeaderFocusBridge(homeFocus, modalOpen).fillMaxWidth().onPreviewKeyEvent { event ->
+        if (fieldFocused && event.type == KeyEventType.KeyDown && event.key == Key.Tab) {
+            focus.moveFocus(if (event.isShiftPressed) FocusDirection.Previous else FocusDirection.Next)
+            focusWebCanvasAfterInput()
+            true
+        } else false
+    }.background(HeaderFill).drawBehind {
         drawLine(Color.White.copy(alpha = 0.07f), Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
     }) {
         val narrow = maxWidth <= 860.dp
@@ -309,7 +328,7 @@ internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: F
                     NavButton("People") { navigate(WebRoute.People, false) }
                     NavButton("My Library") { navigate(WebRoute.Library(), false) }
                 }
-                val field = Modifier.focusRequester(searchFocus).testTag("header-search-input").onFocusChanged { searchFocused(it.isFocused) }
+                val field = Modifier.focusRequester(searchFocus).testTag("header-search-input").onFocusChanged { fieldFocused = it.isFocused; searchFocused(it.isFocused) }
                 // Wide: the field sits at the right edge, at most 340dp, shrinking before the nav does. Narrow: it takes the row.
                 if (narrow) WebSearchField(displayed, change, submit, field.weight(1f), invalid = invalid, enabled = searchEnabled)
                 else Box(Modifier.weight(1f).padding(start = 10.dp), contentAlignment = Alignment.CenterEnd) {
@@ -318,7 +337,8 @@ internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: F
                 Box(Modifier.padding(start = if (narrow) 0.dp else 10.dp)) {
                     when (session) {
                         is WebSessionState.Ready -> if (session.session == null) {
-                            PillButton("Sign in", signIn, signInFocus?.let { Modifier.focusRequester(it) } ?: Modifier, small = true)
+                            val approvalTrigger = rememberWebModalTrigger(WebModalKind.Approval)
+                            PillButton("Sign in", { approvalTrigger.open(signIn) }, approvalTrigger.modifier.then(signInFocus?.let { Modifier.focusRequester(it) } ?: Modifier), small = true)
                         } else NavigationMenu(session.session!!.displayName.ifBlank { "Account" }, listOf("Watchlist" to WebRoute.Library(), "Favourites" to WebRoute.Library("favourites"), "Ratings" to WebRoute.Library("ratings"), "Settings" to WebRoute.Settings), navigate)
                         WebSessionState.Checking -> Text("Verifying", style = MaterialTheme.typography.bodySmall, color = Tokens.Colors.TextSecondary)
                         is WebSessionState.Failed -> Text("Unverified", style = MaterialTheme.typography.bodySmall, color = Tokens.Colors.TextSecondary)

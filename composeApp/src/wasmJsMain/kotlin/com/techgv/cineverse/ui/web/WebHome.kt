@@ -98,7 +98,8 @@ internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: Ge
         (titles.firstOrNull { it.key == saved } ?: titles.firstOrNull())?.let { holder.selectHero(it) }
     }
     WebHomeContent(state, entry, session, { entry.putString("home.hero", null); holder.selectTrend(it) }, { holder.selectHero(it) }, holder::retry,
-        { requested = it; holder.playTrailer(it) }, { navigate(it, false) }, retryStorage, storage, signIn, noTrailer)
+        { if (holder.canStartTrailer) { requested = it; holder.playTrailer(it) } }, { navigate(it, false) }, retryStorage, storage, signIn, noTrailer,
+        canPlayTrailer = { holder.canStartTrailer })
 }
 
 /**
@@ -126,7 +127,7 @@ internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebS
                             selectTrend: (TrendingWindow) -> Unit, selectHero: (Hero) -> Unit,
                             retry: (HomeRow) -> Unit, playTrailer: (Title) -> Unit, navigate: (WebRoute) -> Unit,
                             retryStorage: () -> Unit, storage: BrowserStorageFailure?, signIn: () -> Unit,
-                            noTrailer: Set<MediaRef> = emptySet()) {
+                            noTrailer: Set<MediaRef> = emptySet(), canPlayTrailer: () -> Boolean = { state.trailerLoading == null }) {
     val scroll = savedScroll(saver, "page")
     var popularTv by remember { mutableStateOf(saver.getBoolean("home.popularTv") ?: false) }
     LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-home").semantics {
@@ -146,7 +147,7 @@ internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebS
         if (state.genresError != null) item("genres-error") {
             WebPage { ErrorState("Genre names could not be read. Loaded content is retained.", retryStorage, Modifier.testTag("home-genres-recovery")) }
         }
-        item("hero") { HomeHero(state, { saver.putString("home.hero", it.key); selectHero(it) }, playTrailer, navigate, noTrailer) }
+        item("hero") { HomeHero(state, { saver.putString("home.hero", it.key); selectHero(it) }, playTrailer, navigate, noTrailer, canPlayTrailer) }
         item("trending") {
             HomeSection(HomeRow.Trending, state.rows[HomeRow.Trending] ?: SectionState.Loading, saver, retry, navigate) {
                 SegmentedControl(listOf("Today", "This week"), if (state.trend == TrendingWindow.Day) 0 else 1,
@@ -165,7 +166,8 @@ internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebS
             val titles = (upcoming as? SectionState.Content)?.value?.items.orEmpty().filterIsInstance<Hero.OfTitle>().filter { it.title.ref !in noTrailer }.take(8)
             if (titles.isNotEmpty()) ScrollRow("Find a trailer · Upcoming movies", state = savedScroll(saver, "trailers")) {
                 items(titles, key = { it.key }) { hero ->
-                    VideoCard(hero.title.title, "Find a trailer", webPalette(hero.key), { playTrailer(hero.title) }, imageUrl = webImage(hero.title.backdropPath, "w780"))
+                    val trigger = rememberWebModalTrigger(WebModalKind.Trailer)
+                    VideoCard(hero.title.title, "Find a trailer", webPalette(hero.key), { if (canPlayTrailer()) trigger.open { playTrailer(hero.title) } }, trigger.modifier.testTag("home-trailer-${hero.title.ref.key}"), imageUrl = webImage(hero.title.backdropPath, "w780"))
                 }
             }
         }
@@ -193,7 +195,8 @@ private fun GuestCallToAction(signIn: () -> Unit) {
                 Text("Sign in with your TMDB account to sync your watchlist, favourites and ratings. Until then they are saved in this browser.",
                     Modifier.padding(top = 8.dp).widthIn(max = 560.dp), style = bodyStyle(16.sp).copy(lineHeight = 24.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.85f))
             }
-            PillButton("Sign in with TMDB", signIn, variant = ButtonVariant.White, small = true)
+            val trigger = rememberWebModalTrigger(WebModalKind.Approval)
+            PillButton("Sign in with TMDB", { trigger.open(signIn) }, trigger.modifier, variant = ButtonVariant.White, small = true)
         }
     }
 }
@@ -253,7 +256,7 @@ private fun homeSectionError(kind: SectionErrorKind): String = when (kind) {
 }
 
 @Composable
-private fun HomeHero(state: HomeUiState, select: (Hero) -> Unit, play: (Title) -> Unit, navigate: (WebRoute) -> Unit, noTrailer: Set<MediaRef>) {
+private fun HomeHero(state: HomeUiState, select: (Hero) -> Unit, play: (Title) -> Unit, navigate: (WebRoute) -> Unit, noTrailer: Set<MediaRef>, canPlayTrailer: () -> Boolean) {
     val hero = state.hero
     val trending = (state.rows[HomeRow.Trending] as? SectionState.Content)?.value?.items.orEmpty()
     val picks = trending.take(5)
@@ -303,7 +306,8 @@ private fun HomeHero(state: HomeUiState, select: (Hero) -> Unit, play: (Title) -
                         FlowRow(Modifier.padding(top = 26.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (hero is Hero.OfTitle && hero.title.ref !in noTrailer) {
                                 val finding = state.trailerLoading == hero.title.ref
-                                PillButton(if (finding) "Finding trailer…" else "Play trailer", { play(hero.title) }, icon = CvIcons.Play, enabled = state.trailerLoading == null)
+                                val trigger = rememberWebModalTrigger(WebModalKind.Trailer)
+                                PillButton(if (finding) "Finding trailer…" else "Play trailer", { if (canPlayTrailer()) trigger.open { play(hero.title) } }, trigger.modifier, icon = CvIcons.Play, enabled = state.trailerLoading == null)
                             }
                             PillButton("More info", { navigate(hero.route()) }, variant = ButtonVariant.Ghost, icon = CvIcons.Info)
                         }

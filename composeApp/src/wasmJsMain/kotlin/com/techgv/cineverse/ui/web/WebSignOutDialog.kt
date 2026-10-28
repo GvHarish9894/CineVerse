@@ -18,7 +18,7 @@ import com.techgv.cineverse.ui.theme.bodyStyle
 
 /** Host once above routes, next to WebImportDialog. [restoreFocus] is the Settings/avatar-menu trigger. */
 @Composable
-fun WebSignOutDialog(owner: WebAccountOwner, restoreFocus: FocusRequester) {
+fun WebSignOutDialog(owner: WebAccountOwner, restoreFocus: FocusRequester, onRestoreFocus: (() -> Unit)? = null) {
     val state by owner.state.collectAsState()
     if (state.signOut == WebSignOutPhase.Closed) return
     val busy = state.signOut == WebSignOutPhase.SigningOut || state.signOut == WebSignOutPhase.Checking
@@ -28,6 +28,7 @@ fun WebSignOutDialog(owner: WebAccountOwner, restoreFocus: FocusRequester) {
         title = "Sign out of CineVerse",
         kicker = "YOUR BROWSER ACCOUNT",
         restoreFocus = restoreFocus,
+        onRestoreFocus = onRestoreFocus,
         modifier = Modifier.testTag("web-sign-out-dialog"),
     ) {
         Column(

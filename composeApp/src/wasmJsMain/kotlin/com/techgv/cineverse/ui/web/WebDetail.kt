@@ -254,12 +254,16 @@ private fun WebDetailInfo(detail: Detail, account: LibraryState, actionable: Boo
                 if (!known) "Favourite · unknown" else if (account.favourite) "Favourited" else "Favourite",
                 active = known && account.favourite, favouriteColor, Color.White,
                 enabled = actionable && account.canToggle(LibraryKind.FAVOURITE)) { act(LibraryKind.FAVOURITE) }
+            val rateTrigger = rememberWebModalTrigger(WebModalKind.Rate)
             DetailActionButton(if (known && account.rating != null) CvIcons.StarFilled else CvIcons.Star,
                 if (!known) "Rating · unknown" else account.rating?.let { "Rated $it" } ?: "Rate",
                 active = known && account.rating != null, Tokens.Colors.Gold, Tokens.Colors.OnGold,
-                enabled = actionable && account.canToggle(LibraryKind.RATING)) { act(LibraryKind.RATING) }
+                enabled = actionable && account.canToggle(LibraryKind.RATING), modifier = rateTrigger.modifier) { rateTrigger.open { act(LibraryKind.RATING) } }
             val videos = detail.webDetailVideos()
-            videos.firstOrNull()?.let { video -> PillButton("Play trailer", { playTrailer(detail.toTitle(), videos, video) }, icon = CvIcons.Play) }
+            videos.firstOrNull()?.let { video ->
+                val trigger = rememberWebModalTrigger(WebModalKind.Trailer)
+                PillButton("Play trailer", { trigger.open { playTrailer(detail.toTitle(), videos, video) } }, trigger.modifier, icon = CvIcons.Play)
+            }
         }
         detail.webDetailTagline()?.let {
             Text(it, Modifier.padding(top = 24.dp), style = bodyStyle(17.sp).copy(fontStyle = FontStyle.Italic), color = Tokens.Colors.TextPrimary.copy(alpha = 0.72f))
@@ -284,8 +288,8 @@ private val favouriteColor = Color(0xFFFF5C8A)
 /** Kit `.circ`: 50dp round icon button, filled with the state colour when active; the label is its tooltip. */
 @Composable
 private fun DetailActionButton(icon: ImageVector, label: String, active: Boolean, activeContainer: Color, activeContent: Color,
-                               enabled: Boolean, onClick: () -> Unit) {
-    RoundIconButton(icon, label, onClick, diameter = 50.dp, container = if (active) activeContainer else Color(0xFF1C1933),
+                               enabled: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    RoundIconButton(icon, label, onClick, modifier, diameter = 50.dp, container = if (active) activeContainer else Color(0xFF1C1933),
         content = if (active) activeContent else Color.White, enabled = enabled)
 }
 
@@ -356,8 +360,9 @@ private fun WebDetailMain(detail: Detail, navigate: (WebRoute) -> Unit, playTrai
             WebSectionHeader("Videos")
             LazyRow(contentPadding = PaddingValues(top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 items(videos, key = { it.key }) { video ->
+                    val trigger = rememberWebModalTrigger(WebModalKind.Trailer)
                     VideoCard(video.name.ifBlank { video.type }, video.type.takeIf { it.isNotBlank() }, detailPalette,
-                        { playTrailer(detail.toTitle(), videos, video) }, Modifier.testTag("detail-video-${video.key}"),
+                        { trigger.open { playTrailer(detail.toTitle(), videos, video) } }, trigger.modifier.testTag("detail-video-${video.key}"),
                         webImage(detail.backdropPath, "w780"), width = 300.dp)
                 }
             }

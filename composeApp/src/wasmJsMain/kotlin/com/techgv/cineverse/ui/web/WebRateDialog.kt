@@ -38,7 +38,7 @@ import kotlin.math.round
  * onOutcome (root-owned) reports them: no toast here.
  */
 @Composable
-fun WebRateDialog(actions: LibraryActionsStateHolder, restoreFocus: FocusRequester) {
+fun WebRateDialog(actions: LibraryActionsStateHolder, restoreFocus: FocusRequester, onRestoreFocus: (() -> Unit)? = null) {
     val prompt by actions.ratePrompt.collectAsState(null)
     val p = prompt ?: return
     var chosen by remember(p) { mutableStateOf(p.initial) }
@@ -50,10 +50,11 @@ fun WebRateDialog(actions: LibraryActionsStateHolder, restoreFocus: FocusRequest
         title = p.title.title,
         kicker = if (p.identity != null) "Rate on TMDB" else "Rate in this browser",
         restoreFocus = restoreFocus,
+        onRestoreFocus = onRestoreFocus,
         modifier = Modifier.testTag("web-rate-dialog"),
     ) {
         Spacer(Modifier.height(22.dp))
-        RatingStars(shown, chosen, onHover = { hover = it }, onChoose = { chosen = it }, onSubmit = { submit() })
+        RatingStars(shown, chosen, onHover = { hover = it }, onChoose = { chosen = it }, onSubmit = { submit() }, onDismiss = actions::closeRate)
         Text(
             buildAnnotatedString {
                 append(shown?.let(::oneDecimal) ?: "–")
@@ -73,12 +74,16 @@ fun WebRateDialog(actions: LibraryActionsStateHolder, restoreFocus: FocusRequest
 
 /** 5 stars, 0.5..10 in 0.5 steps: pointer x previews (hover) and chooses (release); ←/→/↑/↓ ±0.5, Home/End, Enter submits. */
 @Composable
-private fun RatingStars(shown: Double?, chosen: Double?, onHover: (Double?) -> Unit, onChoose: (Double) -> Unit, onSubmit: () -> Unit) {
+private fun RatingStars(shown: Double?, chosen: Double?, onHover: (Double?) -> Unit, onChoose: (Double) -> Unit, onSubmit: () -> Unit, onDismiss: () -> Unit) {
     val hover by rememberUpdatedState(onHover)
     val choose by rememberUpdatedState(onChoose)
     val source = remember { MutableInteractionSource() }
+    val change: (Double) -> Unit = { target ->
+        hover(null)
+        choose((round(target * 2) / 2.0).coerceIn(MIN_RATING, MAX_RATING))
+    }
     Row(
-        Modifier
+        webDialogSlider(chosen, chosen?.let { "${oneDecimal(it)}, ${ratingWord(it)}" } ?: "Not chosen", change, onSubmit, onDismiss)
             .testTag("web-rate-stars")
             .focusRing(source, RoundedCornerShape(12.dp))
             .pointerHoverIcon(PointerIcon.Hand)
@@ -107,14 +112,14 @@ private fun RatingStars(shown: Double?, chosen: Double?, onHover: (Double?) -> U
                     }
                     else -> return@onKeyEvent false
                 }
-                if (event.type == KeyEventType.KeyDown) { hover(null); onChoose(((chosen ?: 0.0) + step).coerceIn(MIN_RATING, MAX_RATING)) }
+                if (event.type == KeyEventType.KeyDown) change((chosen ?: 0.0) + step)
                 true
             }
             .semantics {
                 contentDescription = "Rating out of 10"
                 stateDescription = chosen?.let { "${oneDecimal(it)}, ${ratingWord(it)}" } ?: "Not chosen"
                 progressBarRangeInfo = ProgressBarRangeInfo((chosen ?: 0.0).toFloat(), 0f..MAX_RATING.toFloat(), steps = 19)
-                setProgress { target -> onChoose((round(target * 2) / 2.0).coerceIn(MIN_RATING, MAX_RATING)); true }
+                setProgress { target -> change(target.toDouble()); true }
             }
             .focusable(interactionSource = source),
     ) {

@@ -9,6 +9,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -42,9 +44,21 @@ fun WebTrailerDialog(
     restoreFocus: FocusRequester,
     host: WebTrailerHost,
     maxWidth: Dp = 1000.dp,
+    onRestoreFocus: (() -> Unit)? = null,
 ) {
-    val owner = remember(videos, initial, autoplay, host) { WebTrailerOwner(videos, initial, autoplay, host) }
+    val closeFocus = remember { FocusRequester() }
+    val firstMore = remember { FocusRequester() }
+    var hasMore by remember { mutableStateOf(false) }
+    val owner = remember(videos, initial, autoplay, host) {
+        WebTrailerOwner(videos, initial, autoplay, host,
+            beforeFrame = { focusWebCanvas(); closeFocus.requestFocus() },
+            afterFrame = { focusWebCanvas(); if (hasMore) firstMore.requestFocus() else closeFocus.requestFocus() },
+        )
+    }
     val current = owner.current ?: return
+    val more = owner.videos - current
+    SideEffect { hasMore = more.isNotEmpty() }
+    val restore by rememberUpdatedState(onRestoreFocus)
     val density = LocalDensity.current.density
     // Kit `.player` is [maxWidth] (1000) wide; short windows shrink it so the 16:9 slot, caption and More videos strip still fit (never below 560).
     val windowHeight = (LocalWindowInfo.current.containerSize.height / density).dp
@@ -55,6 +69,15 @@ fun WebTrailerDialog(
         title = current.name,
         kicker = current.type,
         restoreFocus = restoreFocus,
+        onRestoreFocus = {
+            owner.close()
+            restore?.invoke() ?: runCatching { restoreFocus.requestFocus() }
+            Unit
+        },
+        closeButtonModifier = Modifier.onPreviewKeyEvent { event ->
+            event.type == KeyEventType.KeyDown && event.key == Key.Tab && (!event.isShiftPressed || more.isEmpty()) && owner.focusFrame()
+        },
+        ownedElementId = owner.ownedElementId,
         modifier = Modifier.testTag("web-trailer-dialog"),
         maxWidth = playerWidth,
     ) {
@@ -66,17 +89,21 @@ fun WebTrailerDialog(
         )
         Text("Plays on YouTube. Use the player's own controls.", Modifier.padding(top = 10.dp),
             style = bodyStyle(13.sp), color = Tokens.Colors.TextSecondary)
-        val more = owner.videos - current
         if (more.isNotEmpty()) {
             Text("More videos", Modifier.padding(top = 18.dp, bottom = 8.dp), style = bodyStyle(15.sp, FontWeight.SemiBold), color = Tokens.Colors.TextPrimary)
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("web-trailer-more-videos"),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                more.forEach { video -> PillButton("${video.name} · ${video.type}", { owner.select(video) }, variant = ButtonVariant.Ghost, small = true) }
+                more.forEachIndexed { index, video ->
+                    val first = if (index == 0) Modifier.focusRequester(firstMore).onPreviewKeyEvent { event ->
+                        event.type == KeyEventType.KeyDown && event.key == Key.Tab && event.isShiftPressed && owner.focusFrame()
+                    } else Modifier
+                    PillButton("${video.name} · ${video.type}", { owner.select(video) }, first, variant = ButtonVariant.Ghost, small = true)
+                }
             }
         }
     }
-    // Registered after CvDialog so it is disposed first: the iframe goes before CvDialog restores focus.
+    // Independent disposal also handles an entry change; the return callback above guarantees cleanup before restoration.
     DisposableEffect(owner) { onDispose { owner.close() } }
 }

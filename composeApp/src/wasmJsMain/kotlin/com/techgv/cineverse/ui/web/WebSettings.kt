@@ -135,12 +135,15 @@ fun WebSettings(
                                 val account = session.session
                                 if (account == null) {
                                     Text("Guest · preferences are saved in this browser", style = bodyStyle(15.5.sp, FontWeight.SemiBold))
-                                    PillButton("Sign in", owner::signIn, Modifier.padding(top = 14.dp), small = true)
+                                    val trigger = rememberWebModalTrigger(WebModalKind.Approval)
+                                    PillButton("Sign in", { trigger.open(owner::signIn) }, trigger.modifier.padding(top = 14.dp), small = true)
                                 } else {
                                     Text("Signed in as ${account.displayName}", style = bodyStyle(15.5.sp, FontWeight.SemiBold))
                                     FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        PillButton("Sign out", owner::signOut, variant = ButtonVariant.Ghost, small = true)
-                                        PillButton("Import guest library", owner::importLibrary, variant = ButtonVariant.Ghost, small = true)
+                                        val signOutTrigger = rememberWebModalTrigger(WebModalKind.Account)
+                                        val importTrigger = rememberWebModalTrigger(WebModalKind.Account)
+                                        PillButton("Sign out", { signOutTrigger.open(owner::signOut) }, signOutTrigger.modifier, variant = ButtonVariant.Ghost, small = true)
+                                        PillButton("Import guest library", { importTrigger.open(owner::importLibrary) }, importTrigger.modifier, variant = ButtonVariant.Ghost, small = true)
                                     }
                                 }
                             }

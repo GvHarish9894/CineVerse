@@ -264,6 +264,10 @@ class HomeStateHolder(
         }
     }
 
+    /** Synchronous UI admission check: derived uiState can lag, and the job can outlive its loading flag. */
+    val canStartTrailer: Boolean
+        get() = active && trailerLoading.value == null && trailerJob?.isActive != true
+
     /**
      * Play trailer from Home (§7.2): list items have no video key → fetch `/videos` (cached). Empty in a
      * non-`en-US` language → one `en-US` fetch (§7.4 rule). One fetch at a time; ignored while inactive.
