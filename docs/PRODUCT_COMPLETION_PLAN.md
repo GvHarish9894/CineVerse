@@ -185,6 +185,12 @@ C3 retry atdf0e25d Stage1 compile4PASS(up-to-date targets, invocation successful
 
 C2 fixture8b5198b independently reviewed5cb5a7eb CLEAR: mapping-only sameorigin7/defaultrestore; no preload/globalfetch/errorhandlers; Search production provider one load/exact7weights + all navigation asserts; defaultNull and realbyte/atomic coverage retained. Next soleexecution fresh compile + exact20 + exact1 Mocha2000; manifest includes six controlling files includingWebSearchFonts. No native5 repeat required because only wasm testfiles changed and previous native compile clear, unless compile evidence reveals production impact. C3 resource reviewer parallel readonly. Previewoff.
 
+### C2 one assertion RED / C3 artifact-only resource route
+
+C2 8b5198b compilePASS; browserA exact20 fresh19pass1fail. All real7assets HTTP200 observed without preload/interception; actualBundledBytes/Skia/exactfamilyweights and atomiclastfailure PASS; bootstrap7/7PASS. Only `defaultNullHookLeavesTheUnprovidedBundledThemePathIntact`: override null but Web browser unprovided commonresource font family weights actual400/400/400 vs expected500/700/800 once fixture preload removed. BrowserB correctlywithheld. Next readonly triage whether assertion is invalid cross-platform coupling vs missing legitimate non-preload production observation; no weaken/delete until evidence. If correction needed preserve test name/core null-unprovided contract and move native resource exactweight evidence to existing nonweb test only if already covered or add smallest common/native test, not browser preload. No rerun yet.
+
+C3 resource review5d6dc592: both prior/current Karma configs never served `/composeResources`; current nativeyield exposed latent404. Production dist/testpackage realbytescorrect. Authorized artifact-only correction: ownedKarma files pattern `kotlin/composeResources/.../font/*.ttf` servedtrue/includedfalse and proxy production-style prefix to `/base/kotlin/...`; no copy/preload/fake/globalfetch/source/generatedconfig edit. Retry exact6 first currentdf0e25d; verify HTTP200/hash and6/6. Onlythen continue staged Modal8, traps5, isolatedRoot1 unchanged2000, full64,Home12,native5. Stop first red. Font failure reviewer parallel readonly. Previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
