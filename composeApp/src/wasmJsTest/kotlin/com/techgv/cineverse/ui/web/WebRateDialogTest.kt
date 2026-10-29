@@ -140,7 +140,7 @@ class WebRateDialogTest {
         try {
             show(f)
             runOnIdle { f.actions.openRate(MOVIE) }
-            waitUntil { webDocumentNode("#web-rate-stars")?.getAttribute("role") == "slider" }
+            yieldToWebBrowser { webDocumentNode("#web-rate-stars")?.getAttribute("role") == "slider" }
             runOnIdle {
                 val slider = webDocumentNode("#web-rate-stars")!!
                 assertEquals("0", slider.getAttribute("aria-valuemin"))
@@ -152,7 +152,7 @@ class WebRateDialogTest {
                 ratingDomKey(slider, "ArrowRight") // Same event turn, before callback recomposition.
             }
             assertValue("1.0", "Poor")
-            waitUntil { webDocumentNode("#web-rate-stars")?.getAttribute("aria-valuenow") == "1" }
+            yieldToWebBrowser { webDocumentNode("#web-rate-stars")?.getAttribute("aria-valuenow") == "1" }
             runOnIdle { ratingDomKey(webDocumentNode("#web-rate-stars")!!, "Enter") }
             onNodeWithTag("web-rate-dialog").assertDoesNotExist()
             assertEquals(listOf("$movieRating=1.0"), f.writes)
@@ -164,16 +164,16 @@ class WebRateDialogTest {
         try {
             show(f)
             runOnIdle { f.actions.openRate(MOVIE) }
-            waitUntil { webDocumentNode("#web-rate-stars")?.getAttribute("role") == "slider" }
+            yieldToWebBrowser { webDocumentNode("#web-rate-stars")?.getAttribute("role") == "slider" }
             val old = webDocumentNode("#web-rate-stars")!!
             runOnIdle { f.actions.closeRate() }
-            waitUntil { webDocumentNode("#web-rate-stars") == null }
+            yieldToWebBrowser { webDocumentNode("#web-rate-stars") == null }
             runOnIdle {
                 assertNull(old.getAttribute("aria-valuenow"))
                 assertNull(old.getAttribute("aria-valuetext"))
                 f.actions.openRate(OTHER)
             }
-            waitUntil { webDocumentNode("#web-rate-stars")?.getAttribute("role") == "slider" }
+            yieldToWebBrowser { webDocumentNode("#web-rate-stars")?.getAttribute("role") == "slider" }
             runOnIdle {
                 assertNotSame(old, webDocumentNode("#web-rate-stars"))
                 ratingDomKey(old, "End")

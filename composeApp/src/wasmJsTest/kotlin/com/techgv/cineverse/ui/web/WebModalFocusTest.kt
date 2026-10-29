@@ -42,6 +42,7 @@ class WebModalFocusTest {
         }
         onNodeWithText("Actual account trigger").performClick()
         onNodeWithContentDescription("Close").performClick()
+        yieldToWebBrowser()
         onNodeWithText("Actual account trigger").assertIsFocused()
         onNodeWithText("Header fallback").assertIsNotFocused()
     }
@@ -50,19 +51,22 @@ class WebModalFocusTest {
         val fallback = FocusRequester()
         val returns = WebModalFocus(fallback)
         var open by mutableStateOf(false)
+        var enabled by mutableStateOf(true)
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             CompositionLocalProvider(LocalWebModalFocus provides returns) {
                 Column {
                     PillButton("Header fallback", {}, Modifier.focusRequester(fallback))
                     val trigger = rememberWebModalTrigger(WebModalKind.Rate)
-                    PillButton("Rate trigger", { trigger.open { open = true } }, trigger.modifier, enabled = !open)
+                    PillButton("Rate trigger", { trigger.open { open = true } }, trigger.modifier, enabled = enabled)
                 }
                 if (open) CvDialog({ open = false }, "Rate", onRestoreFocus = returns.restorer(WebModalKind.Rate)) {}
             }
         }
         onNodeWithText("Rate trigger").performClick()
+        runOnIdle { enabled = false }
         onNodeWithText("Rate trigger").assertIsNotEnabled()
         onNodeWithContentDescription("Close").performClick()
+        yieldToWebBrowser()
         onNodeWithText("Header fallback").assertIsFocused()
         onNodeWithText("Rate trigger").assertIsNotFocused()
     }
@@ -115,7 +119,7 @@ class WebModalFocusTest {
                 } }
             }
         }
-        waitUntil { hasNamedModal("Modal 0") && webDocumentNode("#modal-background")?.let(::webNodeHidden) == true }
+        yieldToWebBrowser { hasNamedModal("Modal 0") && webDocumentNode("#modal-background")?.let(::webNodeHidden) == true }
         onNodeWithText("Real dialog action").assertExists()
         runOnIdle {
             assertTrue(webDocumentNode("[role=dialog] [aria-label=Close]") != null)
@@ -123,12 +127,12 @@ class WebModalFocusTest {
             // The installed listener can rewrite role during a sync; annotation must repair the same live node.
             webDocumentNode("[role=dialog]")!!.removeAttribute("role")
         }
-        waitUntil { hasNamedModal("Modal 0") }
+        yieldToWebBrowser { hasNamedModal("Modal 0") }
         runOnIdle { modal = 1 }
-        waitUntil { hasNamedModal("Modal 1") && !hasNamedModal("Modal 0") }
+        yieldToWebBrowser { hasNamedModal("Modal 1") && !hasNamedModal("Modal 0") }
         runOnIdle { assertTrue(webNodeHidden(webDocumentNode("#modal-background")!!)) }
         onNodeWithContentDescription("Close").performClick()
-        waitUntil { !hasNamedModal("Modal 1") && webDocumentNode("#modal-background")?.let { !webNodeHidden(it) } == true }
+        yieldToWebBrowser { !hasNamedModal("Modal 1") && webDocumentNode("#modal-background")?.let { !webNodeHidden(it) } == true }
         onNodeWithText("Background action").performClick()
         runOnIdle { assertEquals(1, actions) }
     }
@@ -156,6 +160,7 @@ class WebModalFocusTest {
         }
         onNodeWithTag("header-search-input").performClick().performKeyInput { pressKey(Key.Tab) }
         onNodeWithText("Sign in").assertIsFocused()
+        yieldToWebBrowser { webActiveElement()?.tagName == "CANVAS" }
         runOnIdle { assertEquals("CANVAS", webActiveElement()?.tagName) }
         onNodeWithText("Sign in").performKeyInput { pressKey(Key.Enter) }
         runOnIdle { assertEquals(1, signIns) }
@@ -172,8 +177,9 @@ class WebModalFocusTest {
             }
         }
         onNodeWithContentDescription("CineVerse home").assertHasClickAction()
-        waitUntil { webDocumentNode("#web-header") != null }
+        yieldToWebBrowser { webDocumentNode("#web-header") != null }
         runOnIdle { enterHeaderCanvas(webDocumentNode("canvas")!!) }
+        yieldToWebBrowser()
         onNodeWithContentDescription("CineVerse home").assertIsFocused()
         onNodeWithContentDescription("CineVerse home").performKeyInput { pressKey(Key.Enter) }
         runOnIdle { assertEquals(1, homes) }
