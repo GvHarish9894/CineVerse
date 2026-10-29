@@ -87,8 +87,7 @@ internal actual fun cvDialogWindow(
                             val direction = if (event.isShiftPressed) FocusDirection.Previous else FocusDirection.Next
                             if (!focus.moveFocus(direction)) {
                                 focus.clearFocus(force = true)
-                                if (direction == FocusDirection.Next) closeFocus.requestFocus()
-                                else group.requestFocus(direction)
+                                closeFocus.requestFocus()
                             }
                             focusWebCanvas()
                             true
