@@ -141,6 +141,14 @@ C3 independentreviewfdaed329 BLOCK oneP1 only: WebModalFocus.restorer checks tri
 
 C5 runtimeevidence reviewer failed solely provider `auth_unavailable` with upstreamPROTOCOL_ERROR, no product/evidence defect and no source/runtimechange. Operator explicitlyrequestedretry. Retry readonlysameexact evidence; do not rerunAndroid. Root18/18+Person11/11 claims remainprovisional pendingreview, sourceclean1b52c5c. Use selectedcliproxyapi/gpt-5.6-sol; a new providerfailure stops/reports nofallback. All lanes source/read-only, no executionlease this round, previewoff.
 
+### Android evidence accepted / next web source corrections
+
+C5 runtime evidence review4d45b4d7 CLEAR: recovered30host+fivecompile provenance and freshRoot18/18+Person11/11 exactscope accepted; rawargbundle absence adequately disclosed viaCLI+AGPforwarding+event/PID/exactXML evidence. Two P2 prose corrections applied directly to managed runtime report (report excluded from evidencemanifest): physicalphone was notselected/targeted/installed/operatedon BUT AGPenumeratedADBbridge before serialfilter; bootscreen wallpaper-only/noerror, laterterminalscreens showhealthylauncher. No result/source/artifactclaim changed. Current focusedAndroid historical5 Root failures closed. Sevenclasses58methods and iOS5 remainopen.
+
+Font triage e2e3e2c6: no productionfont defect. Bootstrap late-success test capturedhistory before ordinaryLibraryinitial scrollsaver emitted deterministic movie.index/offset0. Approved smallest ONEFILE WebFontBootstrapUiTest change: before baseline capture wait (browser-nativeyield/within existing bound) for exact initial keys0/0, settle, capture completeexactstring; postfont exactequality and all mount/session/history/write/backassertions retained. No superset/ignoredkey. Search test no sourceeditinitially: run corrected20 fontmethods fresh invocation then exactunchangedSearch method alone fresh invocation, both Mocha2000; aggregate21/21 required. If isolatedSearch stilltimeouts STOP, then separatelyreview source replacement of fixed100ms delays with observableWebNavigation.entry.first pattern, no timeoutraise.
+
+W1 fallback fix clean91fa75c, exact2files/deltaSHAe76f84712619464ef3798bc83ee88205ad7a35356bbf98be6ce3c330258fe937, expected-red realenabled→disabled trigger regression prepared. Next independent source followup; no execution yet. Parallel font onefile sourcewriter andW1 reviewer, no executionlease. Use selected5.6-sol; providerfailureSTOP. Previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
