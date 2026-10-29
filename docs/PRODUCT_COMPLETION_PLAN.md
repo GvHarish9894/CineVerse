@@ -161,6 +161,12 @@ C3 current91fa75c Stage1 all4 wasm compiletargetsEXECUTED/PASS; Stage2 exactHome
 
 C2 baselinefix2eb839f reviewedffc877b1CLEAR. Next soleexecutionlease split controlledfresh invocations at samehead: compile; exact20 loader+bootstrap require20/20; separate exactunchangedSearch method fresh process require1/1 underMocha2000. This split was triage-approved not waiver; aggregate21/21/0skip/unreported. If Searchstilltimeout STOP then later source replacement fixed100ms delays withobservablehistoryentry pattern, no timeoutincrease. If aggregategreen run5nativecompiletargets. C3 review runsread-only parallel. Previewoff.
 
+### Fonts GREEN / W1 correction implementation
+
+C2 current2eb839f split acceptanceGREEN: freshisolated A exactloader13+bootstrap7=20/20; B unchangedSearch exact1/1 underMocha2000; aggregate21unique21pass0fail/skip/unreported. All5 nativecompat compiletargetsPASS afterbrowsergreen. No source/test/build/timeout/assertion/dependency/cache/compilerflag edit. Old combined19/21 remains preserved as superseded mixed-process evidence. Fonts accepted localruntime+nativecompile; productiondocument actualdecode/render/CSP/Safari/deployed remainseparate. Independent evidence review next readonly; no rerun.
+
+C3 triagec8e35e8e maps9 failures: cluster1 six test-only native callback starvation (MutationObserver/microtask/DOMfocus), add package-local bounded native-yield helper existing1000ms and update only ModalFocus/RateDialog/TrailerDocument assertions unchanged. Cluster2 real disabledtrigger unstable restoration: track actualfocus viaonFocusChanged; immediate fallback false/throw; after one bounded browser/frame callback verify still-live trigger actualfocus else fallback; preserve enabled/removed/recomposition. Cluster3 real backwardtrap bug: `group.requestFocus(Previous)` invalid2D requester entry; wrap both directions to known closeFocus. Cluster4 rapidHome trailer no productiondefect proven; after1-3 reviewed/run, isolated exactmethod unchanged2000 before any sourceedit, then final combined64. Sourcewriter oneC3; tests-first3commits preferred, exact newhelper+3testfiles+2production files, no business/owner/dialog semantics outside. Independent review before execution. Font evidence reviewer parallel readonly. Previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
