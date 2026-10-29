@@ -225,6 +225,10 @@ Accessibility head68602ad exact6 rerun with proven7font route still RED 0/6: eve
 
 Operator explicitly requested “Do it all one by one.” Proceed serially under existing lease/privacy/model policies: (1) accessibility labeled diagnostic→smallest correction→review→64+12+nativecompile+real-document; (2) native root integration; (3) remaining Android58; (4) iOS5+hosted gates; (5) combined TV/server/package/security; (6) request only external real-account/deploy/push inputs. No blind reruns; preserve each stage evidence. Start C3 diagnostic current68602ad: temporarily label helper phases for exact6, run once with proven font route, remove labels before commit/final state, report exact first false conditions. No production correction in diagnostic stage.
 
+### Accessibility root cause proven: test document seam
+
+Labeled diagnostic at68602ad exact6 once: all stop at first phase. Modal/background/rating/header canvas nodes absent; explicit trailer iframe present but modal ownership absent. Compose assertions can pass while document activeElement remainsBODY. Root cause: runComposeUiTest in-memory semantics not attached production ComposeViewport document. No production defect proven. Next source-only smallest shared test harness: create/remove owned #cineverse-root, mount relevant composables through attached ComposeViewport using real production document seam, expose fixture callbacks/state, deterministic disposal/DOM cleanup. Convert only six DOM-bearing cases (or shared helper used by their3classes), keep ordinary Compose semantics tests separate, exact assertions/timeouts. No production changes. Review then exact6 with font route.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
