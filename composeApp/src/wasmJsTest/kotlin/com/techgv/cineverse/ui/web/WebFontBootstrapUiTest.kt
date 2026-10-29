@@ -120,8 +120,19 @@ class WebFontBootstrapUiTest {
             assertSame(WebFallbackFonts, loaded)
             onNodeWithText("My Library").performClick()
             onNodeWithText("Saved in this browser · sign in to sync with TMDB").assertExists()
+            val initialSaved = """{"library.tab":"Watchlist","library.movie.index":"0","library.movie.offset":"0"}"""
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    while (history.saved != initialSaved) {
+                        delay(10)
+                        mainClock.advanceTimeByFrame()
+                        waitForIdle()
+                    }
+                }
+            }
             waitForIdle()
             val saved = history.saved
+            assertEquals(initialSaved, saved)
             val sessions = f.sessionReads
             val subscriptions = f.settingsSubscriptions
             val reads = f.catalogReads
