@@ -149,6 +149,12 @@ Font triage e2e3e2c6: no productionfont defect. Bootstrap late-success test capt
 
 W1 fallback fix clean91fa75c, exact2files/deltaSHAe76f84712619464ef3798bc83ee88205ad7a35356bbf98be6ce3c330258fe937, expected-red realenabled→disabled trigger regression prepared. Next independent source followup; no execution yet. Parallel font onefile sourcewriter andW1 reviewer, no executionlease. Use selected5.6-sol; providerfailureSTOP. Previewoff.
 
+### W1 source CLEAR / font baseline checkpoint
+
+C3 fallbackfix91fa75c independently reviewedCLEAR by85af5dcf; priorP1 closedsource. WebModalFocus now respectsFocusRequester boolean/throw, fallback onlyfailed; realenabled→disabledPillButton/CvDialogclose regression plus success/removed/recomposition coverage retained. FullW1 source remainsclean91fa75c. Next soleexecutionlease W1: wasm main/testcompile, sharedHomeStateHolderTest, focused browser classes WebModalFocus/RateDialog/Root/TrailerDocument/ApprovalDialog/AccountDialog/TrailerDialog exact actualmethod accounting; five nativecompatcompile targets. Stop assertion/infra no retry. Native DialogFocus actual device/sim runtime and productiondocumentAXkeyboardiframe/Safari remain separate after compile/browser proof.
+
+C2 onefile font baselinefix clean2eb839f138a98a140e34ed3ba09cbfd50f848600, parentb22a0aa, deltaSHAbc7b713b3f2720b4cb3f3d022d4624e2213f95550d29a2d094f225d7c61ce399. Deterministically waits ordinaryLibrary saver index/offset0, settles, captures complete exactstate; all later exacthistory/lifetime/url/push/write/back assertions retained.21prepared no execution. Independent source review parallel withW1lease; afterclear future split fresh20 fontclasses + fresh1 unchangedSearch underMocha2000, aggregate21/21 then5nativecompile. No Searchsourceedit yet.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
