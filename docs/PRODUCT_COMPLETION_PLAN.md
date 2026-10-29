@@ -215,6 +215,12 @@ C2 head743cc993 final validationGREEN: wasmcompilePASS; freshBrowserA20/20; fres
 
 C3 helper68602ad independently reviewed066012ed CLEAR all21conditions immediateDOM/true, target-bound1000. Next soleexecution exact6 with proven artifact route; ifgreen continue Modal8,traps5,isolatedRoot1,full64,Home12,native5. Stop first product red; no optional diagnostics. Previewoff.
 
+### Final fast-pass result
+
+Fonts final evidence independently CLEAR: head743cc993, browser20/20+1/1, native5compile, Android exact nativefont test1/1, clean shutdown. Remaining publication/iOSruntime/productionbrowser separate.
+
+Accessibility head68602ad exact6 rerun with proven7font route still RED 0/6: every exact target condition timed out at unchanged1000 after removing global idle. Thus not resource/harness-idle anymore; target DOM/observer/focus conditions genuinely unobserved in Karma or need labeled phase diagnosis. Downstream Modal8/traps5/root1/full64/Home12/native5 withheld. No further blind retry. Next smallest work is one labeled diagnostic pass per multi-phase method (test-only, labels removed after), then correct exact production/test seam; real production-document AX checks may supersede Karma-only DOM assumptions if evidence proves. Previewoff/clean.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
