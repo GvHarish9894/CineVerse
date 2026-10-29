@@ -173,6 +173,12 @@ Font evidence reviewbf0e2536 found P1 acceptance-boundary violation despite inte
 
 C3 clusters1-3 source atdf0e25d, threecommits, exact6paths cumulativeSHA9b9ca806ac42617c970bc1e14f3466116cf05c5fb12f3ff2f48ba975b1a3b9f5. Added bounded1000 nativeyield helper tests; modal trigger actualfocus tracked/onemicrotask fallback; invalid group.requestFocus(Previous) replaced closeFocus bothwraps. WebRoot/Home untouched. Independent source review now, no execution. Font sourcewriter parallel; noGradle/browser lease active. Previewoff.
 
+### W1 source CLEAR / font fixture corrected
+
+C3df0e25d independently reviewed597b620a CLEAR P0/P1. Yield alwaysnative10ms beforecondition, bound1000 unchanged; inventories/assertions retained. Trigger state remembered/actual onFocusChanged/livefalse disposal; false/throw/removed immediatefallback then one queuedmicrotask verified actualfocus; noleak. Dialog bothwrap toclose correct. P2 harmless nowunused `group` requester deferred (delete would invalidate review; nobehavior). Next soleexecution staged: compile4; sixcluster methods; allModal8; five traps; isolated unchanged rapidRoot freshMocha2000; if pass full7classes64/64; Home12; then native5. STOP first red no retries/sourcefix. Productiondoc/nativeruntime separate.
+
+C2 fixture P1 corrected clean8b5198b35e0fa3b07ce32d8267f1062746c53fa3 parent2eb839f delta7c39acd949412060ebc190b6f3a5efb67fdbd5aa21eba5035908878deb8e55ef exact3testpaths. RemovedpreloadFont/globalfetch/errortrace; mapping-only helper. Search mounts productionProvideWebBundledFonts/loadWebBundledFonts, asserts one load + exact display500/700/800 body400/500/600/700 while retaining route/caret/history/backforward/zerowrite. Default-null removes unrelated loader, retainsnull/nativeweights. Independent source review parallel withC3 soleexecution. Future manifest includes WebSearchFonts; afterclear fresh20+fresh1 required again, native5 neednot repeat unless source review finds production/native impact (test-only). Previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
