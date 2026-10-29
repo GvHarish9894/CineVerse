@@ -203,6 +203,12 @@ C3 reviewer7c17eb0b P1: helper evaluates target onlyafter globalwaitForIdle; all
 
 C2 tests-only clean743cc993df693b1944c1074b0be37672501e1c02 parent8b5198b delta ca2b3d277fe46330ec3edf76e725b246a9972d12ee3fc28216a20cadc6cee589 exact2paths. Browser default-null now null + FontList sizes3/4 + Material typography family equality. New mobileUiTest NativeBundledFontsTest exact null,size,display500/700/800,body400/500/600/700. No prod/config change. Independent source review parallel C3 one-line writer. After reviews serialize C3 exact6/stages then C2 20+1/nativecompile/nativehost. Previewoff.
 
+### C2 source CLEAR final gates / C3 helper checkpoint
+
+C2 743cc993 independently reviewed646a9624 CLEAR exact2paths; browser contractdirect and native exactweights preserved correct source sets. Next soleexecution: wasmcompile; fresh20 thenfresh1 with actualasset route/noninterception; native5 compile (newmobileUiTest); execute exact NativeBundledFontsTest one method on ownedAndroid AVD only serial excludedphysical; no wipe/reset. Stop first red. iOS runtime counterpart remains later.
+
+C3 helper onefile clean68602ad1f780affa19efd77ffde2374a070eb349 parentdf0e25d delta84f56626ce8529aae5b9650bd52d517971a20870c1b06ff75b69cbde061fc0fd. Exactly removeswaitForIdle/import, retains1000/delay/frame/condition,21calls. Independent source review parallel C2 execution. Afterclear exact6 with proven route then stages. Previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
