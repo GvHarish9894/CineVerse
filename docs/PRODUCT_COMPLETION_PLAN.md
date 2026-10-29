@@ -191,6 +191,12 @@ C2 8b5198b compilePASS; browserA exact20 fresh19pass1fail. All real7assets HTTP2
 
 C3 resource review5d6dc592: both prior/current Karma configs never served `/composeResources`; current nativeyield exposed latent404. Production dist/testpackage realbytescorrect. Authorized artifact-only correction: ownedKarma files pattern `kotlin/composeResources/.../font/*.ttf` servedtrue/includedfalse and proxy production-style prefix to `/base/kotlin/...`; no copy/preload/fake/globalfetch/source/generatedconfig edit. Retry exact6 first currentdf0e25d; verify HTTP200/hash and6/6. Onlythen continue staged Modal8, traps5, isolatedRoot1 unchanged2000, full64,Home12,native5. Stop first red. Font failure reviewer parallel readonly. Previewoff.
 
+### C3 target timeout triage / C2 tests-only contract split
+
+C3 artifact resource route PROVEN7/7 HTTP200 exactbytes/hashes no404. Exact6 now all fail existing `yieldToWebBrowser` withTimeout1000; target condition unknown because helper encapsulates delay+frame+waitForIdle and Wasmstack. Stages3-8withheld. Next readonly triage all six source/evidence; likely distinguish helper awaiting global app/font idleness vs target nativecallback. Do not raise timeout or weaken condition; smallest fix may yield native turn then bounded polling target with frame and avoid global waitForIdle inside same1s, but only if evidence proves. No execution.
+
+C2 triage f7b91a9c: invalid browser coupling, not prod defect. Production provider exact7 PASS. Tests-only authorized: WebBundledFontsTest retain name/null override; assert display/body FontList sizes3/4 and MaterialTypography families equal selected families, no preload/readiness. Add mobileUiTest NativeBundledFontsTest exact override null, display weights500/700/800, body400/500/600/700, sizes3/4 on native/common path. This replaces—not drops—exactweight evidence on correct platform. No production edit. Sourcewriter parallel C3 reviewer; review before gates. Previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
