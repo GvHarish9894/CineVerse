@@ -14,7 +14,6 @@ internal suspend fun ComposeUiTest.yieldToWebBrowser(condition: () -> Boolean = 
             do {
                 delay(10)
                 mainClock.advanceTimeByFrame()
-                waitForIdle()
             } while (!condition())
         }
     }
