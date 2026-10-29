@@ -2,11 +2,11 @@
 
 package com.techgv.cineverse.ui.theme
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontListFontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.LoadedFont
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -233,18 +233,29 @@ class WebBundledFontsTest {
 
     @Test fun defaultNullHookLeavesTheUnprovidedBundledThemePathIntact() = runComposeUiTest {
         var defaultIsNull = false
-        var nativeStyleWeights = emptyList<FontWeight>()
+        var selected: CvFonts? = null
+        var materialDisplay: FontFamily? = null
+        var materialBody: FontFamily? = null
         setContent {
             val override = LocalCvFontOverride.current
-            SideEffect { defaultIsNull = override == null }
             CineVerseTheme(ShellStyle.Mobile) {
                 val fonts = LocalCvFonts.current
-                SideEffect { nativeStyleWeights = (fonts.display as FontListFontFamily).fonts.map { it.weight } }
+                val typography = MaterialTheme.typography
+                SideEffect {
+                    defaultIsNull = override == null
+                    selected = fonts
+                    materialDisplay = typography.displayLarge.fontFamily
+                    materialBody = typography.bodyLarge.fontFamily
+                }
             }
         }
         waitForIdle()
         assertTrue(defaultIsNull)
-        assertEquals(listOf(FontWeight.Medium, FontWeight.Bold, FontWeight.ExtraBold), nativeStyleWeights)
+        val fonts = assertNotNull(selected)
+        assertEquals(3, assertIs<FontListFontFamily>(fonts.display).fonts.size)
+        assertEquals(4, assertIs<FontListFontFamily>(fonts.body).fonts.size)
+        assertEquals(fonts.display, materialDisplay)
+        assertEquals(fonts.body, materialBody)
     }
 }
 
