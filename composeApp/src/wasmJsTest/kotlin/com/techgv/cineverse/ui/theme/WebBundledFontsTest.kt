@@ -232,23 +232,19 @@ class WebBundledFontsTest {
     }
 
     @Test fun defaultNullHookLeavesTheUnprovidedBundledThemePathIntact() = runComposeUiTest {
-        val mapping = WebSearchFonts()
         var defaultIsNull = false
         var nativeStyleWeights = emptyList<FontWeight>()
-        try {
-            setContent {
-                val override = LocalCvFontOverride.current
-                SideEffect { defaultIsNull = override == null }
-                mapping.Load()
-                CineVerseTheme(ShellStyle.Mobile) {
-                    val fonts = LocalCvFonts.current
-                    SideEffect { nativeStyleWeights = (fonts.display as FontListFontFamily).fonts.map { it.weight } }
-                }
+        setContent {
+            val override = LocalCvFontOverride.current
+            SideEffect { defaultIsNull = override == null }
+            CineVerseTheme(ShellStyle.Mobile) {
+                val fonts = LocalCvFonts.current
+                SideEffect { nativeStyleWeights = (fonts.display as FontListFontFamily).fonts.map { it.weight } }
             }
-            mapping.verifyLoaded { waitForIdle() }
-            assertTrue(defaultIsNull)
-            assertEquals(listOf(FontWeight.Medium, FontWeight.Bold, FontWeight.ExtraBold), nativeStyleWeights)
-        } finally { mapping.close() }
+        }
+        waitForIdle()
+        assertTrue(defaultIsNull)
+        assertEquals(listOf(FontWeight.Medium, FontWeight.Bold, FontWeight.ExtraBold), nativeStyleWeights)
     }
 }
 
