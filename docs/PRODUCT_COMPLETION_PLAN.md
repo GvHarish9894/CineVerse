@@ -155,6 +155,12 @@ C3 fallbackfix91fa75c independently reviewedCLEAR by85af5dcf; priorP1 closedsour
 
 C2 onefile font baselinefix clean2eb839f138a98a140e34ed3ba09cbfd50f848600, parentb22a0aa, deltaSHAbc7b713b3f2720b4cb3f3d022d4624e2213f95550d29a2d094f225d7c61ce399. Deterministically waits ordinaryLibrary saver index/offset0, settles, captures complete exactstate; all later exacthistory/lifetime/url/push/write/back assertions retained.21prepared no execution. Independent source review parallel withW1lease; afterclear future split fresh20 fontclasses + fresh1 unchangedSearch underMocha2000, aggregate21/21 then5nativecompile. No Searchsourceedit yet.
 
+### W1 first gate RED / font split execution authorized
+
+C3 current91fa75c Stage1 all4 wasm compiletargetsEXECUTED/PASS; Stage2 exactHomeStateHolderTest12/12wasmbrowserPASS incl synchronous traileradmission. Stage3 exact7classes64/64reported,55pass9fail0skip; no disconnect/infragap. Failures: ModalFocus disabledfallbackfocusedfalse; liveAX/replacement timeout; headerSearchactiveBODYnotCANVAS; narrowlogo timeout. Rate slider2timeouts. Root rapidtrailerMocha2000 timeout. TrailerDialog backwardShiftTab illegal2Dfocussearch. TrailerDocument forwardframeguard timeout. Stage4nativecompileswithheld. Sourceunchangedclean. Next independent readonlytriage all9 into bounded clusters usingfreshXML/log/currentpublicAPI; no rerun/timeoutassertion changes. No source correction until triage.
+
+C2 baselinefix2eb839f reviewedffc877b1CLEAR. Next soleexecutionlease split controlledfresh invocations at samehead: compile; exact20 loader+bootstrap require20/20; separate exactunchangedSearch method fresh process require1/1 underMocha2000. This split was triage-approved not waiver; aggregate21/21/0skip/unreported. If Searchstilltimeout STOP then later source replacement fixed100ms delays withobservablehistoryentry pattern, no timeoutincrease. If aggregategreen run5nativecompiletargets. C3 review runsread-only parallel. Previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
