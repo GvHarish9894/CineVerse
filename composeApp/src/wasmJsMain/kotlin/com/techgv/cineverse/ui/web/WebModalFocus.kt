@@ -15,6 +15,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 
 internal enum class WebModalKind { Trailer, Rate, Account, Approval }
 
@@ -25,9 +26,12 @@ internal class WebModalFocus(private val fallback: FocusRequester) {
     fun restorer(kind: WebModalKind): () -> Unit {
         val trigger = triggers[kind]
         return {
-            val restored = trigger?.live == true &&
-                runCatching { trigger.requester.requestFocus() }.getOrDefault(false)
-            if (!restored) runCatching { fallback.requestFocus() }
+            if (trigger?.live != true) runCatching { fallback.requestFocus() }
+            else if (!runCatching { trigger.requester.requestFocus() }.getOrDefault(false)) {
+                runCatching { fallback.requestFocus() }
+            } else afterWebFocusCommit {
+                if (!trigger.live || !trigger.focused) runCatching { fallback.requestFocus() }
+            }
             Unit
         }
     }
@@ -38,7 +42,9 @@ internal val LocalWebModalFocus = staticCompositionLocalOf<WebModalFocus?> { nul
 internal class WebModalTrigger(private val owner: WebModalFocus?, private val kind: WebModalKind) {
     val requester = FocusRequester()
     var live = false
-    val modifier: Modifier get() = Modifier.focusRequester(requester)
+    var focused = false
+        private set
+    val modifier: Modifier get() = Modifier.focusRequester(requester).onFocusChanged { focused = it.isFocused }
     fun open(action: () -> Unit) {
         owner?.capture(kind, this)
         action()
@@ -120,6 +126,9 @@ internal fun webHeaderFocusBridge(home: FocusRequester?, modalOpen: Boolean): Mo
 private external fun installHeaderFocusBridge(enter: (Boolean) -> Unit): JsAny
 @JsFun("(bridge) => bridge.close()")
 private external fun disposeHeaderFocusBridge(bridge: JsAny)
+
+@JsFun("(verify) => { queueMicrotask(verify); }")
+private external fun afterWebFocusCommit(verify: () -> Unit)
 
 /** Backing-input disposal can blur after Compose moves focus; repair once after that event, never poll. */
 internal fun focusWebCanvasAfterInput() {
