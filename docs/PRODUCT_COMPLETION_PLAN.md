@@ -197,6 +197,12 @@ C3 artifact resource route PROVEN7/7 HTTP200 exactbytes/hashes no404. Exact6 now
 
 C2 triage f7b91a9c: invalid browser coupling, not prod defect. Production provider exact7 PASS. Tests-only authorized: WebBundledFontsTest retain name/null override; assert display/body FontList sizes3/4 and MaterialTypography families equal selected families, no preload/readiness. Add mobileUiTest NativeBundledFontsTest exact override null, display weights500/700/800, body400/500/600/700, sizes3/4 on native/common path. This replaces—not drops—exactweight evidence on correct platform. No production edit. Sourcewriter parallel C3 reviewer; review before gates. Previewoff.
 
+### C3 one-line helper correction / C2 contract source checkpoint
+
+C3 reviewer7c17eb0b P1: helper evaluates target onlyafter globalwaitForIdle; all themed tests have unrelated7resource work. Smallest tests-only one-line remove `waitForIdle()` inside bounded loop; retain Dispatchers.Default/delay10/frame/condition/withTimeout1000. Conditions DOM reads ortrue; no runOnIdle/timeout/theme/provider/production change. Exact6 rerun with proven artifact font route after independent review. Labels only if later multiphase red.
+
+C2 tests-only clean743cc993df693b1944c1074b0be37672501e1c02 parent8b5198b delta ca2b3d277fe46330ec3edf76e725b246a9972d12ee3fc28216a20cadc6cee589 exact2paths. Browser default-null now null + FontList sizes3/4 + Material typography family equality. New mobileUiTest NativeBundledFontsTest exact null,size,display500/700/800,body400/500/600/700. No prod/config change. Independent source review parallel C3 one-line writer. After reviews serialize C3 exact6/stages then C2 20+1/nativecompile/nativehost. Previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
