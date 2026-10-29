@@ -179,6 +179,12 @@ C3df0e25d independently reviewed597b620a CLEAR P0/P1. Yield alwaysnative10ms bef
 
 C2 fixture P1 corrected clean8b5198b35e0fa3b07ce32d8267f1062746c53fa3 parent2eb839f delta7c39acd949412060ebc190b6f3a5efb67fdbd5aa21eba5035908878deb8e55ef exact3testpaths. RemovedpreloadFont/globalfetch/errortrace; mapping-only helper. Search mounts productionProvideWebBundledFonts/loadWebBundledFonts, asserts one load + exact display500/700/800 body400/500/600/700 while retaining route/caret/history/backforward/zerowrite. Default-null removes unrelated loader, retainsnull/nativeweights. Independent source review parallel withC3 soleexecution. Future manifest includes WebSearchFonts; afterclear fresh20+fresh1 required again, native5 neednot repeat unless source review finds production/native impact (test-only). Previewoff.
 
+### C3 harness resource BLOCK / C2 corrected execution
+
+C3 retry atdf0e25d Stage1 compile4PASS(up-to-date targets, invocation successful). Stage2 exact6 allreported but0pass/6fail BEFORE target assertions: MissingResourceException HTTP404 root `/composeResources/...` bundled fonts. Generated ownedKarma had proxies{} webpackCopy[] though sevenfiles exist generated/build locations. Not accessibility RED, notinfra/disconnect. Stages3-8withheld. Next independent readonly compare prior91fa55/64 working Karma/init/generated resource serving vs current stage; determine artifactconfig regression vs source mapping need. No rerun/correction until evidence. Preview/ownedportclean.
+
+C2 fixture8b5198b independently reviewed5cb5a7eb CLEAR: mapping-only sameorigin7/defaultrestore; no preload/globalfetch/errorhandlers; Search production provider one load/exact7weights + all navigation asserts; defaultNull and realbyte/atomic coverage retained. Next soleexecution fresh compile + exact20 + exact1 Mocha2000; manifest includes six controlling files includingWebSearchFonts. No native5 repeat required because only wasm testfiles changed and previous native compile clear, unless compile evidence reveals production impact. C3 resource reviewer parallel readonly. Previewoff.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
