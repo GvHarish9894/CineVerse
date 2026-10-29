@@ -221,6 +221,10 @@ Fonts final evidence independently CLEAR: head743cc993, browser20/20+1/1, native
 
 Accessibility head68602ad exact6 rerun with proven7font route still RED 0/6: every exact target condition timed out at unchanged1000 after removing global idle. Thus not resource/harness-idle anymore; target DOM/observer/focus conditions genuinely unobserved in Karma or need labeled phase diagnosis. Downstream Modal8/traps5/root1/full64/Home12/native5 withheld. No further blind retry. Next smallest work is one labeled diagnostic pass per multi-phase method (test-only, labels removed after), then correct exact production/test seam; real production-document AX checks may supersede Karma-only DOM assumptions if evidence proves. Previewoff/clean.
 
+### Operator authorization: finish remaining work sequentially
+
+Operator explicitly requested “Do it all one by one.” Proceed serially under existing lease/privacy/model policies: (1) accessibility labeled diagnostic→smallest correction→review→64+12+nativecompile+real-document; (2) native root integration; (3) remaining Android58; (4) iOS5+hosted gates; (5) combined TV/server/package/security; (6) request only external real-account/deploy/push inputs. No blind reruns; preserve each stage evidence. Start C3 diagnostic current68602ad: temporarily label helper phases for exact6, run once with proven font route, remove labels before commit/final state, report exact first false conditions. No production correction in diagnostic stage.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
