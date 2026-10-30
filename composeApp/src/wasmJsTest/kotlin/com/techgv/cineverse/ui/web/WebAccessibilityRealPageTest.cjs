@@ -164,6 +164,21 @@ async function focusedAx(page, role, name) {
     return nodes.length === 1 && axProperty(nodes[0], 'focused') === true;
 }
 
+async function borderRect(page, node) {
+    const quad = (await page.call('DOM.getBoxModel', node)).model.border;
+    const xs = [quad[0], quad[2], quad[4], quad[6]]; const ys = [quad[1], quad[3], quad[5], quad[7]];
+    return {left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys)};
+}
+// Whatever element holds focus (Compose's IME input or the mirror), AT must land on one textbox named like the field, over the field.
+async function focusedSearchField(page, name) {
+    const focused = axNodes(await axTree(page)).filter(node => ['textbox', 'searchbox'].includes(node.role?.value) && axProperty(node, 'focused') === true);
+    if (focused.length !== 1 || focused[0].name?.value !== name || !focused[0].backendDOMNodeId) return false;
+    const field = await objectFor(page, '#header-search-input');
+    if (!field) return false;
+    const [a, b] = await Promise.all([borderRect(page, {backendNodeId: focused[0].backendDOMNodeId}), borderRect(page, {objectId: field.objectId})]).catch(() => []);
+    return !!a && a.left <= b.right && b.left <= a.right && a.top <= b.bottom && b.top <= a.bottom;
+}
+
 async function selectorState(page, selector) {
     return evaluate(page, `(() => { const n=(${deepFindSource})(${JSON.stringify(selector)}); return n && {tag:n.tagName,id:n.id,role:n.getAttribute('role'),label:n.getAttribute('aria-label'),modal:n.getAttribute('aria-modal'),owns:n.getAttribute('aria-owns'),min:n.getAttribute('aria-valuemin'),max:n.getAttribute('aria-valuemax'),now:n.getAttribute('aria-valuenow'),text:n.getAttribute('aria-valuetext'),tabindex:n.getAttribute('tabindex')}; })()`);
 }
@@ -231,18 +246,14 @@ async function headerCase(page, origin) {
     const searchNodes = axNamed(await axTree(page), 'textbox', searchName);
     assert.equal(searchNodes.length, 1); assert.ok(searchNodes[0].backendDOMNodeId);
     await clickBox(page, {backendNodeId: searchNodes[0].backendDOMNodeId});
-    await until(() => focusedAx(page, 'textbox', searchName), 'search AX focus after click');
+    await until(() => focusedSearchField(page, searchName), 'named search AX focus after click');
     await key(page, 'Tab');
     await until(() => focusedAx(page, 'button', 'Sign in'), 'Sign in AX focus');
     assert.equal(await callOn(page, (await activeObject(page)).objectId, 'function(){return this.tagName}'), 'CANVAS');
     await key(page, 'Enter');
     await until(async () => (await bridge(page)).signIns === 1, 'sign-in callback');
     await key(page, 'Tab', true);
-    await until(async () => {
-        const currentSearch = await objectFor(page, '#header-search-input');
-        const partial = await page.call('Accessibility.getPartialAXTree', {objectId: currentSearch.objectId, fetchRelatives: false});
-        return partial.nodes.some(node => ['textbox', 'searchbox'].includes(node.role?.value) && axProperty(node, 'focused') === true);
-    }, 'search AX focus');
+    await until(() => focusedSearchField(page, searchName), 'named search AX focus');
     const signIns = axNamed(await axTree(page), 'button', 'Sign in');
     assert.equal(signIns.length, 1); assert.notEqual(axProperty(signIns[0], 'disabled'), true); assert.ok(signIns[0].backendDOMNodeId);
 }
