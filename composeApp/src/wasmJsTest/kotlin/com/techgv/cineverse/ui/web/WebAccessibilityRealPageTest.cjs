@@ -135,7 +135,11 @@ async function callOn(page, objectId, functionDeclaration, arguments = []) {
 async function click(page, selector) {
     const object = await objectFor(page, selector);
     assert.ok(object?.objectId, 'Missing click target ' + selector);
-    const box = await page.call('DOM.getBoxModel', {objectId: object.objectId});
+    await clickBox(page, {objectId: object.objectId});
+}
+
+async function clickBox(page, node) {
+    const box = await page.call('DOM.getBoxModel', node);
     const quad = box.model.content;
     const x = (quad[0] + quad[2] + quad[4] + quad[6]) / 4;
     const y = (quad[1] + quad[3] + quad[5] + quad[7]) / 4;
@@ -222,7 +226,12 @@ async function modalCase(page, origin) {
 
 async function headerCase(page, origin) {
     await ready(page, origin, async () => !!(await objectFor(page, '#header-search-input')));
-    await domFocus(page, '#header-search-input');
+    // A real user seeds Compose focus by clicking the field; DOM.focus on the hidden a11y copy does not move it.
+    const searchName = 'Search movies, TV and people';
+    const searchNodes = axNamed(await axTree(page), 'textbox', searchName);
+    assert.equal(searchNodes.length, 1); assert.ok(searchNodes[0].backendDOMNodeId);
+    await clickBox(page, {backendNodeId: searchNodes[0].backendDOMNodeId});
+    await until(() => focusedAx(page, 'textbox', searchName), 'search AX focus after click');
     await key(page, 'Tab');
     await until(() => focusedAx(page, 'button', 'Sign in'), 'Sign in AX focus');
     assert.equal(await callOn(page, (await activeObject(page)).objectId, 'function(){return this.tagName}'), 'CANVAS');
