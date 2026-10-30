@@ -26,7 +26,8 @@ class MobileHomeStorageRecoveryTest {
             val page = (model.home.uiState.value.rows[HomeRow.Trending] as? SectionState.Content)?.value
             fixture.graph.settingsFailed.value && model.storageFailed.value && page?.moreError == SectionErrorKind.Generic
         }
-        onNodeWithTag("mobile-home").performScrollToNode(hasTestTag("home-settings-recovery"))
+        // Scroll the banner item to the top; scrolling only until it is visible leaves Retry under the floating tab bar.
+        onNodeWithTag("mobile-home").performScrollToKey("settings-error")
         onNodeWithText("Saved preferences unavailable; keeping the last loaded values.").assertIsDisplayed()
         runOnIdle {
             assertTrue(model.storageFailed.value)
@@ -70,7 +71,7 @@ class MobileHomeStorageRecoveryTest {
         waitUntil {
             model.home.uiState.value.genresError == SectionErrorKind.Generic && model.storageFailed.value
         }
-        onNodeWithTag("mobile-home").performScrollToNode(hasTestTag("home-genres-recovery"))
+        onNodeWithTag("mobile-home").performScrollToKey("genres-error")
         onNodeWithText("Genre names unavailable; keeping loaded content.").assertIsDisplayed()
         runOnIdle { fixture.api.failGenresStorage = false }
         onNodeWithTag("home-genres-recovery").onChildren().filter(hasText("Retry")).onFirst().performClick()
