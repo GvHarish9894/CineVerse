@@ -302,7 +302,7 @@ internal fun WebHeader(route: WebRoute, session: WebSessionState, searchFocus: F
         }
     }
     val submit = { if (searchEnabled && !invalid) searchSubmit(displayed) }
-    BoxWithConstraints(webHeaderFocusBridge(homeFocus, modalOpen).fillMaxWidth().onPreviewKeyEvent { event ->
+    BoxWithConstraints(webHeaderFocusBridge(homeFocus, modalOpen, fieldFocused).fillMaxWidth().onPreviewKeyEvent { event ->
         if (fieldFocused && event.type == KeyEventType.KeyDown && event.key == Key.Tab) {
             focus.moveFocus(if (event.isShiftPressed) FocusDirection.Previous else FocusDirection.Next)
             focusWebCanvasAfterInput()

@@ -7,6 +7,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.testTag
@@ -79,23 +81,32 @@ internal fun rememberWebModalTrigger(kind: WebModalKind): WebModalTrigger {
 internal external fun focusWebCanvas()
 
 @Composable
-internal fun webHeaderFocusBridge(home: FocusRequester?, modalOpen: Boolean): Modifier {
+internal fun webHeaderFocusBridge(home: FocusRequester?, modalOpen: Boolean, searchFocused: Boolean): Modifier {
     val group = remember { FocusRequester() }
     val blocked by rememberUpdatedState(modalOpen)
+    var bridge by remember { mutableStateOf<JsAny?>(null) }
     DisposableEffect(home, group) {
-        val bridge = installHeaderFocusBridge { backwards ->
+        val installed = installHeaderFocusBridge { backwards ->
             if (!blocked) {
                 if (backwards) group.requestFocus(FocusDirection.Previous) else home?.requestFocus()
             }
         }
-        onDispose { disposeHeaderFocusBridge(bridge) }
+        bridge = installed
+        onDispose { disposeHeaderFocusBridge(installed) }
+    }
+    // AT lands on Compose's unnamed IME input while the field is focused, so it borrows the field's name.
+    DisposableEffect(bridge, searchFocused) {
+        val current = bridge
+        current?.let { nameHeaderSearchInput(it, searchFocused) }
+        onDispose { current?.let { nameHeaderSearchInput(it, false) } }
     }
     return Modifier.testTag("web-header").focusRequester(group).focusGroup()
 }
 
 @JsFun("""(enter) => {
     let canvas=null, backwards=false, entering=false;
-    const observed=new Set(), editors=new Map();
+    let named=false;
+    const observed=new Set(), editors=new Map(), labelled=new Set();
     const onKey=e=>{
         if(e.key!=='Tab') return;
         backwards=e.shiftKey;
@@ -115,10 +126,16 @@ internal fun webHeaderFocusBridge(home: FocusRequester?, modalOpen: Boolean): Mo
         if(next && next!==canvas) { if(canvas) canvas.removeEventListener('focus',onFocus); canvas=next; canvas.addEventListener('focus',onFocus); }
         for(const n of root.querySelectorAll('*')) if(n.shadowRoot) scan(n.shadowRoot);
     }
-    const observer=new MutationObserver(()=>scan(document.getElementById('cineverse-root') || document.body));
+    function nameInput() {
+        for(const input of labelled) if(!named || !input.isConnected) { input.removeAttribute('aria-labelledby'); labelled.delete(input); }
+        const input=named && canvas && canvas.parentElement && canvas.parentElement.querySelector(':scope > input, :scope > textarea');
+        if(input && !labelled.has(input)) { input.setAttribute('aria-labelledby','header-search-input'); labelled.add(input); }
+    }
+    const observer=new MutationObserver(()=>{ scan(document.getElementById('cineverse-root') || document.body); nameInput(); });
     document.addEventListener('keydown',onKey,true);
     scan(document.getElementById('cineverse-root') || document.body);
-    return {close() {
+    return {name(on) { named=on; nameInput(); }, close() {
+        named=false; nameInput();
         observer.disconnect(); document.removeEventListener('keydown',onKey,true); if(canvas) canvas.removeEventListener('focus',onFocus);
         for(const [node,tabindex] of editors) { if(tabindex===null) node.removeAttribute('tabindex'); else node.setAttribute('tabindex',tabindex); }
     }};
@@ -126,6 +143,8 @@ internal fun webHeaderFocusBridge(home: FocusRequester?, modalOpen: Boolean): Mo
 private external fun installHeaderFocusBridge(enter: (Boolean) -> Unit): JsAny
 @JsFun("(bridge) => bridge.close()")
 private external fun disposeHeaderFocusBridge(bridge: JsAny)
+@JsFun("(bridge, on) => bridge.name(on)")
+private external fun nameHeaderSearchInput(bridge: JsAny, on: Boolean)
 
 @JsFun("(verify) => { queueMicrotask(verify); }")
 private external fun afterWebFocusCommit(verify: () -> Unit)
