@@ -11,6 +11,8 @@ import platform.CoreGraphics.CGRectMake
 import platform.Foundation.NSURL
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
+import platform.UIKit.UIPopoverPresentationController
+import platform.UIKit.popoverPresentationController
 
 internal actual fun Scope.mobileExternalActions(): MobileExternalActions = IosMobileExternalActions(get())
 
