@@ -229,6 +229,12 @@ Operator explicitly requested “Do it all one by one.” Proceed serially under
 
 Labeled diagnostic at68602ad exact6 once: all stop at first phase. Modal/background/rating/header canvas nodes absent; explicit trailer iframe present but modal ownership absent. Compose assertions can pass while document activeElement remainsBODY. Root cause: runComposeUiTest in-memory semantics not attached production ComposeViewport document. No production defect proven. Next source-only smallest shared test harness: create/remove owned #cineverse-root, mount relevant composables through attached ComposeViewport using real production document seam, expose fixture callbacks/state, deterministic disposal/DOM cleanup. Convert only six DOM-bearing cases (or shared helper used by their3classes), keep ordinary Compose semantics tests separate, exact assertions/timeouts. No production changes. Review then exact6 with font route.
 
+### Parallel checkpoint: native/iOS source ready; accessibility real-page harness required
+
+C3 public API guard: CMP1.11.1 ComposeViewport returnsUnit/discards internal ComposeWindow; no public dispose and source TODO. In-process attached test would leak scene/listeners, so no edit. Next design isolated real-document harness: one production ComposeViewport per fresh browser page/context; close page for deterministic cleanup. Need exact build/fixture approach using public project APIs, fake runtime/callback bridge, no frameworkfork/reflection or persistent preview.
+
+C5 Person/Season integration committed68e50fd on topProfile6079ed4,13files/new MobileCatalogEntry+MobileCatalogRootTest, placeholders removed, static-only; independent review before compile. C2 hosted-iOS tests commit9f2e5078 exact3paths portable saveable helper+state waits, static-only; independent review before execution. Run reviewers in parallel; execution lease remainsfree until clear.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
