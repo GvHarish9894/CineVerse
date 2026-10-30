@@ -35,7 +35,7 @@ import kotlin.test.*
 
 /** Root wiring over the real graph/runtime with fake TMDB, session engine, stores, opener and trailer host only. */
 class WebRootTest {
-    private class Fixture(signedIn: Boolean = false, twoTrailerTitles: Boolean = false) : AutoCloseable {
+    private class Fixture(signedIn: Boolean = false, twoTrailerTitles: Boolean = false, reduceMotion: Boolean = false) : AutoCloseable {
         val calls = mutableListOf<String>()
         val http = mutableListOf<String>()
         val opened = mutableListOf<String>()
@@ -93,7 +93,7 @@ class WebRootTest {
         private val values = object : SettingsValues {
             override fun string(key: String): String? = null
             // test perf: glow off; glow-follows-preference covered by WebRuntimeUiTest.ambientGlowFollowsTheSavedPreference.
-            override fun boolean(key: String): Boolean? = if (key == "glow") false else null
+            override fun boolean(key: String): Boolean? = if (key == "glow") false else if (key == "motion" && reduceMotion) true else null
             override fun stringSet(key: String): Set<String>? = null
         }
         private val id = "cineverse.root.test.${++next}"
@@ -217,12 +217,14 @@ class WebRootTest {
     }
 
     @Test fun rapidHomeTrailerPressesKeepFirstPendingTitleAndOpeningTrigger() = runComposeUiTest {
-        val f = Fixture(twoTrailerTitles = true)
+        // test perf (Mocha 2s): one-jump scroll and reduced motion (no card-lift/dialog-slide frames).
+        // Motion-on focus return stays covered by detailTrailerCloseReturnsToTheLivePlayButton.
+        val f = Fixture(twoTrailerTitles = true, reduceMotion = true)
         f.videoGate = CompletableDeferred()
         try {
             root(f, FakeHistory("/"))
             exists("web-home")
-            onNodeWithTag("web-home").performScrollToNode(hasTestTag("home-trailer-movie:1"))
+            onNodeWithTag("web-home").performScrollToKey("trailers")
             val first = onNodeWithTag("home-trailer-movie:1").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
             val second = onNodeWithTag("home-trailer-movie:2").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
             runOnIdle { first(); second() } // Both real UI handlers, before any rendered loading-state update.
