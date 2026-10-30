@@ -88,6 +88,8 @@ internal actual fun cvDialogWindow(
                             if (!focus.moveFocus(direction)) {
                                 focus.clearFocus(force = true)
                                 closeFocus.requestFocus()
+                                // Close is the first stop; CMP rejects a 1D requestFocus(Previous), so walk to the last stop.
+                                if (event.isShiftPressed) while (focus.moveFocus(FocusDirection.Next)) Unit
                             }
                             focusWebCanvas()
                             true

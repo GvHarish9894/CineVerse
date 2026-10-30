@@ -74,7 +74,7 @@ fun WebTrailerDialog(
             restore?.invoke() ?: runCatching { restoreFocus.requestFocus() }
             Unit
         },
-        closeButtonModifier = Modifier.onPreviewKeyEvent { event ->
+        closeButtonModifier = Modifier.focusRequester(closeFocus).onPreviewKeyEvent { event ->
             event.type == KeyEventType.KeyDown && event.key == Key.Tab && (!event.isShiftPressed || more.isEmpty()) && owner.focusFrame()
         },
         ownedElementId = owner.ownedElementId,
