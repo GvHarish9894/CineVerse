@@ -111,9 +111,13 @@ class MobileNavigationTest {
         onNodeWithText("Search", useUnmergedTree = true).performClick()
         onNodeWithText("Home", useUnmergedTree = true).performClick()
         onNodeWithText("Now playing in theatres").assertIsDisplayed()
+        // The trend chip lives in a LazyColumn item that is composed-out once scrolled past.
+        onNodeWithTag("mobile-home").performScrollToNode(hasText("Today"))
         onNodeWithText("Today").assertIsSelected()
+        onNodeWithTag("mobile-home").performScrollToNode(hasText("Now playing in theatres"))
         runOnIdle { restoration.emulateSaveAndRestore() }
         onNodeWithText("Now playing in theatres").assertIsDisplayed()
+        onNodeWithTag("mobile-home").performScrollToNode(hasText("Today"))
         onNodeWithText("Today").assertIsSelected()
         onNodeWithText("Home", useUnmergedTree = true).performClick()
         onNodeWithContentDescription("Details for day-en-US 1").assertIsDisplayed()
