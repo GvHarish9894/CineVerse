@@ -347,6 +347,14 @@ Integrated review of 82aed66c: BLOCK on one P1-1 — the font Karma route lived 
 
 Push identity (read-only check): gh active account = harish-zuper; GvHarish9894 is logged in but not active. OPERATOR must switch (`gh auth switch -u GvHarish9894`) before any push; parent will not change auth.
 
+### Checkpoint 2026-10-30n — ALL LOCAL GATES GREEN on product-integration 1325cc8d
+
+Plain CI-style web (no init script/owned config): composeApp 396/396, shared 524/524, real page 7/7 — P1-1 resolved by checked-in karma.config.d/fonts.js. Integrated review otherwise CLEAR.
+
+Local acceptance summary at 1325cc8d (code identical to 82aed66c + one test-config file): compile all targets; host 184; shared jvm 554 + androidHost 548 + wasm 524; server 60 (security suites); TV unit 63 + lint 0 err + debug/release build + instrumented 38/1 (secondary user) + install-over-old-data fixture PASS; web composeApp 396 + real page 7 + distribution + secret scan; Android 17 classes/130 on owned emulator. iOS: 88/88 at pre-integration C2 head; integrated-head run BLOCKED on Xcode 27.2 first-launch (operator).
+
+OUTSTANDING (require operator or external systems): (1) `sudo xcodebuild -runFirstLaunch`, then iOS full suite on 1325cc8d; (2) `gh auth switch -u GvHarish9894` then operator approval to promote (ff master <- product-integration) and push; (3) real-account TMDB approval/import/sign-out acceptance on all platforms; (4) deployment + deployed CSP/BFF check (server before web if separate); (5) Safari/mobile browsers + real screen readers; (6) human design review. Follow-ups: add webAccessibilityRealPageTest to CI; refine secret-grep gate to exclude the CI sentinel.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
