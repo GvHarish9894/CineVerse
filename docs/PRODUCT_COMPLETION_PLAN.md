@@ -303,6 +303,14 @@ C3: a8bec00c review CLEAR. Pre-existing P1 WebModalFocus.kt:91 `group.requestFoc
 
 iOS: rerun hosted full suite on integrated C5 head (last 88/88 was pre-integration C2 head).
 
+### Checkpoint 2026-10-30h
+
+C3 at 605580b9: real page 7/7 (new header-reverse-entry case caught the live WebModalFocus.kt:91 throw; fixed via FocusDirection.Left). Six invalid runComposeUiTest methods removed. Karma seven classes: 56/58. Reds: (1) WebModalFocusTest.disabledTriggerUsesFallbackAfterDialogCloses — disabled trigger still Focused=true after close (fallback also focused?) — possibly affected by the P2 walk change `if (closeFocus.requestFocus() && isShiftPressed)` or the one-microtask restore; needs triage vs a8bec00c; (2) WebRootTest.rapidHomeTrailerPressesKeepFirstPendingTitleAndOpeningTrigger times out alone too (Mocha 2000) — cluster 4 now reproducible in isolation -> needs labeled phase diagnosis in that test. Gates (b) Home 12 and (c) native 5 withheld.
+
+ANDROID test changes a527b81f/903dc927 reviewed CLEAR (OK with notes). Full 16-class run at one head: do once on the final integrated candidate.
+
+iOS on C5 head BLOCKED (infra): Xcode updated to 27.2 (27B52) at 23:15 IST; simctl requires `sudo xcodebuild -runFirstLaunch` (operator/admin). Stage 1 compile passed at 903dc927. Not bypassed. OPERATOR INPUT REQUIRED.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
