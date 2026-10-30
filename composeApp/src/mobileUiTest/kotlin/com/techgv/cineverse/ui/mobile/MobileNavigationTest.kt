@@ -1,6 +1,8 @@
 package com.techgv.cineverse.ui.mobile
 
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.semantics.SemanticsActions
@@ -59,12 +61,38 @@ class MobileNavigationTest {
         runOnIdle { assertEquals(listOf("videos/101/en-US"), api.calls.filter { it.startsWith("videos/") }) }
     }
 
+    @Test fun publicSaveableRegistryRecreationRestoresRememberSaveableScalar() = runComposeUiTest {
+        val restoration = PortableStateRestoration()
+        lateinit var changeValue: () -> Unit
+        var instances = 0
+        setContent {
+            restoration.Content {
+                var value by rememberSaveable { mutableIntStateOf(1) }
+                SideEffect { changeValue = { value = 7 } }
+                DisposableEffect(Unit) {
+                    instances++
+                    onDispose {}
+                }
+                Text("Saved scalar $value")
+            }
+        }
+        onNodeWithText("Saved scalar 1").assertIsDisplayed()
+        runOnIdle {
+            assertEquals(1, instances)
+            changeValue()
+        }
+        onNodeWithText("Saved scalar 7").assertIsDisplayed()
+        runOnIdle { restoration.emulateSaveAndRestore() }
+        onNodeWithText("Saved scalar 7").assertIsDisplayed()
+        runOnIdle { assertEquals(2, instances) }
+    }
+
     @Test fun selectedTabAndEachStackSurviveSaveRestore() = runComposeUiTest {
-        val restoration = StateRestorationTester(this)
-        restoration.setContent { MobileTestRoot() }
+        val restoration = PortableStateRestoration()
+        setContent { restoration.Content { MobileTestRoot() } }
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
         onNodeWithText("Profile", useUnmergedTree = true).performClick()
-        restoration.emulateSaveAndRestore()
+        runOnIdle { restoration.emulateSaveAndRestore() }
         onNodeWithText("Internal placeholder · This tab is not implemented in M1.").assertIsDisplayed()
         onNodeWithText("Home", useUnmergedTree = true).performClick()
         onNodeWithText("Internal placeholder · movie 101").assertIsDisplayed()
@@ -74,17 +102,19 @@ class MobileNavigationTest {
     }
 
     @Test fun homeScrollAndTrendRestoreAcrossTabsAndSaveRestore() = runComposeUiTest {
-        val restoration = StateRestorationTester(this)
+        val restoration = PortableStateRestoration()
         val savedHome = SavedStateHandle()
-        restoration.setContent { MobileTestRoot(savedHome) }
+        setContent { restoration.Content { MobileTestRoot(savedHome) } }
         onNodeWithTag("mobile-home").performScrollToNode(hasText("Today"))
         onNodeWithText("Today").performClick()
         onNodeWithTag("mobile-home").performScrollToNode(hasText("Now playing in theatres"))
         onNodeWithText("Search", useUnmergedTree = true).performClick()
         onNodeWithText("Home", useUnmergedTree = true).performClick()
         onNodeWithText("Now playing in theatres").assertIsDisplayed()
-        restoration.emulateSaveAndRestore()
+        onNodeWithText("Today").assertIsSelected()
+        runOnIdle { restoration.emulateSaveAndRestore() }
         onNodeWithText("Now playing in theatres").assertIsDisplayed()
+        onNodeWithText("Today").assertIsSelected()
         onNodeWithText("Home", useUnmergedTree = true).performClick()
         onNodeWithContentDescription("Details for day-en-US 1").assertIsDisplayed()
     }

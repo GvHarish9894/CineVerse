@@ -3,6 +3,7 @@ package com.techgv.cineverse.ui.mobile
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import com.techgv.cineverse.presentation.HomeRow
+import com.techgv.cineverse.presentation.SectionErrorKind
 import com.techgv.cineverse.presentation.SectionState
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.test.*
@@ -21,6 +22,10 @@ class MobileHomeStorageRecoveryTest {
             fixture.store.values.value = mapOf("unrelated" to "storage-down")
             model.home.loadMore(HomeRow.Trending)
         }
+        waitUntil {
+            val page = (model.home.uiState.value.rows[HomeRow.Trending] as? SectionState.Content)?.value
+            fixture.graph.settingsFailed.value && model.storageFailed.value && page?.moreError == SectionErrorKind.Generic
+        }
         onNodeWithTag("mobile-home").performScrollToNode(hasTestTag("home-settings-recovery"))
         onNodeWithText("Saved preferences unavailable; keeping the last loaded values.").assertIsDisplayed()
         runOnIdle {
@@ -28,8 +33,11 @@ class MobileHomeStorageRecoveryTest {
             assertEquals(before.hero, model.home.uiState.value.hero)
             fixture.store.fail = false
         }
-        onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("home-settings-recovery"))).performClick()
-        waitForIdle()
+        onNodeWithTag("home-settings-recovery").onChildren().filter(hasText("Retry")).onFirst().performClick()
+        waitUntil {
+            val page = (model.home.uiState.value.rows[HomeRow.Trending] as? SectionState.Content)?.value
+            !fixture.graph.settingsFailed.value && !model.storageFailed.value && page?.page == 2 && page?.moreError == null
+        }
         runOnIdle {
             assertSame(retainedModel, model)
             assertFalse(fixture.graph.settingsFailed.value)
@@ -59,11 +67,17 @@ class MobileHomeStorageRecoveryTest {
         val retainedModel = model
         val before = model.home.uiState.value
         runOnIdle { gate.complete(Unit) }
+        waitUntil {
+            model.home.uiState.value.genresError == SectionErrorKind.Generic && model.storageFailed.value
+        }
         onNodeWithTag("mobile-home").performScrollToNode(hasTestTag("home-genres-recovery"))
         onNodeWithText("Genre names unavailable; keeping loaded content.").assertIsDisplayed()
         runOnIdle { fixture.api.failGenresStorage = false }
-        onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("home-genres-recovery"))).performClick()
-        waitForIdle()
+        onNodeWithTag("home-genres-recovery").onChildren().filter(hasText("Retry")).onFirst().performClick()
+        waitUntil {
+            model.home.uiState.value.genresError == null && !model.storageFailed.value &&
+                model.home.uiState.value.genres.keys == setOf(28, 18)
+        }
         runOnIdle {
             assertSame(retainedModel, model)
             assertNull(model.home.uiState.value.genresError)
