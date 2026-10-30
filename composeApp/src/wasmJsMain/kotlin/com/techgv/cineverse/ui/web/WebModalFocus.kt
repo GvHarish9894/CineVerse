@@ -127,9 +127,13 @@ internal fun webHeaderFocusBridge(home: FocusRequester?, modalOpen: Boolean, sea
         for(const n of root.querySelectorAll('*')) if(n.shadowRoot) scan(n.shadowRoot);
     }
     function nameInput() {
-        for(const input of labelled) if(!named || !input.isConnected) { input.removeAttribute('aria-labelledby'); labelled.delete(input); }
+        for(const input of labelled) if(!named || !input.isConnected) { input.removeAttribute('aria-label'); labelled.delete(input); }
         const input=named && canvas && canvas.parentElement && canvas.parentElement.querySelector(':scope > input, :scope > textarea');
-        if(input && !labelled.has(input)) { input.setAttribute('aria-labelledby','header-search-input'); labelled.add(input); }
+        // accname: aria-labelledby -> a textbox contributes only its (empty) value, so copy the label text instead.
+        const root=input && input.getRootNode();
+        const mirror=input && (root && root.getElementById ? root : document).getElementById('header-search-input');
+        const label=mirror && mirror.getAttribute('aria-label');
+        if(input && label && !labelled.has(input)) { input.setAttribute('aria-label',label); labelled.add(input); }
     }
     const observer=new MutationObserver(()=>{ scan(document.getElementById('cineverse-root') || document.body); nameInput(); });
     document.addEventListener('keydown',onKey,true);
