@@ -24,7 +24,7 @@ import com.techgv.cineverse.ui.theme.bodyStyle
 
 /** Host once above routes. Removing this host does not dispose the app-lifetime owner. */
 @Composable
-fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester) {
+fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester, onRestoreFocus: (() -> Unit)? = null) {
     val state by owner.state.collectAsState()
     if (state.phase == WebApprovalPhase.Closed) return
     CvDialog(
@@ -32,6 +32,7 @@ fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester) {
         title = "Sign in to CineVerse",
         kicker = "TMDB account",
         restoreFocus = restoreFocus,
+        onRestoreFocus = onRestoreFocus,
         modifier = Modifier.testTag("web-approval-dialog"),
     ) {
         Column(

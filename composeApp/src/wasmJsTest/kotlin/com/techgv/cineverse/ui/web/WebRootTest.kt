@@ -35,7 +35,7 @@ import kotlin.test.*
 
 /** Root wiring over the real graph/runtime with fake TMDB, session engine, stores, opener and trailer host only. */
 class WebRootTest {
-    private class Fixture(signedIn: Boolean = false) : AutoCloseable {
+    private class Fixture(signedIn: Boolean = false, twoTrailerTitles: Boolean = false, reduceMotion: Boolean = false) : AutoCloseable {
         val calls = mutableListOf<String>()
         val http = mutableListOf<String>()
         val opened = mutableListOf<String>()
@@ -46,6 +46,7 @@ class WebRootTest {
         private var sessionBody = if (signedIn) WebApprovalFixture.SIGNED else WebApprovalFixture.GUEST
         /** When set, session reads wait for it: the runtime stays Checking. */
         var sessionGate: CompletableDeferred<Unit>? = null
+        var videoGate: CompletableDeferred<Unit>? = null
         private val guestRows = MutableStateFlow<List<GuestLibraryRow>>(emptyList())
         private val account = mutableMapOf<MediaRef, LibraryState>()
         private val api = object : WebSeasonUnusedApi() {
@@ -54,14 +55,21 @@ class WebRootTest {
                 return MovieDetailDto(id, title = "Root film", overview = "Root overview", videos = VideosDto(listOf(
                     VideoDto(key = WebTrailerHostFake.TRAILER.key, name = "Official Trailer", site = "YouTube", type = "Trailer", official = true))))
             }
-            override suspend fun videos(media: MediaType, id: Int, language: String): VideosDto = VideosDto(listOf(
-                VideoDto(key = "tEaSeR_0001", name = "Teaser", site = "YouTube", type = "Teaser", official = true),
-                VideoDto(key = WebTrailerHostFake.TRAILER.key, name = "Official Trailer", site = "YouTube", type = "Trailer", official = true),
-            )).also { calls += "videos:$id" }
-            // Home: one trending movie; every other row and the genre lists are empty.
+            override suspend fun videos(media: MediaType, id: Int, language: String): VideosDto {
+                calls += "videos:$id"
+                videoGate?.await()
+                return VideosDto(listOf(
+                    VideoDto(key = "tEaSeR_0001", name = "Teaser", site = "YouTube", type = "Teaser", official = true),
+                    VideoDto(key = WebTrailerHostFake.TRAILER.key, name = "Official Trailer", site = "YouTube", type = "Trailer", official = true),
+                ))
+            }
+            // Default Home: one trending movie; optional upcoming fixtures exercise two pending trailer presses.
             override suspend fun trending(window: TrendingWindow, language: String, page: Int) =
                 PageDto(page, listOf(MediaItemDto(1, mediaType = "movie", title = "Root film", releaseDate = "2026-03-13")), 1, 1)
-            override suspend fun movieList(list: MovieList, language: String, region: String, page: Int) = PageDto<MediaItemDto>(page, emptyList(), 1, 0)
+            override suspend fun movieList(list: MovieList, language: String, region: String, page: Int) =
+                if (twoTrailerTitles && list == MovieList.Upcoming) PageDto(page, listOf(
+                    MediaItemDto(1, title = "Root film"), MediaItemDto(2, title = "Second film")), 1, 2)
+                else PageDto<MediaItemDto>(page, emptyList(), 1, 0)
             override suspend fun tvList(list: TvList, language: String, timezone: String?, page: Int) = PageDto<MediaItemDto>(page, emptyList(), 1, 0)
             override suspend fun popularPeople(language: String, page: Int) = PageDto<MediaItemDto>(page, emptyList(), 1, 0)
             override suspend fun genres(media: MediaType, language: String) = GenreListDto()
@@ -85,7 +93,7 @@ class WebRootTest {
         private val values = object : SettingsValues {
             override fun string(key: String): String? = null
             // test perf: glow off; glow-follows-preference covered by WebRuntimeUiTest.ambientGlowFollowsTheSavedPreference.
-            override fun boolean(key: String): Boolean? = if (key == "glow") false else null
+            override fun boolean(key: String): Boolean? = if (key == "glow") false else if (key == "motion" && reduceMotion) true else null
             override fun stringSet(key: String): Set<String>? = null
         }
         private val id = "cineverse.root.test.${++next}"
@@ -158,7 +166,7 @@ class WebRootTest {
             }
             override fun open(approval: WebApprovalAttempt) { opened += "open" }
         }
-        override fun close() { sessionGate?.complete(Unit); runtime.stop(); app.close() }
+        override fun close() { sessionGate?.complete(Unit); videoGate?.complete(Unit); runtime.stop(); app.close() }
         companion object { private var next = 0 }
     }
 
@@ -204,6 +212,60 @@ class WebRootTest {
             exists("web-settings")
             onNodeWithText("not implemented in this preview", substring = true).assertDoesNotExist()
             assertEquals(setOf("GET /api/session"), f.http.toSet())
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
+    @Test fun rapidHomeTrailerPressesKeepFirstPendingTitleAndOpeningTrigger() = runComposeUiTest {
+        // test perf (Mocha 2s): one-jump scroll and reduced motion (no card-lift/dialog-slide frames).
+        // Motion-on focus return stays covered by detailTrailerCloseReturnsToTheLivePlayButton.
+        val f = Fixture(twoTrailerTitles = true, reduceMotion = true)
+        f.videoGate = CompletableDeferred()
+        try {
+            root(f, FakeHistory("/"))
+            exists("web-home")
+            onNodeWithTag("web-home").performScrollToKey("trailers")
+            val first = onNodeWithTag("home-trailer-movie:1").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+            val second = onNodeWithTag("home-trailer-movie:2").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+            runOnIdle { first(); second() } // Both real UI handlers, before any rendered loading-state update.
+            waitUntil { f.calls.count { it == "videos:1" } == 1 }
+            runOnIdle {
+                assertFalse("videos:2" in f.calls)
+                f.videoGate!!.complete(Unit)
+            }
+            exists("web-trailer-dialog") // Also proves requested title was not replaced by the ignored second press.
+            onNodeWithContentDescription("Close").performClick()
+            onNodeWithTag("home-trailer-movie:1").assertIsFocused()
+            assertFalse("videos:2" in f.calls)
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
+    @Test fun detailTrailerCloseReturnsToTheLivePlayButton() = runComposeUiTest {
+        val f = Fixture()
+        try {
+            root(f, FakeHistory("/movie/1"))
+            exists("web-detail")
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Play trailer").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Play trailer").performClick()
+            exists("web-trailer-dialog")
+            onNodeWithContentDescription("Close").performClick()
+            onNodeWithText("Play trailer").assertIsFocused()
+            assertEquals(0, f.trailerHost.live)
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
+    @Test fun detailRateCancelReturnsToTheActualRateTriggerWithoutWriting() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        try {
+            root(f, FakeHistory("/movie/1"))
+            exists("web-detail")
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Rate").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithContentDescription("Rate").performClick()
+            exists("web-rate-dialog")
+            onNodeWithContentDescription("Close").performClick()
+            onNodeWithContentDescription("Rate").assertIsFocused()
             assertEquals(emptyList(), f.writes)
         } finally { f.close() }
     }
@@ -302,6 +364,21 @@ class WebRootTest {
         } finally { f.close() }
     }
 
+    @Test fun settingsSignOutCancelRestoresTheOpeningButtonWithoutLogout() = runComposeUiTest {
+        val f = Fixture(signedIn = true)
+        try {
+            root(f, FakeHistory("/settings"))
+            exists("web-settings")
+            val trigger = hasText("Sign out") and hasAnyAncestor(hasTestTag("settings-account"))
+            onNode(trigger).performClick()
+            exists("web-sign-out-dialog")
+            onNodeWithContentDescription("Close").performClick()
+            onNode(trigger).assertIsFocused()
+            assertEquals(setOf("GET /api/session"), f.http.toSet())
+            assertEquals(emptyList(), f.writes)
+        } finally { f.close() }
+    }
+
     @Test fun settingsImportOpensTheOwnerDialogWithoutWritesOrLogout() = runComposeUiTest {
         val f = Fixture(signedIn = true)
         val history = FakeHistory("/settings")
@@ -312,6 +389,8 @@ class WebRootTest {
             exists("web-import-dialog")
             onNodeWithText("Nothing to import").assertExists() // The fake offer is complete: the owner reports it honestly.
             onNodeWithTag("web-sign-out-dialog").assertDoesNotExist()
+            onNodeWithContentDescription("Close").performClick()
+            onNodeWithText("Import guest library").assertIsFocused()
             assertEquals(setOf("GET /api/session"), f.http.toSet())
             assertEquals(emptyList(), f.writes)
         } finally { f.close() }

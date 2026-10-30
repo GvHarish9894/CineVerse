@@ -118,6 +118,7 @@ fun RoundIconButton(
     content: Color = Color.White,
     haptic: HapticKind = HapticKind.Tap,
     enabled: Boolean = true,
+    showTooltip: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -134,7 +135,7 @@ fun RoundIconButton(
             }
         }
     }
-    if (LocalShellStyle.current == ShellStyle.Web) {
+    if (LocalShellStyle.current == ShellStyle.Web && showTooltip) {
         TooltipBox(
             positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
             // `.tip`: white, dark text, radius 8, 12.5 semibold.

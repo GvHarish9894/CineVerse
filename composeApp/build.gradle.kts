@@ -2,6 +2,12 @@ import groovy.json.JsonSlurper
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import org.jetbrains.kotlin.gradle.targets.js.dsl.KotlinJsBinaryMode
+import org.jetbrains.kotlin.gradle.targets.js.ir.JsIrBinary
+import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrCompilation
+import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrTarget
+import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsExec
+import org.jetbrains.kotlin.gradle.targets.js.npm.npmProject
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -53,6 +59,11 @@ kotlin {
             }
         }
         binaries.executable()
+        val wasmMain = compilations.getByName("main")
+        val accessibilityHarness = compilations.create("accessibilityHarness") {
+            associateWith(wasmMain)
+        }
+        binaries.executable(accessibilityHarness)
     }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
@@ -134,6 +145,37 @@ kotlin {
             implementation(libs.kotlinx.browser)
         }
     }
+}
+
+val accessibilityHarnessCompilation =
+    (kotlin.targets.getByName("wasmJs") as KotlinJsIrTarget).compilations.getByName("accessibilityHarness") as KotlinJsIrCompilation
+val accessibilityHarnessDist = layout.buildDirectory.dir("dist/wasmJs/accessibilityHarnessDevelopmentExecutable")
+// KGP only creates browser webpack tasks for the main compilation, so stage the unbundled ES-module link output.
+val accessibilityHarnessBinary =
+    accessibilityHarnessCompilation.binaries.withType<JsIrBinary>().single { it.mode == KotlinJsBinaryMode.DEVELOPMENT }
+val accessibilityHarnessNpm = accessibilityHarnessCompilation.npmProject
+
+val webAccessibilityHarnessDistribution = tasks.register<Sync>("webAccessibilityHarnessDistribution") {
+    group = "verification"
+    description = "Stages the isolated real-page accessibility harness distribution."
+    // Harness .mjs/.wasm, Skiko runtime (skiko.mjs/.wasm) and processed resources (index.html).
+    from(accessibilityHarnessBinary.linkSyncTask)
+    // kotlinx-datetime imports bare '@js-joda/core'; index.html maps it to this file with an import map.
+    dependsOn(accessibilityHarnessNpm.nodeJsRoot.npmInstallTaskProvider)
+    from(accessibilityHarnessNpm.nodeModulesDir.map { it.file("@js-joda/core/dist/js-joda.esm.js") })
+    from(layout.projectDirectory.dir("src/commonMain/composeResources/font")) {
+        into("composeResources/com.techgv.cineverse.ui.resources/font")
+    }
+    into(accessibilityHarnessDist)
+}
+
+NodeJsExec.register(accessibilityHarnessCompilation, "webAccessibilityRealPageTest") {
+    group = "verification"
+    description = "Runs the seven isolated real-page accessibility cases in an owned Chrome using Node 22."
+    dependsOn(webAccessibilityHarnessDistribution)
+    inputFileProperty.set(layout.projectDirectory.file("src/wasmJsTest/kotlin/com/techgv/cineverse/ui/web/WebAccessibilityRealPageTest.cjs"))
+    sourceMapStackTraces = false
+    args(accessibilityHarnessDist.get().asFile.absolutePath)
 }
 
 // commonMain resources = the checked-in composeResources (fonts) + design/sample-tmdb.json for the gallery,

@@ -70,7 +70,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.techgv.cineverse.ui.adaptive.LocalShellStyle
 import com.techgv.cineverse.ui.adaptive.LocalWindowClass
@@ -260,9 +259,19 @@ fun BoxScope.ToastHost(state: ToastState) {
 /** Platform dialog properties: full-width content; web/iOS draw the kit's 72% scrim, Android uses the window dim. */
 expect fun cvDialogProperties(): DialogProperties
 
+/** Adds web modal attributes to the existing semantics node; native dialogs already own their AX boundary. */
+@Composable
+internal expect fun cvDialogSemantics(title: String, ownedElementId: String?): Modifier
+
+@Composable
+internal expect fun cvDialogWindow(
+    onDismissRequest: () -> Unit, closeFocus: FocusRequester, restoreFocus: FocusRequester?,
+    onRestoreFocus: (() -> Unit)?, content: @Composable () -> Unit,
+)
+
 /**
  * Modal dialog (`.dialog`): ≤ [maxWidth] (560dp; the web trailer `.player` passes 1000dp), radius 28, raised surface, close button, kicker + title + [content].
- * A platform dialog window, so focus is trapped inside (Tab cycles within) and screen readers treat it as modal.
+ * A platform modal boundary (same-scene on web), with trapped keyboard focus and modal screen-reader semantics.
  * Esc / back / scrim tap dismiss. On close, focus returns to [restoreFocus] (attach it to the trigger).
  * Enter: 350 ms rise + scale .97 → 1 (fade only under reduce motion).
  */
@@ -274,50 +283,55 @@ fun CvDialog(
     kicker: String? = null,
     restoreFocus: FocusRequester? = null,
     maxWidth: Dp = 560.dp,
+    onRestoreFocus: (() -> Unit)? = null,
+    closeButtonModifier: Modifier = Modifier,
+    ownedElementId: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val web = LocalShellStyle.current == ShellStyle.Web
     val narrow = LocalWindowClass.current == WindowClass.Phone
     val reduceMotion = LocalReduceMotion.current
-    DisposableEffect(restoreFocus) { onDispose { restoreFocus?.let { runCatching { it.requestFocus() } } } }
-    Dialog(onDismissRequest = onDismissRequest, properties = cvDialogProperties()) {
+    val closeFocus = remember { FocusRequester() }
+    cvDialogWindow(onDismissRequest, closeFocus, restoreFocus, onRestoreFocus) {
         val enter = remember { Animatable(0f) }
         LaunchedEffect(Unit) { enter.animateTo(1f, tween(350, easing = EmphasizedEasing)) }
-        val closeFocus = remember { FocusRequester() }
         // Keyboard users land inside the dialog; touch users get no focus ring.
         if (web) LaunchedEffect(Unit) { runCatching { closeFocus.requestFocus() } }
         val shape = RoundedCornerShape(Tokens.Radius.Dialog)
-        Column(
-            modifier
-                .padding(20.dp)
-                .widthIn(max = maxWidth)
-                .fillMaxWidth()
-                .onPreviewKeyEvent { event ->
-                    (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismissRequest() }
-                }
-                .graphicsLayer {
-                    alpha = enter.value
-                    if (!reduceMotion) {
-                        translationY = (1f - enter.value) * 20.dp.toPx()
-                        val scale = 0.97f + 0.03f * enter.value
-                        scaleX = scale
-                        scaleY = scale
+        Box(cvDialogSemantics(title, ownedElementId)) {
+            Column(
+                modifier
+                    .padding(20.dp)
+                    .widthIn(max = maxWidth)
+                    .fillMaxWidth()
+                    .onPreviewKeyEvent { event ->
+                        (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismissRequest() }
                     }
+                    .graphicsLayer {
+                        alpha = enter.value
+                        if (!reduceMotion) {
+                            translationY = (1f - enter.value) * 20.dp.toPx()
+                            val scale = 0.97f + 0.03f * enter.value
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                    }
+                    .dropShadow(shape, Shadow(120.dp, Color.Black.copy(alpha = 0.6f), offset = DpOffset(0.dp, 40.dp)))
+                    .clip(shape)
+                    .background(Tokens.Colors.SurfaceRaised)
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
+                    .padding(horizontal = if (narrow) 22.dp else 36.dp, vertical = if (narrow) 28.dp else 34.dp),
+            ) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f)) { OverlayHeading(kicker, title) }
+                    RoundIconButton(
+                        CvIcons.Close, "Close", onDismissRequest, closeButtonModifier.focusRequester(closeFocus),
+                        diameter = 38.dp, container = Color.White.copy(alpha = 0.08f), haptic = HapticKind.Back,
+                        showTooltip = !web,
+                    )
                 }
-                .dropShadow(shape, Shadow(120.dp, Color.Black.copy(alpha = 0.6f), offset = DpOffset(0.dp, 40.dp)))
-                .clip(shape)
-                .background(Tokens.Colors.SurfaceRaised)
-                .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
-                .padding(horizontal = if (narrow) 22.dp else 36.dp, vertical = if (narrow) 28.dp else 34.dp),
-        ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f)) { OverlayHeading(kicker, title) }
-                RoundIconButton(
-                    CvIcons.Close, "Close", onDismissRequest, Modifier.focusRequester(closeFocus),
-                    diameter = 38.dp, container = Color.White.copy(alpha = 0.08f), haptic = HapticKind.Back,
-                )
+                content()
             }
-            content()
         }
     }
 }

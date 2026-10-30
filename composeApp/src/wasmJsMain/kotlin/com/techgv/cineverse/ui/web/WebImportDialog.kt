@@ -22,7 +22,7 @@ import com.techgv.cineverse.ui.theme.bodyStyle
  * or Done. Hidden while the sign-out dialog is open so only one modal owns focus.
  */
 @Composable
-fun WebImportDialog(owner: WebAccountOwner, restoreFocus: FocusRequester) {
+fun WebImportDialog(owner: WebAccountOwner, restoreFocus: FocusRequester, onRestoreFocus: (() -> Unit)? = null) {
     val state by owner.state.collectAsState()
     if (state.signOut != WebSignOutPhase.Closed) return
     val prompt = state.importPrompt
@@ -52,6 +52,7 @@ fun WebImportDialog(owner: WebAccountOwner, restoreFocus: FocusRequester) {
         title = title,
         kicker = "GUEST LIBRARY",
         restoreFocus = restoreFocus,
+        onRestoreFocus = onRestoreFocus,
         modifier = Modifier.testTag("web-import-dialog"),
     ) {
         Column(
