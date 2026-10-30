@@ -29,6 +29,7 @@ import kotlinx.coroutines.test.TestCoroutineScheduler
 internal fun MobileDetailRootUiFixture(
     knownGuest: Boolean = true,
     actionObserver: ((MobileDetailViewModel, MobileDetailAuthority?, (LibraryKind) -> Unit) -> Unit)? = null,
+    external: MobileExternalActions = RecordingMobileExternalActions(),
     onReady: (MobileDetailRootFixture, MobileDetailRootUiOwner) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -41,9 +42,18 @@ internal fun MobileDetailRootUiFixture(
     CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalViewModelStoreOwner provides owner,
         LocalMobileDetailActionObserver provides actionObserver) {
         CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = true)) {
-            ProvideWindowClass { MobileShell { MobileRoot(fixture.graph, home) } }
+            ProvideWindowClass { MobileShell { MobileRoot(fixture.graph, home, external) } }
         }
     }
+}
+
+/** Records every platform hand-off; never launches a real external app. */
+internal class RecordingMobileExternalActions(var succeeds: Boolean = true) : MobileExternalActions {
+    val calls = mutableListOf<String>()
+    override suspend fun openYouTube(key: String) = record("youtube:$key")
+    override suspend fun openUrl(url: String) = record("url:$url")
+    override fun share(text: String) = record("share:$text")
+    private fun record(call: String): Boolean { calls += call; return succeeds }
 }
 
 /** Two real resumed entries; root status collection is deliberately controlled by each regression. */

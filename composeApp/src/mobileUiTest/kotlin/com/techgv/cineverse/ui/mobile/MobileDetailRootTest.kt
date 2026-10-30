@@ -333,11 +333,13 @@ class MobileDetailRootTest {
     }
 
     @Test fun actualHomeTapMountsDetailAndOutboundIdsUseExistingNavigator() = runComposeUiTest {
-        setContent { MobileDetailRootUiFixture { _, _ -> } }
+        val external = RecordingMobileExternalActions()
+        setContent { MobileDetailRootUiFixture(external = external) { _, _ -> } }
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
         onNodeWithText("Root title 101 en-US").assertExists()
         onNodeWithTag("mobile-detail").assertExists()
-        onNodeWithContentDescription("Share title").assertDoesNotExist()
+        onNodeWithContentDescription("Share title").performClick()
+        runOnIdle { assertEquals(listOf("share:https://www.themoviedb.org/movie/101"), external.calls) }
         onNodeWithTag("mobile-detail").performScrollToNode(hasText("Cast"))
         onNodeWithText("Cast").performClick()
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-person-431"))
@@ -571,9 +573,10 @@ class MobileDetailRootTest {
         runOnIdle { assertTrue(f.guest.rows.value.isEmpty()) }
     }
 
-    @Test fun trailerRouteClosesRootRateAndLeavesPlaybackImplementationPending() = runComposeUiTest {
+    @Test fun trailerRouteClosesRootRateAndOpensOutThroughThePlatformAdapter() = runComposeUiTest {
         lateinit var f: MobileDetailRootFixture
-        setContent { MobileDetailRootUiFixture { fixture, _ -> f = fixture } }
+        val external = RecordingMobileExternalActions()
+        setContent { MobileDetailRootUiFixture(external = external) { fixture, _ -> f = fixture } }
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-trailer"))
         val trailer = onNodeWithTag("detail-trailer").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
@@ -581,6 +584,15 @@ class MobileDetailRootTest {
         onNodeWithTag("mobile-rate-sheet").assertExists()
         runOnIdle { trailer() }
         onNodeWithTag("mobile-rate-sheet").assertDoesNotExist()
-        onNodeWithText("Internal placeholder · Root trailer. Trailer playback is not implemented.").assertExists()
+        onNodeWithTag("mobile-trailer").assertExists()
+        onNode(hasText("Root title 101 en-US") and hasAnyAncestor(hasTestTag("mobile-trailer"))).assertExists()
+        onNode(hasText("Root trailer") and hasAnyAncestor(hasTestTag("mobile-trailer"))).assertExists()
+        onNodeWithText("Open in YouTube").performClick()
+        onNodeWithText("Share").performClick()
+        runOnIdle { assertEquals(listOf("youtube:aB3_dE5-gH7", "share:https://www.youtube.com/watch?v=aB3_dE5-gH7"), external.calls) }
+        onNodeWithText("Back").performClick()
+        onNodeWithTag("mobile-trailer").assertDoesNotExist()
+        onNodeWithTag("mobile-detail").assertExists()
+        onNodeWithTag("mobile-rate-sheet").assertDoesNotExist()
     }
 }

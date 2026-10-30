@@ -33,7 +33,7 @@ import com.techgv.cineverse.ui.theme.CineVerseTheme
 
 /** Native composition root. The graph and its observers already exist before either platform displays UI. */
 @Composable
-fun NativeMobileApp(graph: MobileApplication) {
+fun NativeMobileApp(graph: MobileApplication, external: MobileExternalActions) {
     setSingletonImageLoaderFactory { context ->
         // Deliberately independent from the authenticated TMDB API client.
         ImageLoader.Builder(context).components { add(KtorNetworkFetcherFactory()) }.build()
@@ -51,7 +51,7 @@ fun NativeMobileApp(graph: MobileApplication) {
                     }
                 } else {
                     val model = viewModel { MobileHomeViewModel(graph, createSavedStateHandle()) }
-                    MobileRoot(graph, model)
+                    MobileRoot(graph, model, external)
                 }
             }
         }
@@ -59,7 +59,7 @@ fun NativeMobileApp(graph: MobileApplication) {
 }
 
 @Composable
-internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
+internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, external: MobileExternalActions) {
     val home = model.home
     val toasts = LocalToasts.current
     var selected by rememberSaveable(stateSaver = Saver<MobileTab, Int>(
@@ -171,7 +171,9 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
                     } else MobilePlaceholder(selected.name, "Internal placeholder · This tab is not implemented in M1.")
                 }
                 composable<MobileDetailRoute> { route ->
-                    MobileDetailRouteEntry(graph, route, detailBinding, navigator, ::back)
+                    MobileDetailRouteEntry(graph, route, detailBinding, navigator, ::back) { ref ->
+                        if (!external.share(ref.tmdbUrl())) toasts.show(ToastMessage("Couldn't open sharing."))
+                    }
                 }
                 composable<MobilePersonRoute> { route ->
                     MobilePersonRouteEntry(graph, route, catalogBinding, navigator, ::back)
@@ -180,8 +182,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
                     MobileSeasonRouteEntry(graph, route, catalogBinding, navigator, ::back)
                 }
                 composable<MobileTrailerRoute> { route ->
-                    val trailer = route.toRoute<MobileTrailerRoute>()
-                    MobilePlaceholder(trailer.title, "Internal placeholder · ${trailer.kicker}. Trailer playback is not implemented.", ::back)
+                    MobileTrailerScreen(route.toRoute<MobileTrailerRoute>(), external, ::back)
                 }
                 composable<MobileBrowseRoute> { route ->
                     val selection = route.toRoute<MobileBrowseRoute>().selection()

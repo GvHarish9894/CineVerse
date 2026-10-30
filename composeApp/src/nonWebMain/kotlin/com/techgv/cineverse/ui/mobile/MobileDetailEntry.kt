@@ -10,6 +10,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.toRoute
+import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.presentation.RatePrompt
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -223,6 +224,7 @@ internal fun MobileDetailRouteEntry(
     binding: MobileDetailRootBinding,
     navigator: MobileNavigator,
     onBack: () -> Unit,
+    onShare: (MediaRef) -> Unit,
 ) {
     val route = entry.toRoute<MobileDetailRoute>()
     val model = viewModel(viewModelStoreOwner = entry) { graph.detail(route.media, route.id, createSavedStateHandle()) }
@@ -234,7 +236,7 @@ internal fun MobileDetailRouteEntry(
         model.state.map { it.invalid || it.settingsFailed || it.libraryFailed || it.identityFailed }
             .distinctUntilChanged().collect { binding.detailReadsChanged(entry, model) }
     }
-    MobileDetailScreen(model, navigator, onBack)
+    MobileDetailScreen(model, navigator, onBack, onShare)
 }
 
 @Composable

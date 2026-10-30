@@ -118,7 +118,7 @@ internal fun MobileTestRoot(
     CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalViewModelStoreOwner provides owner) {
         CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = true)) {
             CompositionLocalProvider(LocalHaptics provides haptics) {
-                ProvideWindowClass { MobileShell { MobileRoot(fixture.graph, model) } }
+                ProvideWindowClass { MobileShell { MobileRoot(fixture.graph, model, RecordingMobileExternalActions()) } }
             }
         }
     }

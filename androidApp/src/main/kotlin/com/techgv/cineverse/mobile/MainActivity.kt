@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.techgv.cineverse.di.nativeMobileApplication
+import com.techgv.cineverse.di.nativeMobileExternalActions
 import com.techgv.cineverse.ui.mobile.NativeMobileApp
 
 class MainActivity : ComponentActivity() {
@@ -18,7 +19,8 @@ class MainActivity : ComponentActivity() {
         approval.attach(this)
         intent?.dataString?.let(approval::onCallback)
         val graph = nativeMobileApplication()
-        setContent { NativeMobileApp(graph) }
+        val external = nativeMobileExternalActions()
+        setContent { NativeMobileApp(graph, external) }
     }
 
     override fun onStart() {

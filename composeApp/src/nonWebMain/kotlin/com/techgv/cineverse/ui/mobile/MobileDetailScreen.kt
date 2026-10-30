@@ -32,8 +32,7 @@ internal val LocalMobileDetailActionObserver = staticCompositionLocalOf<
     ((MobileDetailViewModel, MobileDetailAuthority?, (LibraryKind) -> Unit) -> Unit)?
 > { null }
 
-private val MobileYouTubeKey = Regex("[A-Za-z0-9_-]{11}")
-internal fun Detail.mobileDetailVideos(): List<Video> = videos.filter { MobileYouTubeKey.matches(it.key) }.distinctBy { it.key }
+internal fun Detail.mobileDetailVideos(): List<Video> = videos.filter { isYouTubeKey(it.key) }.distinctBy { it.key }
 
 /** The parent binds route lifetime/resume on the owner; composition is not lifecycle authority. */
 @Composable
