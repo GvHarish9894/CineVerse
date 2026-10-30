@@ -4,6 +4,7 @@ import com.techgv.cineverse.data.search.RecentQueryStore
 import com.techgv.cineverse.ui.mobile.MobileApplication
 import com.techgv.cineverse.ui.mobile.MobileExternalActions
 import com.techgv.cineverse.ui.mobile.mobileExternalActions
+import kotlinx.coroutines.Dispatchers
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import org.koin.dsl.onClose
@@ -16,7 +17,7 @@ fun nativeMobileExternalActions(): MobileExternalActions = KoinPlatform.getKoin(
 
 fun mobileModule(): Module = module {
     single(createdAtStart = true) {
-        MobileApplication(get(), get(), get(), get(), get(), RecentQueryStore(get()), get(AppScope), get(), get())
+        MobileApplication(get(), get(), get(), get(), get(), RecentQueryStore(get()), get(AppScope), get(), get(), Dispatchers.Main.immediate)
     } onClose { it?.close() }
     single { mobileExternalActions() }
 }

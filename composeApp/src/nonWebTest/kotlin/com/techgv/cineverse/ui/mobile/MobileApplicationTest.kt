@@ -10,6 +10,7 @@ import com.techgv.cineverse.di.mobileModule
 import com.techgv.cineverse.domain.Hero
 import com.techgv.cineverse.presentation.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
@@ -106,30 +107,33 @@ class MobileApplicationTest {
     }
 
     @Test fun nativeModuleResolvesOneEagerGraphAcrossRepeatedEntrypointLookups() = runTest {
-        val f = MobileFixture(backgroundScope)
-        f.graph.close()
-        val app = koinApplication {
-            modules(module {
-                single { f.catalog }
-                single { f.generation }
-                single { f.settings }
-                single<com.techgv.cineverse.data.settings.SettingsStore> { f.store }
-                single<com.techgv.cineverse.data.auth.AuthRepository> { f.auth }
-                single { f.library }
-                single(com.techgv.cineverse.di.AppScope) { backgroundScope }
-                single { inertApproval(f.auth, backgroundScope) }
-                single { inertImporter(f.library) }
-            }, mobileModule())
-        }
-        runCurrent()
-        val first = app.koin.get<MobileApplication>()
-        assertSame(first, app.koin.get<MobileApplication>())
-        assertSame(f.catalog, first.catalog)
-        assertEquals(1, f.store.subscriptions)
-        app.close()
-        f.settings.update { it.copy(region = "US") }
-        runCurrent()
-        assertEquals(0L, f.generation.current)
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val f = MobileFixture(backgroundScope)
+            f.graph.close()
+            val app = koinApplication {
+                modules(module {
+                    single { f.catalog }
+                    single { f.generation }
+                    single { f.settings }
+                    single<com.techgv.cineverse.data.settings.SettingsStore> { f.store }
+                    single<com.techgv.cineverse.data.auth.AuthRepository> { f.auth }
+                    single { f.library }
+                    single(com.techgv.cineverse.di.AppScope) { backgroundScope }
+                    single { inertApproval(f.auth, backgroundScope) }
+                    single { inertImporter(f.library) }
+                }, mobileModule())
+            }
+            runCurrent()
+            val first = app.koin.get<MobileApplication>()
+            assertSame(first, app.koin.get<MobileApplication>())
+            assertSame(f.catalog, first.catalog)
+            assertEquals(1, f.store.subscriptions)
+            app.close()
+            f.settings.update { it.copy(region = "US") }
+            runCurrent()
+            assertEquals(0L, f.generation.current)
+        } finally { Dispatchers.resetMain() }
     }
 
     @Test fun mobileStrengthMappingPreservesStoredEnumsAndUsesKitDurations() {

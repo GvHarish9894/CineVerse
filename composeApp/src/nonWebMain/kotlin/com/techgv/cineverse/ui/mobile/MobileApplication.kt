@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 /** A received null session is guest; no emission is still unknown. */
 data class MobileIdentity(val session: AuthSession?)
@@ -45,6 +47,8 @@ class MobileApplication(
     appScope: CoroutineScope,
     approval: NativeApprovalCoordinator,
     importer: LibraryImporter,
+    /** The account owner and import holder keep unsynchronized state, so production confines them to the UI thread. */
+    accountContext: CoroutineContext = EmptyCoroutineContext,
 ) {
     private val scope = CoroutineScope(appScope.coroutineContext + SupervisorJob(appScope.coroutineContext[Job]))
     val settingsFlow = settingsRepository.settings
@@ -66,7 +70,7 @@ class MobileApplication(
         onOutcome = { mutableOutcomes.tryEmit(it) },
         onStorageFailure = { mutableStorageFailed.value = true; invalidateDetailContext() },
     )
-    val account = MobileAccountOwner(this, approval, importer, settingsRepository, auth, scope)
+    val account = MobileAccountOwner(this, approval, importer, settingsRepository, auth, CoroutineScope(scope.coroutineContext + accountContext))
     private var settingsJob: Job? = null
     private var identityJob: Job? = null
 

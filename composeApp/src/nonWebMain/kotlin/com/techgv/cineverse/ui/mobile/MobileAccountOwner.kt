@@ -112,7 +112,9 @@ class MobileAccountOwner internal constructor(
 
     /** Library/Profile guest Sign in. Single-flight while an approval dialog is showing. */
     fun onSignIn() {
-        if (approvalPhase() == null) begin()
+        if (approvalPhase() != null) return
+        // A returning callback may be exchanging with no dialog showing: reattach to it instead of restarting.
+        if (approval.status.value == NativeApprovalStatus.Checking) request.compareAndSet(null, ApprovalRequest()) else begin()
     }
 
     fun startAgain() {
