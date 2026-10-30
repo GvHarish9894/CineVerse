@@ -15,6 +15,7 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.techgv.cineverse.domain.Hero
+import com.techgv.cineverse.presentation.HomeRow
 import com.techgv.cineverse.presentation.HomeStateHolder
 import com.techgv.cineverse.ui.adaptive.ProvideWindowClass
 import com.techgv.cineverse.ui.adaptive.ShellStyle
@@ -129,7 +130,8 @@ class MobileNavigationTest {
 
     @Test fun seeAllUsesExploreHandoffAndReturnsWithoutLosingHome() = runComposeUiTest {
         setContent { MobileTestRoot() }
-        onNodeWithTag("mobile-home").performScrollToNode(hasText("Trending"))
+        // Scroll the row to the top; scrolling only until "Trending" is visible leaves "See all" under the floating tab bar.
+        onNodeWithTag("mobile-home").performScrollToKey(HomeRow.Trending.key)
         onAllNodesWithText("See all")[0].performClick()
         onNodeWithText("Trending · This week · Movies, TV and People").assertIsDisplayed()
         onNodeWithText("Back").performClick()
