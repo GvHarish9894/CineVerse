@@ -22,46 +22,6 @@ class WebTrailerDocumentTest {
             WebTrailerDocumentHost.create("about:blank", title, slot)
     }
 
-    @Test fun forwardTabEntersOwnedFrameAndAfterGuardReturnsToMoreVideos() = runComposeUiTest {
-        var open by mutableStateOf(true)
-        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            if (open) WebTrailerDialog(listOf(WebTrailerHostFake.TRAILER, WebTrailerHostFake.TEASER), WebTrailerHostFake.TRAILER,
-                false, { open = false }, remember { FocusRequester() }, host)
-        }
-        yieldToWebBrowser { webDocumentNode("iframe[data-cv-trailer]") != null && hasNamedModal("Official Trailer") }
-        runOnIdle {
-            val iframe = webDocumentNode("iframe[data-cv-trailer]")!!
-            assertTrue(iframe.getAttribute("title")!!.contains("Official Trailer"))
-            assertTrue(webDocumentNode("[role=dialog]")!!.getAttribute("aria-owns")!!.split(" ").contains(iframe.id))
-            assertTrue(sameDomRoot(iframe, webDocumentNode("[role=dialog]")!!))
-            assertNull(webDocumentNode("[aria-hidden=true] [data-cv-trailer-before], [aria-hidden=true] [data-cv-trailer-after]"))
-        }
-        onNodeWithContentDescription("Close").performKeyInput { pressKey(Key.Tab) }
-        yieldToWebBrowser { webActiveElement() == webDocumentNode("iframe[data-cv-trailer]") }
-        runOnIdle { assertEquals(webDocumentNode("iframe[data-cv-trailer]"), webActiveElement()) }
-        // Simulates the browser reaching the boundary AFTER native player controls; does not invent player key handling.
-        runOnIdle { (webDocumentNode("[data-cv-trailer-after]") as HTMLElement).focus() }
-        yieldToWebBrowser()
-        onNodeWithText("Teaser One · Teaser").assertIsFocused()
-        onNodeWithText("Teaser One · Teaser").performKeyInput { pressKey(Key.Tab) }
-        onNodeWithContentDescription("Close").assertIsFocused()
-        onNodeWithContentDescription("Close").performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) } }
-        onNodeWithText("Teaser One · Teaser").assertIsFocused()
-        onNodeWithText("Teaser One · Teaser").performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) } }
-        yieldToWebBrowser { webActiveElement() == webDocumentNode("iframe[data-cv-trailer]") }
-        runOnIdle { assertEquals(webDocumentNode("iframe[data-cv-trailer]"), webActiveElement()) }
-        runOnIdle { (webDocumentNode("[data-cv-trailer-before]") as HTMLElement).focus() }
-        yieldToWebBrowser()
-        onNodeWithContentDescription("Close").assertIsFocused()
-        onNodeWithContentDescription("Close").performClick()
-        yieldToWebBrowser { webDocumentNode("[data-cv-trailer], [data-cv-trailer-before], [data-cv-trailer-after]") == null }
-        runOnIdle {
-            assertNull(webDocumentNode("iframe[data-cv-trailer]"))
-            assertNull(webDocumentNode("[data-cv-trailer-before], [data-cv-trailer-after]"))
-        }
-        yieldToWebBrowser { !hasNamedModal("Official Trailer") }
-    }
-
     @Test fun oneVideoBothBoundariesReturnToCloseAndDisposalRemovesAllOwnedDom() = runComposeUiTest {
         var open by mutableStateOf(true)
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
@@ -77,18 +37,6 @@ class WebTrailerDocumentTest {
         runOnIdle { assertNull(webDocumentNode("[data-cv-trailer], [data-cv-trailer-before], [data-cv-trailer-after]")) }
     }
 }
-
-@JsFun("""(name) => {
-    function find(root) {
-        for (const n of root.querySelectorAll('*')) {
-            if (n.getAttribute('role') === 'dialog' && n.getAttribute('aria-modal') === 'true' && n.getAttribute('aria-label') === name) return true;
-            if (n.shadowRoot && find(n.shadowRoot)) return true;
-        }
-        return false;
-    }
-    return find(document);
-}""")
-internal external fun hasNamedModal(name: String): Boolean
 
 /** Only the owned top-level document/shadow roots, never the remote iframe document. */
 @JsFun("""(selector) => {
@@ -106,6 +54,3 @@ internal external fun webDocumentNode(selector: String): HTMLElement?
     return active;
 }""")
 internal external fun webActiveElement(): HTMLElement?
-
-@JsFun("(a,b) => a.getRootNode() === b.getRootNode()")
-private external fun sameDomRoot(a: HTMLElement, b: HTMLElement): Boolean

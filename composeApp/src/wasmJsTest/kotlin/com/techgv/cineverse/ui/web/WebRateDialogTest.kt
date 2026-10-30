@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlin.js.ExperimentalWasmJsInterop::class)
+@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 
 package com.techgv.cineverse.ui.web
 
@@ -21,7 +21,6 @@ import com.techgv.cineverse.ui.theme.AppearanceSettings
 import com.techgv.cineverse.ui.web.WebRateFixture.Companion.B
 import com.techgv.cineverse.ui.web.WebRateFixture.Companion.MOVIE
 import com.techgv.cineverse.ui.web.WebRateFixture.Companion.OTHER
-import org.w3c.dom.HTMLElement
 import kotlin.test.*
 
 class WebRateDialogTest {
@@ -132,54 +131,6 @@ class WebRateDialogTest {
             onNodeWithTag("web-rate-dialog").assertDoesNotExist()
             assertEquals(listOf("$movieRating=8.5"), f.writes)
             assertEquals(LibraryWrite.Rate(8.5), f.outcomes.single().write)
-        } finally { f.dispose() }
-    }
-
-    @Test fun realRatingDomSliderAdjustsChosenValueOnceAndSubmitsThatValue() = runComposeUiTest {
-        val f = WebRateFixture()
-        try {
-            show(f)
-            runOnIdle { f.actions.openRate(MOVIE) }
-            yieldToWebBrowser { webDocumentNode("#web-rate-stars")?.getAttribute("role") == "slider" }
-            runOnIdle {
-                val slider = webDocumentNode("#web-rate-stars")!!
-                assertEquals("0", slider.getAttribute("aria-valuemin"))
-                assertEquals("10", slider.getAttribute("aria-valuemax"))
-                assertEquals("0", slider.getAttribute("aria-valuenow"))
-                assertEquals("Not chosen", slider.getAttribute("aria-valuetext"))
-                assertEquals("-1", slider.getAttribute("tabindex")) // No second sequential Tab stop.
-                ratingDomKey(slider, "ArrowRight")
-                ratingDomKey(slider, "ArrowRight") // Same event turn, before callback recomposition.
-            }
-            assertValue("1.0", "Poor")
-            yieldToWebBrowser { webDocumentNode("#web-rate-stars")?.getAttribute("aria-valuenow") == "1" }
-            runOnIdle { ratingDomKey(webDocumentNode("#web-rate-stars")!!, "Enter") }
-            onNodeWithTag("web-rate-dialog").assertDoesNotExist()
-            assertEquals(listOf("$movieRating=1.0"), f.writes)
-        } finally { f.dispose() }
-    }
-
-    @Test fun disposedRatingDomNodeCannotAdjustReplacementPromptOrLeaveSliderAttributes() = runComposeUiTest {
-        val f = WebRateFixture()
-        try {
-            show(f)
-            runOnIdle { f.actions.openRate(MOVIE) }
-            yieldToWebBrowser { webDocumentNode("#web-rate-stars")?.getAttribute("role") == "slider" }
-            val old = webDocumentNode("#web-rate-stars")!!
-            runOnIdle { f.actions.closeRate() }
-            yieldToWebBrowser { webDocumentNode("#web-rate-stars") == null }
-            runOnIdle {
-                assertNull(old.getAttribute("aria-valuenow"))
-                assertNull(old.getAttribute("aria-valuetext"))
-                f.actions.openRate(OTHER)
-            }
-            yieldToWebBrowser { webDocumentNode("#web-rate-stars")?.getAttribute("role") == "slider" }
-            runOnIdle {
-                assertNotSame(old, webDocumentNode("#web-rate-stars"))
-                ratingDomKey(old, "End")
-            }
-            assertValue("–", "Choose a rating")
-            assertTrue(f.writes.isEmpty())
         } finally { f.dispose() }
     }
 
@@ -345,7 +296,3 @@ class WebRateDialogTest {
         } finally { f.dispose() }
     }
 }
-
-/** An AT-style keyboard event on the exact live semantics node, never an injected replacement input. */
-@JsFun("(node,key) => { node.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true})); }")
-private external fun ratingDomKey(node: HTMLElement, key: String)

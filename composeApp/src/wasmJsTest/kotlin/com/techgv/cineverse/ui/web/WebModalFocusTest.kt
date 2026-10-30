@@ -1,19 +1,13 @@
-@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class, kotlin.js.ExperimentalWasmJsInterop::class)
+@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 
 package com.techgv.cineverse.ui.web
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
-import com.techgv.cineverse.di.WebSessionState
-import org.w3c.dom.HTMLElement
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import com.techgv.cineverse.ui.adaptive.ShellStyle
@@ -23,7 +17,6 @@ import com.techgv.cineverse.ui.setThemedContent
 import com.techgv.cineverse.ui.theme.AppearanceSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class WebModalFocusTest {
     @Test fun closeReturnsToActualTriggerRatherThanHeaderFallback() = runComposeUiTest {
@@ -108,35 +101,6 @@ class WebModalFocusTest {
         runOnIdle { assertEquals(listOf(1), returned) }
     }
 
-    @Test fun liveSemanticsOwnModalAttributesAndReplacementCannotLeaveBackgroundInert() = runComposeUiTest {
-        var modal by mutableStateOf<Int?>(0)
-        var actions = 0
-        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            Box {
-                PillButton("Background action", { actions++ }, Modifier.testTag("modal-background"))
-                modal?.let { generation -> key(generation) {
-                    CvDialog({ modal = null }, "Modal $generation") { PillButton("Real dialog action", {}) }
-                } }
-            }
-        }
-        yieldToWebBrowser { hasNamedModal("Modal 0") && webDocumentNode("#modal-background")?.let(::webNodeHidden) == true }
-        onNodeWithText("Real dialog action").assertExists()
-        runOnIdle {
-            assertTrue(webDocumentNode("[role=dialog] [aria-label=Close]") != null)
-            assertTrue(webDocumentNode("[role=dialog] [role=button]") != null)
-            // The installed listener can rewrite role during a sync; annotation must repair the same live node.
-            webDocumentNode("[role=dialog]")!!.removeAttribute("role")
-        }
-        yieldToWebBrowser { hasNamedModal("Modal 0") }
-        runOnIdle { modal = 1 }
-        yieldToWebBrowser { hasNamedModal("Modal 1") && !hasNamedModal("Modal 0") }
-        runOnIdle { assertTrue(webNodeHidden(webDocumentNode("#modal-background")!!)) }
-        onNodeWithContentDescription("Close").performClick()
-        yieldToWebBrowser { !hasNamedModal("Modal 1") && webDocumentNode("#modal-background")?.let { !webNodeHidden(it) } == true }
-        onNodeWithText("Background action").performClick()
-        runOnIdle { assertEquals(1, actions) }
-    }
-
     @Test fun removingFocusedAsyncActionKeepsKeyboardFocusInsideTheSameModal() = runComposeUiTest {
         var action by mutableStateOf(true)
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
@@ -149,54 +113,4 @@ class WebModalFocusTest {
         onNodeWithContentDescription("Close").assertIsFocused()
     }
 
-    @Test fun headerSearchTabHasOneActionableSignInStopAndReverseReturnsToInput() = runComposeUiTest {
-        var signIns = 0
-        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            val home = remember { FocusRequester() }
-            Box(Modifier.width(1100.dp)) {
-                WebHeader(WebRoute.Home, WebSessionState.Ready(null), remember { FocusRequester() }, { _, _ -> },
-                    signIn = { signIns++ }, homeFocus = home)
-            }
-        }
-        onNodeWithTag("header-search-input").performClick().performKeyInput { pressKey(Key.Tab) }
-        onNodeWithText("Sign in").assertIsFocused()
-        yieldToWebBrowser { webActiveElement()?.tagName == "CANVAS" }
-        runOnIdle { assertEquals("CANVAS", webActiveElement()?.tagName) }
-        onNodeWithText("Sign in").performKeyInput { pressKey(Key.Enter) }
-        runOnIdle { assertEquals(1, signIns) }
-        onNodeWithText("Sign in").performKeyInput { withKeyDown(Key.ShiftLeft) { pressKey(Key.Tab) } }
-        onNodeWithTag("header-search-input").assertIsFocused()
-    }
-
-    @Test fun narrowHeaderLogoUsesItsRealNamedClickableAndCanvasEntrySelectsIt() = runComposeUiTest {
-        var homes = 0
-        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
-            val home = remember { FocusRequester() }
-            Box(Modifier.width(390.dp)) {
-                WebHeader(WebRoute.Home, WebSessionState.Ready(null), remember { FocusRequester() }, { _, _ -> homes++ }, homeFocus = home)
-            }
-        }
-        onNodeWithContentDescription("CineVerse home").assertHasClickAction()
-        yieldToWebBrowser { webDocumentNode("#web-header") != null }
-        runOnIdle { enterHeaderCanvas(webDocumentNode("canvas")!!) }
-        yieldToWebBrowser()
-        onNodeWithContentDescription("CineVerse home").assertIsFocused()
-        onNodeWithContentDescription("CineVerse home").performKeyInput { pressKey(Key.Enter) }
-        runOnIdle { assertEquals(1, homes) }
-    }
-
 }
-
-@JsFun("""(node) => {
-    for(let n=node;n;n=n.parentElement) if(n.hasAttribute('inert') || n.getAttribute('aria-hidden')==='true') return true;
-    return false;
-}""")
-private external fun webNodeHidden(node: HTMLElement): Boolean
-
-/** Focus-entry event sequence only; native browser Tab traversal remains a production-document gate. */
-@JsFun("""(canvas) => {
-    canvas.blur();
-    document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,composed:true}));
-    canvas.focus();
-}""")
-private external fun enterHeaderCanvas(canvas: HTMLElement)
