@@ -331,6 +331,14 @@ Gates at cebbab17 (pre-C3; C3 touches no tvApp/server and only HomeStateHolder i
 
 Remaining on candidate 82aed66c: Wasm compile + Karma 58 + fonts 21 + real page 7 + web regression groups; Android 17 classes/130 on owned phone AVD; iOS full (blocked: Xcode first-launch); TV instrumented (secondary user) + upgrade fixture; dist/secrets; integrated review; push identity.
 
+### Checkpoint 2026-10-30l — candidate 82aed66c web + Android GREEN
+
+Web on candidate: wasm compile OK; :shared:wasmJsBrowserTest 524/524 (51 classes, Home 12/12 inside); :composeApp:wasmJsBrowserTest FULL 396/396 in one fresh Karma config (C3 seven = 58/58; fonts 13+7; WebSearchTest 16/16 incl. the exact Search method); real page 7/7; wasmJsBrowserDistribution + checkWasmHasNoSecrets clean (18 files); no secrets.properties/local.properties tracked; secret grep = 1 hit which is the CI sentinel TMDB_READ_ACCESS_TOKEN=SENTINEL_TMDB_TOKEN_DO_NOT_SHIP (.github/workflows/shared-server-linux.yml:54, from 711d339d) — not a token; no JWT match. Gate wording to refine: exclude the sentinel value.
+
+Android on candidate: 17 classes / 130 tests, 130/130 pass, 0 skip, on owned emulator-5556 (per-class, fresh XML, exact accounting). AGP default adb 5037 server disclosed again (phone never addressed; killed after).
+
+Remaining: TV instrumented via secondary Android user on owned TV AVD + install-over-old-data fixture; iOS full suite (operator: sudo xcodebuild -runFirstLaunch); integrated independent review of 82aed66c; push identity check; promotion to master only after review and operator approval.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
