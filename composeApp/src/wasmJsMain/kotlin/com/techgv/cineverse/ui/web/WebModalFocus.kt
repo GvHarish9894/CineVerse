@@ -88,7 +88,8 @@ internal fun webHeaderFocusBridge(home: FocusRequester?, modalOpen: Boolean, sea
     DisposableEffect(home, group) {
         val installed = installHeaderFocusBridge { backwards ->
             if (!blocked) {
-                if (backwards) group.requestFocus(FocusDirection.Previous) else home?.requestFocus()
+                // shortcut: 2-D entry picks the right-most stop = last in LTR; revisit if RTL ships.
+                if (backwards) group.requestFocus(FocusDirection.Left) else home?.requestFocus()
             }
         }
         bridge = installed

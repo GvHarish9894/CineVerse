@@ -55,7 +55,6 @@ internal actual fun cvDialogWindow(
     val boundary = remember { WebDialogBoundary(closeFocus) }
     val restore by rememberUpdatedState(onRestoreFocus)
     val dismiss by rememberUpdatedState(onDismissRequest)
-    val group = remember { FocusRequester() }
     val focus = LocalFocusManager.current
     var hasFocus by remember { mutableStateOf(false) }
     // Async approval/account phases can remove the focused action without removing the modal.
@@ -78,7 +77,7 @@ internal actual fun cvDialogWindow(
             detectTapGestures { dismiss() }
         })
         CompositionLocalProvider(LocalWebDialogBoundary provides boundary) {
-            Box(Modifier.focusRequester(group).onFocusChanged { hasFocus = it.hasFocus }.focusProperties { onExit = { cancelFocusChange() } }.focusGroup()
+            Box(Modifier.onFocusChanged { hasFocus = it.hasFocus }.focusProperties { onExit = { cancelFocusChange() } }.focusGroup()
                 .onKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) false
                     else when (event.key) {
@@ -87,9 +86,8 @@ internal actual fun cvDialogWindow(
                             val direction = if (event.isShiftPressed) FocusDirection.Previous else FocusDirection.Next
                             if (!focus.moveFocus(direction)) {
                                 focus.clearFocus(force = true)
-                                closeFocus.requestFocus()
                                 // Close is the first stop; CMP rejects a 1D requestFocus(Previous), so walk to the last stop.
-                                if (event.isShiftPressed) while (focus.moveFocus(FocusDirection.Next)) Unit
+                                if (closeFocus.requestFocus() && event.isShiftPressed) while (focus.moveFocus(FocusDirection.Next)) Unit
                             }
                             focusWebCanvas()
                             true
