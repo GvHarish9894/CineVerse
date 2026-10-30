@@ -70,6 +70,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
     var pendingTrend by rememberSaveable { mutableStateOf(com.techgv.cineverse.data.tmdb.TrendingWindow.Week.name) }
     var scrollSearch by rememberSaveable { mutableIntStateOf(0) }
     var scrollExplore by rememberSaveable { mutableIntStateOf(0) }
+    var scrollLibrary by rememberSaveable { mutableIntStateOf(0) }
     val controllers = MobileTab.entries.map { tab -> key(tab) { rememberNavController() } }
     val controller = controllers[selected.ordinal]
     val entry by controller.currentBackStackEntryAsState()
@@ -102,13 +103,15 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
     }
     fun select(tab: MobileTab) {
         detailBinding.leave()
-        catalogBinding.leave()
+        // A root reselect stays on the same entry; revoking would reload Library and drop its scroll-to-top.
+        if (tab != selected || !atRoot) catalogBinding.leave()
         home.setActive(false)
         if (tab == selected) {
             if (!atRoot) controller.popBackStack<MobileTabRoot>(inclusive = false)
             else if (tab == MobileTab.Home) scrollHome++
             else if (tab == MobileTab.Explore) scrollExplore++
             else if (tab == MobileTab.Search) scrollSearch++
+            else if (tab == MobileTab.Library) scrollLibrary++
         }
         selected = tab
         // Re-select at the root does not change the active effect's key.
@@ -166,7 +169,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
     Box(Modifier.fillMaxSize()) {
         stateHolder.SaveableStateProvider(selected.name) {
             NavHost(controller, startDestination = MobileTabRoot) {
-                composable<MobileTabRoot> {
+                composable<MobileTabRoot> { root ->
                     if (selected == MobileTab.Home) MobileHomeScreen(graph, model, scrollHome, navigator,
                         onSearch = { select(MobileTab.Search) }, onProfile = { select(MobileTab.Profile) })
                     else if (selected == MobileTab.Explore) {
@@ -175,7 +178,9 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
                     } else if (selected == MobileTab.Search) {
                         val search = viewModel { MobileSearchViewModel(graph, createSavedStateHandle()) }
                         MobileSearchScreen(graph, search, scrollSearch, navigator, onInvalidBack = { select(MobileTab.Home) })
-                    } else MobilePlaceholder(selected.name, "Internal placeholder · This tab is not implemented in M1.")
+                    } else if (selected == MobileTab.Library) {
+                        MobileLibraryTabEntry(graph, root, catalogBinding, scrollLibrary, navigator) { select(MobileTab.Explore) }
+                    } else MobileProfileTabEntry(graph, root, catalogBinding)
                 }
                 composable<MobileDetailRoute> { route ->
                     MobileDetailRouteEntry(graph, route, detailBinding, navigator, ::back) { ref ->

@@ -14,7 +14,7 @@ internal interface MobileCatalogEntryModel {
     fun setActive(value: Boolean)
 }
 
-/** Entry visibility authority shared by Person and Season; ViewModel stores alone own final close. */
+/** Entry visibility authority shared by Person, Season and the Library/Profile tab roots; ViewModel stores alone own final close. */
 internal class MobileCatalogRootBinding {
     private var current: NavBackStackEntry? = null
     private var attachedEntry: NavBackStackEntry? = null

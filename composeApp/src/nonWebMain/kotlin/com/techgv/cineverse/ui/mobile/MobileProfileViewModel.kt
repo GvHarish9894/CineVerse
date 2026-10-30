@@ -62,7 +62,7 @@ internal class MobileProfileViewModel(
     private val auth: AuthRepository,
     private val saved: SavedStateHandle,
     parentScope: CoroutineScope? = null,
-) : ViewModel() {
+) : ViewModel(), MobileCatalogEntryModel {
     private val parent = parentScope ?: viewModelScope
     private val job = SupervisorJob(parent.coroutineContext[Job])
     private val scope = CoroutineScope(parent.coroutineContext + job)
@@ -131,7 +131,7 @@ internal class MobileProfileViewModel(
         reader.start()
     }
 
-    fun setActive(value: Boolean) {
+    override fun setActive(value: Boolean) {
         if (closed || active == value) return
         active = value
         val token = revoke()

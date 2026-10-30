@@ -102,6 +102,11 @@ class MobileApplication(
     internal fun season(seriesId: Int, number: Int, savedState: SavedStateHandle, parentScope: CoroutineScope? = null) =
         MobileSeasonViewModel(this, seriesId, number, savedState, settingsFlow, parentScope)
 
+    internal fun library(savedState: SavedStateHandle) = MobileLibraryViewModel(this, library, savedState)
+
+    /** The actual repositories, not the cached [settings] flow: Profile owns its own cold reads and edits. */
+    internal fun profile(savedState: SavedStateHandle) = MobileProfileViewModel(this, settingsRepository, auth, savedState)
+
     /** Trailer route: library actions and the import prompt both defer while it is current. */
     fun setPlayerActive(active: Boolean) {
         actions.setPlayerActive(active)

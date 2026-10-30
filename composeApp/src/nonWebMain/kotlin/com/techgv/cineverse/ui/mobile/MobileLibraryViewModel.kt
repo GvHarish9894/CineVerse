@@ -35,7 +35,7 @@ internal class MobileLibraryViewModel(
     private val repository: LibraryRepository,
     private val savedState: SavedStateHandle,
     scope: CoroutineScope? = null,
-) : ViewModel() {
+) : ViewModel(), MobileCatalogEntryModel {
     private val ownerScope = scope ?: viewModelScope
     private val saver = SavedStateHandleStateSaver(savedState)
     private val valid = validSavedState()
@@ -61,7 +61,7 @@ internal class MobileLibraryViewModel(
             .collect { if (storageRetry == null) reconcile() }
     }
 
-    fun setActive(value: Boolean) {
+    override fun setActive(value: Boolean) {
         if (closed || active == value) return
         active = value
         reconcile()
