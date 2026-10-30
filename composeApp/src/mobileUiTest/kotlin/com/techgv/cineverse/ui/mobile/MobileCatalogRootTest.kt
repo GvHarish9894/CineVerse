@@ -24,27 +24,27 @@ class MobileCatalogRootTest {
         runOnIdle {
             state.binding.attach(state.first, state.firstOwner)
             state.binding.currentChanged(state.first)
-            assertFalse(state.firstOwner.active)
+            assertFalse(state.firstOwner.isActive)
             state.binding.setResumed(true)
-            assertTrue(state.firstOwner.active)
+            assertTrue(state.firstOwner.isActive)
 
             state.binding.setResumed(false)
-            assertFalse(state.firstOwner.active)
+            assertFalse(state.firstOwner.isActive)
             state.binding.setResumed(true)
-            assertTrue(state.firstOwner.active)
+            assertTrue(state.firstOwner.isActive)
 
             state.binding.detach(state.first, state.firstOwner)
-            assertFalse(state.firstOwner.active)
+            assertFalse(state.firstOwner.isActive)
             assertFalse(state.firstOwner.closed, "Temporary tab removal must not close a retained entry owner")
             state.binding.attach(state.first, state.firstOwner)
-            assertTrue(state.firstOwner.active)
+            assertTrue(state.firstOwner.isActive)
 
             state.binding.currentChanged(state.second)
-            assertFalse(state.firstOwner.active, "Destination changes revoke the previous owner synchronously")
+            assertFalse(state.firstOwner.isActive, "Destination changes revoke the previous owner synchronously")
             state.binding.attach(state.second, state.secondOwner)
-            assertTrue(state.secondOwner.active)
+            assertTrue(state.secondOwner.isActive)
             state.binding.leave()
-            assertFalse(state.secondOwner.active)
+            assertFalse(state.secondOwner.isActive)
         }
     }
 
@@ -108,9 +108,9 @@ class MobileCatalogRootTest {
 }
 
 private class TrackingCatalogOwner : MobileCatalogEntryModel {
-    var active = false
+    var isActive = false
     var closed = false
-    override fun setActive(value: Boolean) { active = value }
+    override fun setActive(value: Boolean) { isActive = value }
 }
 
 private class CatalogBindingState(
