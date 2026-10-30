@@ -3,6 +3,8 @@ package com.techgv.cineverse.ui.mobile
 import androidx.lifecycle.SavedStateHandle
 import com.techgv.cineverse.data.auth.AuthRepository
 import com.techgv.cineverse.data.auth.AuthSession
+import com.techgv.cineverse.data.auth.NativeApprovalCoordinator
+import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
 import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.search.RecentQueryStore
@@ -41,6 +43,8 @@ class MobileApplication(
     private val library: LibraryRepository,
     val recentQueries: RecentQueryStore,
     appScope: CoroutineScope,
+    approval: NativeApprovalCoordinator,
+    importer: LibraryImporter,
 ) {
     private val scope = CoroutineScope(appScope.coroutineContext + SupervisorJob(appScope.coroutineContext[Job]))
     val settingsFlow = settingsRepository.settings
@@ -62,6 +66,7 @@ class MobileApplication(
         onOutcome = { mutableOutcomes.tryEmit(it) },
         onStorageFailure = { mutableStorageFailed.value = true; invalidateDetailContext() },
     )
+    val account = MobileAccountOwner(this, approval, importer, settingsRepository, auth, scope)
     private var settingsJob: Job? = null
     private var identityJob: Job? = null
 
@@ -92,6 +97,12 @@ class MobileApplication(
 
     internal fun season(seriesId: Int, number: Int, savedState: SavedStateHandle, parentScope: CoroutineScope? = null) =
         MobileSeasonViewModel(this, seriesId, number, savedState, settingsFlow, parentScope)
+
+    /** Trailer route: library actions and the import prompt both defer while it is current. */
+    fun setPlayerActive(active: Boolean) {
+        actions.setPlayerActive(active)
+        account.setPlayerActive(active)
+    }
 
     private fun invalidateDetailContext() {
         actions.closeRate()

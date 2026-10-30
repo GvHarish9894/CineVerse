@@ -26,7 +26,8 @@ internal class MobileFixture(scope: CoroutineScope) {
         override suspend fun write(session: AuthSession, ref: MediaRef, kind: LibraryKind, target: LibraryState) = error("No account writes in mobile fixtures")
     })
     val recent = com.techgv.cineverse.data.search.RecentQueryStore(store)
-    val graph = MobileApplication(catalog, generation, settings, auth, library, recent, scope)
+    val graph = MobileApplication(catalog, generation, settings, auth, library, recent, scope,
+        inertApproval(auth, scope), inertImporter(library))
 }
 
 internal class MobileSettingsStore : SettingsStore {

@@ -117,6 +117,8 @@ class MobileApplicationTest {
                 single<com.techgv.cineverse.data.auth.AuthRepository> { f.auth }
                 single { f.library }
                 single(com.techgv.cineverse.di.AppScope) { backgroundScope }
+                single { inertApproval(f.auth, backgroundScope) }
+                single { inertImporter(f.library) }
             }, mobileModule())
         }
         runCurrent()

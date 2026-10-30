@@ -155,6 +155,13 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
             mobileLibraryOutcomeMessage(outcome)?.let { toasts.show(ToastMessage(it)) }
         }
     }
+    LaunchedEffect(graph, resumed) {
+        if (resumed) graph.account.messages.collect { toasts.show(ToastMessage(it)) }
+    }
+    val accountDialog by graph.account.dialog.collectAsState(null)
+    val accountOpen = accountDialog != null
+    // An account dialog owns the screen: the rate sheet closes and stays suppressed until it is gone.
+    LaunchedEffect(accountOpen) { if (accountOpen) graph.actions.closeRate() }
     val stateHolder = rememberSaveableStateHolder()
     Box(Modifier.fillMaxSize()) {
         stateHolder.SaveableStateProvider(selected.name) {
@@ -194,7 +201,8 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
         }
         FloatingTabBar(CineVerseTabs, selected.ordinal, { select(MobileTab.entries[it]) })
         MobileRootBackHandler(atRoot && selected != MobileTab.Home) { select(MobileTab.Home) }
-        MobileRootRateHost(graph, detailBinding)
+        if (!accountOpen) MobileRootRateHost(graph, detailBinding)
+        MobileAccountDialogHost(graph.account, accountDialog)
     }
 }
 

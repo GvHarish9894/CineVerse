@@ -24,7 +24,7 @@ internal class MobileSeasonComponentFixture(scope: CoroutineScope) {
         override suspend fun write(session: com.techgv.cineverse.data.auth.AuthSession, ref: MediaRef, kind: LibraryKind, target: LibraryState): Unit = error("No writes")
     })
     val graph = MobileApplication(catalog, generation, settings, auth, library,
-        com.techgv.cineverse.data.search.RecentQueryStore(store), scope)
+        com.techgv.cineverse.data.search.RecentQueryStore(store), scope, inertApproval(auth, scope), inertImporter(library))
     val raw = MutableStateFlow<Result<Settings>>(Result.success(Settings()))
     var subscriptions = 0
     var activeSubscriptions = 0

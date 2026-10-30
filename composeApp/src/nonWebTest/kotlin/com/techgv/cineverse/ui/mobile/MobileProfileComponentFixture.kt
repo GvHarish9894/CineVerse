@@ -27,7 +27,8 @@ internal class MobileProfileComponentFixture(val scope: CoroutineScope) {
         override suspend fun states(session: AuthSession, ref: MediaRef): LibraryState = error("No Profile library reads")
         override suspend fun write(session: AuthSession, ref: MediaRef, kind: LibraryKind, target: LibraryState): Unit = error("No Profile account writes")
     })
-    val graph = MobileApplication(catalog, generation, settings, auth, library, RecentQueryStore(store), scope)
+    val graph = MobileApplication(catalog, generation, settings, auth, library, RecentQueryStore(store), scope,
+        inertApproval(auth, scope), inertImporter(library))
     fun model(saved: SavedStateHandle = SavedStateHandle()) = MobileProfileViewModel(graph, settings, auth, saved, scope)
     fun failReads() {
         store.fail = true

@@ -19,6 +19,7 @@ internal class NativeMobileStorageBoundaryFixture(scope: CoroutineScope) {
         CatalogRepository(dependencies.api, dependencies.generation, settings::current),
         dependencies.generation, settings, dependencies.auth, dependencies.library,
         RecentQueryStore(DataStoreSettingsStore(native)), scope,
+        inertApproval(dependencies.auth, scope), inertImporter(dependencies.library),
     )
 }
 

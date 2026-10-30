@@ -426,7 +426,7 @@ class MobileLibraryViewModelTest {
                 }
             }
             val graph = MobileApplication(f.base.catalog, f.base.generation, f.base.settings, auth,
-                f.repository, f.base.recent, backgroundScope)
+                f.repository, f.base.recent, backgroundScope, inertApproval(auth, backgroundScope), inertImporter(f.repository))
             f.identity(initial); runCurrent()
             val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
             val model = MobileLibraryViewModel(graph, f.repository, SavedStateHandle(), scope)
@@ -506,7 +506,7 @@ class MobileLibraryViewModelTest {
                 }
             }
             val graph = MobileApplication(f.base.catalog, f.base.generation, f.base.settings, auth,
-                f.repository, f.base.recent, backgroundScope)
+                f.repository, f.base.recent, backgroundScope, inertApproval(auth, backgroundScope), inertImporter(f.repository))
             f.identity(account); runCurrent()
             val scope = CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler))
             val model = MobileLibraryViewModel(graph, f.repository, SavedStateHandle(), scope)
@@ -641,7 +641,7 @@ class MobileLibraryViewModelTest {
             }
         }
         val graph = MobileApplication(f.base.catalog, f.base.generation, f.base.settings, auth,
-            f.repository, f.base.recent, backgroundScope)
+            f.repository, f.base.recent, backgroundScope, inertApproval(auth, backgroundScope), inertImporter(f.repository))
         f.identity(null)
         val model = MobileLibraryViewModel(graph, f.repository, SavedStateHandle(), backgroundScope)
         model.setActive(true); runCurrent()

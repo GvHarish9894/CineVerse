@@ -29,7 +29,7 @@ internal class MobileDetailComponentFixture(scope: CoroutineScope) {
         }
     })
     val graph = MobileApplication(catalog, generation, settings, auth, library,
-        com.techgv.cineverse.data.search.RecentQueryStore(settingsStore), scope)
+        com.techgv.cineverse.data.search.RecentQueryStore(settingsStore), scope, inertApproval(auth, scope), inertImporter(library))
     val raw = MutableStateFlow<Result<Settings>>(Result.success(Settings()))
     var settingsSubscriptions = 0
     val rawSettings: Flow<Settings> = flow {

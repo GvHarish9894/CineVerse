@@ -15,6 +15,8 @@ fun nativeMobileApplication(): MobileApplication = KoinPlatform.getKoin().get()
 fun nativeMobileExternalActions(): MobileExternalActions = KoinPlatform.getKoin().get()
 
 fun mobileModule(): Module = module {
-    single(createdAtStart = true) { MobileApplication(get(), get(), get(), get(), get(), RecentQueryStore(get()), get(AppScope)) } onClose { it?.close() }
+    single(createdAtStart = true) {
+        MobileApplication(get(), get(), get(), get(), get(), RecentQueryStore(get()), get(AppScope), get(), get())
+    } onClose { it?.close() }
     single { mobileExternalActions() }
 }

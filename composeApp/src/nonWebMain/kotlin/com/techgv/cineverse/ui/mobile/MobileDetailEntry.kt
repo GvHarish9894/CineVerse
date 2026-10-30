@@ -76,7 +76,7 @@ internal class MobileDetailRootBinding(private val graph: MobileApplication) {
             revoke(token)
             if (operation != token) return
         }
-        graph.actions.setPlayerActive(entry?.destination?.hasRoute<MobileTrailerRoute>() == true)
+        graph.setPlayerActive(entry?.destination?.hasRoute<MobileTrailerRoute>() == true)
         if (operation == token) reconcile(token)
     }
 
@@ -187,7 +187,7 @@ internal class MobileDetailRootBinding(private val graph: MobileApplication) {
         val token = ++operation
         current = null
         revoke(token)
-        if (operation == token) graph.actions.setPlayerActive(false)
+        if (operation == token) graph.setPlayerActive(false)
     }
 }
 

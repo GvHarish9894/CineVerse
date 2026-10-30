@@ -33,7 +33,8 @@ internal class MobileDetailRootFixture(scope: CoroutineScope) {
             accountWrites += session to ref
         }
     })
-    val graph = MobileApplication(catalog, generation, settings, auth, library, RecentQueryStore(store), scope)
+    val graph = MobileApplication(catalog, generation, settings, auth, library, RecentQueryStore(store), scope,
+        inertApproval(auth, scope), inertImporter(library))
 }
 
 internal class MobileDetailRootAuth : AuthRepository {

@@ -25,7 +25,8 @@ internal class MobilePersonComponentFixture(val scope: CoroutineScope) {
         override suspend fun states(session: com.techgv.cineverse.data.auth.AuthSession, ref: MediaRef): LibraryState = error("No account reads")
         override suspend fun write(session: com.techgv.cineverse.data.auth.AuthSession, ref: MediaRef, kind: LibraryKind, target: LibraryState): Unit = error("No account writes")
     })
-    val graph = MobileApplication(catalog, generation, settings, auth, library, RecentQueryStore(store), scope)
+    val graph = MobileApplication(catalog, generation, settings, auth, library, RecentQueryStore(store), scope,
+        inertApproval(auth, scope), inertImporter(library))
     val raw = MutableStateFlow<Result<Settings>>(Result.success(Settings()))
     var subscriptions = 0
     var readers = 0
