@@ -251,6 +251,14 @@ C5: host56/56 at68e50fd retained. Native compile RED twice on test-only JVM clas
 
 C3 harness ee9e288 review7fa2a3a4 BLOCK: P0-1 doFirst captures script vals/outer task → configuration-cache failure (fix: names val + configuration-time args); P0-2 DOM.focus(body) not focusable (fix: blur + assert activeElement===body); P1-1 Node22 pin affects all Wasm tasks → decision: remove pin, CJS asserts Node>=22; P1-2 disposed-slider assert only valuenow/valuetext null per original contract; P2 font-finished check inside poll loop, Close focus via AX wait, SIGKILL fallback, drop redundant srcDir. Apply then first run `:composeApp:webAccessibilityRealPageTest` under lease.
 
+### Checkpoint 2026-10-30 (parallel lanes, opus-5-5)
+
+C5: Person/Season at c556683 compile green (5/5). Chunk 3 trailer/open/share adapters 71386ce review CLEAR (P2 notes only). Next: host tests + native5 compile at 71386ce, then chunk 4 (account owner/dialogs) then chunk 5 (Library/Profile tabs). Worktree slots full (6/6); chunk 4 source waits for C5 execution lease.
+
+C3: build script compiles at 58fdf9fc but KGP creates no webpack task for the custom-compilation binary; staging empty. Replace webpack dependence: stage the harness link task output (.mjs/.wasm/uninstantiated) + skiko runtime from the Kotlin npm dir + processed composeResources fonts; index.html imports the module directly. Build-config/CJS/index.html only.
+
+C2 iOS: helper fix a7ce668 green (steps 1-2 pass). Step 3 at 21ad9c17 now fails post-restore at line 119: Home scroll not visible after emulated restore. Runtime is SkikoComposeUiTest in-memory scene, not UIKit window — iOS UI results are component-level, not "hosted window" acceptance. Diagnose: VM/data recreated under disposed LocalViewModelStoreOwner (fixture) vs LazyListState not saved (product). Fix smallest, test-only unless product defect proven.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
