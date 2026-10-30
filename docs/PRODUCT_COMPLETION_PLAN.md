@@ -235,6 +235,14 @@ C3 public API guard: CMP1.11.1 ComposeViewport returnsUnit/discards internal Com
 
 C5 Person/Season integration committed68e50fd on topProfile6079ed4,13files/new MobileCatalogEntry+MobileCatalogRootTest, placeholders removed, static-only; independent review before compile. C2 hosted-iOS tests commit9f2e5078 exact3paths portable saveable helper+state waits, static-only; independent review before execution. Run reviewers in parallel; execution lease remainsfree until clear.
 
+### Source reviews CLEAR / next parallel gates
+
+C5 Person/Season68e50fd independently CLEAR: correct entry ownership/factories/lifecycle/revocation/Season new owner/tests. Next soleexecution host56 + native5 compile only; defer Android68 runtime until more root integration to avoid waste.
+
+C2 iOS9f2e507 independently CLEAR: portable saveable registry and state waits. Hosted iOS focused execution after current C5 lease.
+
+C3 real-page plan approved: custom `accessibilityHarness` Wasm compilation associated withwasmJsMain, dedicated test sources/resources, real ComposeViewport/production components/bridge, Node22 CDP runner one fresh browser context/page per six cases, real assets/AX/DOM, page close disposal. No production files. First add runner+harness/build tasks while invalid runCompose tests remain; execute six real-page cases; only after green remove/replace six invalid methods and normal compile. Source implementation parallel C5 execution.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
