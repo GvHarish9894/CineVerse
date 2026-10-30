@@ -280,8 +280,11 @@ async function ratingCase(page, origin) {
     assert.deepEqual({min: slider.min, max: slider.max, now: slider.now, text: slider.text, tabindex: slider.tabindex}, {min: '0', max: '10', now: '0', text: 'Not chosen', tabindex: '-1'});
     await evaluate(page, `(() => { const n=(${deepFindSource})('#web-rate-stars'); for(let i=0;i<2;i++)n.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true})); })()`);
     await until(async () => (await selectorState(page, '#web-rate-stars'))?.now === '1', 'rating value 1');
-    const names = axNodes(await axTree(page)).map(node => node.name?.value);
-    assert.ok(names.includes('1.0 / 10')); assert.ok(names.includes('Poor'));
+    // Compose web debounces its a11y DOM sync (100 ms), so visible text lands after the bridge's synchronous valuenow.
+    await until(async () => {
+        const names = axNodes(await axTree(page)).map(node => node.name?.value);
+        return names.includes('1.0 / 10') && names.includes('Poor');
+    }, 'rating AX text 1.0 / 10 and Poor');
     await evaluate(page, `(${deepFindSource})('#web-rate-stars').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))`);
     await until(async () => !(await objectFor(page, '#web-rate-stars')), 'rating submit close');
     const state = await until(async () => {
