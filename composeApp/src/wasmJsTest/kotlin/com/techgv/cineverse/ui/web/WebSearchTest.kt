@@ -14,11 +14,16 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontListFontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.techgv.cineverse.data.storage.BrowserStorageFailure
 import com.techgv.cineverse.data.tmdb.SearchFacet
 import com.techgv.cineverse.presentation.*
+import com.techgv.cineverse.ui.theme.CvFonts
+import com.techgv.cineverse.ui.theme.LocalCvFontOverride
+import com.techgv.cineverse.ui.theme.ProvideWebBundledFonts
+import com.techgv.cineverse.ui.theme.loadWebBundledFonts
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
 import kotlin.test.*
@@ -93,12 +98,23 @@ class WebSearchTest {
     @Test fun browserUrlTypingCaretReloadAndBackForwardUseSameEntryReplacementContract() = runComposeUiTest {
         val snapshot = captureSearchHistory()
         val f = ready(true)
-        var fonts: WebSearchFonts? = null
+        var mapping: WebSearchFonts? = null
+        var selectedFonts: CvFonts? = null
+        var fontLoads = 0
         var showing by mutableStateOf(false)
         val history = BrowserHistory()
-        setContent { if (showing) { fonts?.Load(); WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history) } }
+        setContent {
+            if (showing) ProvideWebBundledFonts(load = {
+                fontLoads++
+                loadWebBundledFonts()
+            }) {
+                val fonts = LocalCvFontOverride.current
+                SideEffect { selectedFonts = fonts }
+                WebApp(f.runtime, f.catalog, f.generation, f.settings, f.recent, history)
+            }
+        }
         try {
-            fonts = WebSearchFonts()
+            mapping = WebSearchFonts()
             installSearchHistory()
             f.runtime.start()
             runOnIdle { showing = true }
@@ -124,14 +140,28 @@ class WebSearchTest {
             waitUntil { history.url == "/library?tab=watchlist" }
             onNodeWithTag("search-input").assertDoesNotExist()
             assertEquals(0, f.edits)
-            fonts.verifyLoaded { mainClock.advanceTimeByFrame(); waitForIdle() }
+            withContext(Dispatchers.Default) {
+                withTimeout(5000) {
+                    while (selectedFonts?.display !is FontListFontFamily || selectedFonts?.body !is FontListFontFamily) {
+                        delay(10)
+                        mainClock.advanceTimeByFrame()
+                        waitForIdle()
+                    }
+                }
+            }
             waitForIdle()
-            fonts.assertLoaded()
+            val loaded = assertNotNull(selectedFonts)
+            val displayWeights = (loaded.display as FontListFontFamily).fonts.map { it.weight.weight }
+            val bodyWeights = (loaded.body as FontListFontFamily).fonts.map { it.weight.weight }
+            assertEquals(listOf(500, 700, 800), displayWeights)
+            assertEquals(listOf(400, 500, 600, 700), bodyWeights)
+            assertEquals(7, displayWeights.size + bodyWeights.size)
+            assertEquals(1, fontLoads)
         } finally {
             runOnIdle { showing = false }
             waitForIdle()
             f.close()
-            try { fonts?.close() } finally { restoreSearchHistory(snapshot) }
+            try { mapping?.close() } finally { restoreSearchHistory(snapshot) }
         }
     }
 

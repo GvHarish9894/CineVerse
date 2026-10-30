@@ -41,6 +41,9 @@ class CvFonts(val display: FontFamily, val body: FontFamily)
 
 val LocalCvFonts = staticCompositionLocalOf { CvFonts(FontFamily.Default, FontFamily.Default) }
 
+/** Null keeps bundled resource loading unchanged; web supplies safe fonts before any asset reads. */
+internal val LocalCvFontOverride = staticCompositionLocalOf<CvFonts?> { null }
+
 /** OS reduce-motion OR the app's Reduce motion setting: animations become crossfades/snaps (kits). */
 val LocalReduceMotion = staticCompositionLocalOf { false }
 
@@ -136,7 +139,7 @@ private fun cineVerseTypography(shell: ShellStyle, fonts: CvFonts): Typography {
 /** Dark-only Material 3 theme from the kits' tokens; provides the shell style, fonts, motion, glow and haptics locals. */
 @Composable
 fun CineVerseTheme(shell: ShellStyle, settings: AppearanceSettings = AppearanceSettings(), content: @Composable () -> Unit) {
-    val fonts = CvFonts(
+    val fonts = LocalCvFontOverride.current ?: CvFonts(
         display = FontFamily(
             Font(Res.font.bricolage_grotesque_medium, FontWeight.Medium),
             Font(Res.font.bricolage_grotesque_bold, FontWeight.Bold),
