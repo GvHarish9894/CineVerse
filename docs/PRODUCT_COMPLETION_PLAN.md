@@ -267,6 +267,14 @@ C3 harness: staging fixed (e67937bc) via binary linkSyncTask + js-joda import ma
 
 C2 iOS: 8/11 green at aa36e6d4 (fixture fixes only: VM-store hoist, Today chip scroll, scroll-by-key so See all is not under FloatingTabBar). Step 9 home-settings-recovery Retry likely under the tab bar too; diagnose/fix test-only, run 9-11. iOS UI runtime = in-memory SkikoComposeUiTest scene (component-level evidence).
 
+### Checkpoint 2026-10-30c
+
+iOS: FULL SUITE 88/88 at C2 630c0765 (fixture-only fixes: VM-store hoist, scroll-by-key under FloatingTabBar x3, duplicate-name page-2 selector). All five historical iOS failures closed; no production change needed. Runtime = SkikoComposeUiTest in-memory scene (component-level evidence; not a UIWindow).
+
+C3 header: 83ceb1d5 aria-label copy WORKS — focused textbox now named 'Search movies, TV and people' (P1 closed in source+real page). Remaining: after Tab, Compose focus ring is on Sign in and canvas is activeElement, but the AX mirror node is not reported focused. Decision: harness over-translated the Kotlin contract (which asserted Compose focus + canvas active); make the harness prove it functionally (Enter -> signIns==1, canvas active, Shift+Tab back to the named textbox, one actionable Sign in). Record P2 product finding: AT focus does not follow Compose keyboard focus on the canvas (framework-level; candidate fix aria-activedescendant/aria-owns on the canvas). Not blocking.
+
+C5 chunk 4 267a4e88 review CLEAR with P1 race: owner on Default while UI calls import holder on Main. Fix: MobileApplication accountContext param, MobileModule passes Dispatchers.Main.immediate, MobileApplicationTest setMain/resetMain. Then host + native5.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
