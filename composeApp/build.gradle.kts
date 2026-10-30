@@ -57,8 +57,9 @@ kotlin {
             }
         }
         binaries.executable()
+        val wasmMain = compilations.getByName("main")
         val accessibilityHarness = compilations.create("accessibilityHarness") {
-            associateWith(compilations.getByName("main"))
+            associateWith(wasmMain)
         }
         binaries.executable(accessibilityHarness)
     }
