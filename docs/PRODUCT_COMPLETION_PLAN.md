@@ -295,6 +295,14 @@ ANDROID RUNTIME at C5 154d1778: 16 classes, 128/128 executed, 122 pass, 6 fail, 
 
 iOS 88/88 was at C2 head (no C5 integration); rerun hosted iOS on the integrated candidate later.
 
+### Checkpoint 2026-10-30g
+
+ANDROID: at C5 903dc927 the 4 red classes pass (CatalogRoot 3/3, DetailScreen 16/16, Explore 7/7, Search 8/8); host 184/184. All six failures were test-side: ambiguous 'Season 7' (heading vs chip -> tag), favourite fixture fed a synthetic reader (-> real repo reader), three stale 'Internal placeholder' expectations (-> real Detail by exact id; TV detail fixture response added), page-2 same-name person (first match), and Search caret: ASSERTION CHANGED (3,7)->(7,7) because Compose CoreTextField deselects on blur (collapses to selection end); still proves retention vs reset(16). Full 128 at one head still owed: 12 classes last ran at 154d1778 (fixture delta is additive). Needs independent review of a527b81f/903dc927.
+
+C3: a8bec00c review CLEAR. Pre-existing P1 WebModalFocus.kt:91 `group.requestFocus(Previous)` throws for >1 child -> tests-first harness case header-reverse-entry, fix via FocusDirection.Left (2-D entry picks right-most = last in LTR; shortcut comment, RTL revisit), expect 7/7; then delete six invalid runComposeUiTest methods + unused helpers; then withheld gates (Karma 7 classes = 58, Home 12, native 5).
+
+iOS: rerun hosted full suite on integrated C5 head (last 88/88 was pre-integration C2 head).
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
