@@ -104,7 +104,11 @@ class MobileNavigationTest {
     @Test fun homeScrollAndTrendRestoreAcrossTabsAndSaveRestore() = runComposeUiTest {
         val restoration = PortableStateRestoration()
         val savedHome = SavedStateHandle()
-        setContent { restoration.Content { MobileTestRoot(savedHome) } }
+        setContent {
+            // A real save/restore never clears the ViewModelStore; clearing it makes NavHost drop the Home entry's saved scroll.
+            val owner = rememberMobileTestOwner()
+            restoration.Content { MobileTestRoot(savedHome, owner = owner) }
+        }
         onNodeWithTag("mobile-home").performScrollToNode(hasText("Today"))
         onNodeWithText("Today").performClick()
         onNodeWithTag("mobile-home").performScrollToNode(hasText("Now playing in theatres"))
@@ -138,17 +142,17 @@ class MobileNavigationTest {
 @Composable
 internal fun MobileTestRoot(
     savedHome: SavedStateHandle = remember { SavedStateHandle() },
+    owner: MobileTestOwner = rememberMobileTestOwner(),
     haptics: Haptics = Haptics.None,
     configureFixture: (MobileFixture) -> Unit = {},
     onReady: (MobileHomeViewModel, MobileFixture) -> Unit = { _, _ -> },
 ) {
     val scope = rememberCoroutineScope()
     val fixture = remember { MobileFixture(scope).also(configureFixture) }
-    val owner = remember { MobileTestOwner() }
     val model = remember { MobileHomeViewModel(fixture.graph, savedHome, scope) }
     SideEffect { onReady(model, fixture) }
     LaunchedEffect(Unit) { fixture.auth.emissions.emit(null) }
-    DisposableEffect(Unit) { onDispose { fixture.graph.close(); owner.viewModelStore.clear() } }
+    DisposableEffect(Unit) { onDispose { fixture.graph.close() } }
     CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalViewModelStoreOwner provides owner) {
         CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = true)) {
             CompositionLocalProvider(LocalHaptics provides haptics) {
@@ -158,7 +162,14 @@ internal fun MobileTestRoot(
     }
 }
 
-private class MobileTestOwner : LifecycleOwner, ViewModelStoreOwner {
+@Composable
+internal fun rememberMobileTestOwner(): MobileTestOwner {
+    val owner = remember { MobileTestOwner() }
+    DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
+    return owner
+}
+
+internal class MobileTestOwner : LifecycleOwner, ViewModelStoreOwner {
     override val lifecycle = LifecycleRegistry(this).apply { currentState = Lifecycle.State.RESUMED }
     override val viewModelStore = ViewModelStore()
 }
