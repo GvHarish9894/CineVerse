@@ -316,6 +316,11 @@ async function disposedRatingCase(page, origin) {
 }
 
 async function trailerCase(page, origin) {
+    await until(async () => (await bridge(page))?.composed, 'trailer harness composition', 15000);
+    // A real user clicks into the page before opening a trailer; the empty canvas click gives the canvas DOM focus.
+    await click(page, 'canvas');
+    await until(() => canvasActive(page), 'canvas activeElement after seed click');
+    await dispatch(page, 'open-trailer');
     await ready(page, origin, async () => !!(await objectFor(page, 'iframe[data-cv-trailer]')) && (await selectorState(page, '[role="dialog"]'))?.label === 'Official Trailer');
     const frame = await selectorState(page, 'iframe[data-cv-trailer]');
     const before = await selectorState(page, '[data-cv-trailer-before]');

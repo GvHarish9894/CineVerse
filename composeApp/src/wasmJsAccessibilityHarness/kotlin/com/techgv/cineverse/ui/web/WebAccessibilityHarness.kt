@@ -43,7 +43,7 @@ private class HarnessState(val case: String) {
     var homeNavigations = 0
     var modalGeneration by mutableStateOf(if (case == MODAL) 0 else null)
     var ratePrompt: String? = null
-    var trailerOpen by mutableStateOf(case == TRAILER)
+    var trailerOpen by mutableStateOf(false)
     val rate = WebAccessibilityRateFixture()
 
     fun dispatch(command: String, argument: String): String {
@@ -57,6 +57,7 @@ private class HarnessState(val case: String) {
                 },
             )
             "close-rate" -> rate.actions.closeRate()
+            "open-trailer" -> trailerOpen = true
             else -> error("Unknown accessibility harness command '$command'")
         }
         return snapshot()
