@@ -287,6 +287,14 @@ NATIVE ROOT INTEGRATION SOURCE-COMPLETE at C5 154d1778: chunks 1-5 reviewed CLEA
 
 C3 real page 5/6 at a5e1b438. Case 6 reverse: Shift modifier DOES reach Compose (probe). Observed: Shift+Tab from Close keeps focus on Close. Root cause (parent): cluster-3 fix `if(!moveFocus(dir)){clearFocus; closeFocus.requestFocus()}` wraps BOTH directions to Close — regression vs the Kotlin contract (WebTrailerDocumentTest L48-49: Close -> Shift+Tab -> Teaser; Teaser -> Shift+Tab -> iframe). Backward wrap must enter the dialog from its LAST stop, without the illegal 1D `requestFocus(Previous)`. Fix tests-first (harness already encodes it), smallest production change in DialogProperties.wasmJs.kt, verify Karma trap tests + real page.
 
+### Checkpoint 2026-10-30f
+
+WEB REAL-PAGE HARNESS 6/6 at C3 a8bec00c. Production fixes found by real page: (1) header focused IME input unnamed -> aria-label copy (83ceb1d5); (2) dialog backward wrap went to Close (my cluster-3 regression) -> now wraps to LAST stop via Close + moveFocus(Next) until false (a8bec00c); (3) WebTrailerDialog closeFocus was never attached to Close -> attached (a8bec00c). Karma: Trailer 9/9, Approval 8/8, Account 7/7. Open: independent review of a8bec00c; latent WebModalFocus.kt:91 `group.requestFocus(Previous)` throws for >1 child (reverse entry into canvas) -> tests-first in harness, fix same pattern; remove the six invalid runComposeUiTest methods (+unused helpers) now that real-page equivalents pass; then withheld gates: seven classes (58 after removal) + Home 12 + native 5.
+
+ANDROID RUNTIME at C5 154d1778: 16 classes, 128/128 executed, 122 pass, 6 fail, 0 skip. Failures: CatalogRoot season 'Season 7' x2 nodes; DetailScreen favourite state; Explore/Search x3 expect 'Internal placeholder · ...' (stale pre-integration expectations); Search editor selection (7,7) vs (3,7) after tab nav. Triage each (test-only unless product proven), rerun only failing classes. AGP started a default adb server on 5037 that could see the phone; selection stayed pinned to emulator-5556, phone never queried — disclosed.
+
+iOS 88/88 was at C2 head (no C5 integration); rerun hosted iOS on the integrated candidate later.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
