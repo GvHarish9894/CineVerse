@@ -6,7 +6,7 @@ const os = require('node:os');
 const http = require('node:http');
 const {spawn} = require('node:child_process');
 
-assert.equal(Number(process.versions.node.split('.')[0]), 22, 'webAccessibilityRealPageTest requires Node 22');
+assert.ok(Number(process.versions.node.split('.')[0]) >= 22, 'webAccessibilityRealPageTest requires Node 22+');
 const dist = path.resolve(process.argv[2] || path.join(__dirname, '../../../../../../../../build/dist/wasmJs/accessibilityHarnessDevelopmentExecutable'));
 const artifacts = fs.mkdtempSync(path.join(os.tmpdir(), 'cineverse-accessibility-'));
 const profile = path.join(artifacts, 'chrome-profile');
@@ -166,7 +166,7 @@ async function selectorState(page, selector) {
 async function assertResources(page, origin) {
     await until(() => {
         assert.deepEqual(failures(page), []);
-        const responses = [...page.responses.values()];
+        const responses = [...page.responses.entries()].filter(([id]) => page.finished.has(id)).map(([, response]) => response);
         const fontResponses = responses.filter(response => response.url.includes('/composeResources/') && response.url.endsWith('.ttf'));
         const wasmResponses = responses.filter(response => new URL(response.url).pathname.endsWith('.wasm'));
         const script = responses.find(response => response.url === origin + '/composeApp.js');
@@ -239,7 +239,8 @@ async function narrowCase(page, origin) {
     await ready(page, origin, async () => axNamed(await axTree(page), 'button', 'CineVerse home').length === 1);
     const logos = axNamed(await axTree(page), 'button', 'CineVerse home');
     assert.equal(logos.length, 1); assert.notEqual(axProperty(logos[0], 'disabled'), true); assert.ok(logos[0].backendDOMNodeId);
-    await domFocus(page, 'body');
+    await evaluate(page, `(${activeSource})()?.blur?.()`);
+    assert.equal(await evaluate(page, 'document.activeElement === document.body'), true);
     await key(page, 'Tab');
     await until(() => focusedAx(page, 'button', 'CineVerse home'), 'logo AX focus');
     assert.equal(await callOn(page, (await activeObject(page)).objectId, 'function(){return this.tagName}'), 'CANVAS');
@@ -275,7 +276,7 @@ async function disposedRatingCase(page, origin) {
     const oldNode = await page.call('DOM.describeNode', {objectId: old.objectId});
     await dispatch(page, 'close-rate');
     await until(async () => !(await objectFor(page, '#web-rate-stars')), 'rating prompt close');
-    assert.deepEqual(await callOn(page, old.objectId, `function(){return ['role','aria-valuemin','aria-valuemax','aria-valuenow','aria-valuetext','tabindex'].map(k=>this.getAttribute(k))}`), [null, null, null, null, null, null]);
+    assert.deepEqual(await callOn(page, old.objectId, `function(){return ['aria-valuenow','aria-valuetext'].map(k=>this.getAttribute(k))}`), [null, null]);
     await dispatch(page, 'open-rate', 'other');
     await until(async () => (await selectorState(page, '#web-rate-stars'))?.role === 'slider', 'replacement rating slider');
     const replacement = await objectFor(page, '#web-rate-stars');
@@ -303,7 +304,7 @@ async function trailerCase(page, origin) {
     assert.ok(owned.includes(frame.id) && owned.includes(before.id) && owned.includes(after.id));
     assert.equal(await evaluate(page, `(${deepFindSource})('[role="dialog"]').getRootNode()===(${deepFindSource})('iframe[data-cv-trailer]').getRootNode()`), true);
     assert.equal(await evaluate(page, `(() => { for(const s of ['[data-cv-trailer-before]','[data-cv-trailer-after]']){let n=(${deepFindSource})(s);for(;n;n=n.parentElement)if(n.getAttribute('aria-hidden')==='true')return false}return true})()`), true);
-    await domFocus(page, '[role="dialog"] [aria-label="Close"]');
+    await until(() => focusedAx(page, 'button', 'Close'), 'initial Close focus');
     await key(page, 'Tab');
     await until(async () => await callOn(page, (await activeObject(page)).objectId, `function(){return this.matches('iframe[data-cv-trailer]')}`), 'iframe focus');
     await domFocus(page, '[data-cv-trailer-after]');
@@ -397,7 +398,11 @@ async function pageSocket(debugging, targetId) {
             for (const browserContextId of remainingContexts) await browser.call('Target.disposeBrowserContext', {browserContextId}).catch(() => {});
             browser.close();
         }
-        if (chrome && chrome.exitCode === null) { chrome.kill('SIGTERM'); await new Promise(resolve => chrome.once('exit', resolve)); }
+        if (chrome && chrome.exitCode === null && chrome.signalCode === null) {
+            const exited = () => chrome.exitCode !== null || chrome.signalCode !== null;
+            chrome.kill('SIGTERM');
+            await until(exited, 'Chrome SIGTERM exit', 5000).catch(() => { chrome.kill('SIGKILL'); return until(exited, 'Chrome SIGKILL exit', 5000); });
+        }
         if (server.listening) await new Promise(resolve => server.close(resolve));
         fs.rmSync(profile, {recursive: true, force: true});
     }

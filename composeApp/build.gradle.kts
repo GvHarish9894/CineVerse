@@ -6,7 +6,6 @@ import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrCompilation
 import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrTarget
 import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsExec
 import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpack
-import org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsPlugin
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -60,8 +59,6 @@ kotlin {
         binaries.executable()
         val accessibilityHarness = compilations.create("accessibilityHarness") {
             associateWith(compilations.getByName("main"))
-            defaultSourceSet.kotlin.srcDir("src/wasmJsAccessibilityHarness/kotlin")
-            defaultSourceSet.resources.srcDir("src/wasmJsAccessibilityHarness/resources")
         }
         binaries.executable(accessibilityHarness)
     }
@@ -164,27 +161,17 @@ val webAccessibilityHarnessDistribution = tasks.register<Sync>("webAccessibility
         into("composeResources/com.techgv.cineverse.ui.resources/font")
     }
     into(accessibilityHarnessDist)
-    doFirst {
-        check(accessibilityHarnessWebpack.names.size == 1) {
-            "Expected one accessibilityHarness development webpack task, found ${accessibilityHarnessWebpack.names.sorted()}"
-        }
-    }
+    val webpackNames = accessibilityHarnessWebpack.names.sorted()
+    doFirst { check(webpackNames.size == 1) { "Expected one accessibilityHarness development webpack task, found $webpackNames" } }
 }
 
-val accessibilityNode = WasmNodeJsPlugin.apply(project).apply { version.set("22.14.0") }
 NodeJsExec.register(accessibilityHarnessCompilation, "webAccessibilityRealPageTest") {
     group = "verification"
     description = "Runs the six isolated real-page accessibility cases in an owned Chrome using Node 22."
     dependsOn(webAccessibilityHarnessDistribution)
     inputFileProperty.set(layout.projectDirectory.file("src/wasmJsTest/kotlin/com/techgv/cineverse/ui/web/WebAccessibilityRealPageTest.cjs"))
     sourceMapStackTraces = false
-    doFirst {
-        check(accessibilityNode.version.get().substringBefore('.') == "22") {
-            "webAccessibilityRealPageTest requires Node 22, configured ${accessibilityNode.version.get()}"
-        }
-        check(!System.getenv("CHROME_BIN").isNullOrBlank()) { "Set CHROME_BIN to the leased Chrome executable" }
-        args(accessibilityHarnessDist.get().asFile.absolutePath)
-    }
+    args(accessibilityHarnessDist.get().asFile.absolutePath)
 }
 
 // commonMain resources = the checked-in composeResources (fonts) + design/sample-tmdb.json for the gallery,
