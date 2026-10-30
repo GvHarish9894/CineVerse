@@ -339,6 +339,14 @@ Android on candidate: 17 classes / 130 tests, 130/130 pass, 0 skip, on owned emu
 
 Remaining: TV instrumented via secondary Android user on owned TV AVD + install-over-old-data fixture; iOS full suite (operator: sudo xcodebuild -runFirstLaunch); integrated independent review of 82aed66c; push identity check; promotion to master only after review and operator approval.
 
+### Checkpoint 2026-10-30m — TV green; integrated review P1-1 fixed
+
+TV on candidate 82aed66c: unit 63/63; instrumented on secondary user 11 (created/removed) 38 OK / 1 ignored (both prior ExitDialogOverPlayer preconditions pass as guest); install-over-old-data fixture on user 0 (debug over data, launch alive, signed release COPY over data, debug back) PASS with settings hash 53e8cfbd... unchanged at every check; user 0 never signed out/cleared. Note: TV AVD quickboots from a saved snapshot and runs used -no-snapshot-save, so device changes are discarded each run (old release build returns) — disclosed. Existing TV profile user 10 untouched.
+
+Integrated review of 82aed66c: BLOCK on one P1-1 — the font Karma route lived only in owned artifacts; plain `wasmJsBrowserTest` (CI) would 404 fonts. FIXED at 1325cc8d: composeApp/karma.config.d/fonts.js (files pattern + proxy only). Plain CI-style run of composeApp 396 + shared 524 + real page 7 in flight. Review otherwise CLEAR: cross-lane seams OK, merge resolutions correct, user-data preservation compatible, security OK (P2: deploy server before web if separate), accessibility 3 product fixes + P2 framework note; changed-assertion table (Search caret 7,7; disabled trigger; harness AX->functional; Root reduceMotion) all judged acceptable. P2 follow-up: add webAccessibilityRealPageTest to CI.
+
+Push identity (read-only check): gh active account = harish-zuper; GvHarish9894 is logged in but not active. OPERATOR must switch (`gh auth switch -u GvHarish9894`) before any push; parent will not change auth.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
