@@ -311,6 +311,12 @@ ANDROID test changes a527b81f/903dc927 reviewed CLEAR (OK with notes). Full 16-c
 
 iOS on C5 head BLOCKED (infra): Xcode updated to 27.2 (27B52) at 23:15 IST; simctl requires `sudo xcodebuild -runFirstLaunch` (operator/admin). Stage 1 compile passed at 903dc927. Not bypassed. OPERATOR INPUT REQUIRED.
 
+### Checkpoint 2026-10-30i — integration candidate started
+
+C3 at ae65d5fb: Karma 58/58, Home 12/12, native 5/5, real page 7/7. Two test-only commits (4605799f: disabled trigger asserts real WebModalTrigger.focused + Focused!=true guard — ASSERTION CHANGED because Compose 1.11.1 disabled clickable drops the Focused key; ae65d5fb: Root rapid-trailer scroll-by-key + fixture reduceMotion for that test only). Independent review in flight.
+
+Integration (C1 slot reused per recipe d8c68796; l3-design untouched): branch product-integration from master 37c45ffe; master had no non-docs commits beyond the C5 merge-base (git cherry verified). Merged C5 903dc927 -> 001126f5 (clean). Merged C2 630c0765 -> cebbab17: conflicts only in MobileExploreScreenTest (took C5, which already contained C2's hunk) and MobileNavigationTest.selectedTab... (C2 runOnIdle restore + C5 real Profile assertions). C2 owned files identical to C2 head; Explore identical to C5. Next: compile smoke on candidate; merge C3 final head after review CLEAR; then full gate list (shared, host 184, native 5, server, TV incl. instrumented+upgrade fixture, Wasm compile+Karma 58+fonts 21+real page 7+web regression groups, Android 17 classes/130, iOS full once first-launch done, dist/secrets).
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
