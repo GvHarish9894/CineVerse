@@ -129,7 +129,9 @@ class MobileDetailScreenTest {
     @Test fun favouriteAndPrimaryTrailerActionsUseTheActualTitle() = runComposeUiTest {
         lateinit var f: MobileDetailComponentFixture
         val destinations = mutableListOf<MobileDestination>()
-        setContent { MobileDetailUiFixture(onReady = { _, fixture -> f = fixture }, onNavigate = destinations::add) }
+        // The real repository reader, so the rendered state follows the guest write (the default reader is synthetic).
+        setContent { MobileDetailUiFixture(onReady = { _, fixture -> f = fixture }, onNavigate = destinations::add,
+            libraryState = { it.library.stateWithOrigin(MediaRef(MediaType.Movie, 42)) }) }
         onNodeWithContentDescription("Favourite title")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not favourite"))
             .assertHasClickAction().performClick()
@@ -142,6 +144,7 @@ class MobileDetailScreenTest {
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Favourite"))
             .assertHasClickAction().performClick()
         waitForIdle()
+        runOnIdle { assertTrue(f.guest.rows.value.isEmpty()) }
         onNodeWithContentDescription("Favourite title")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Not favourite"))
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-trailer"))

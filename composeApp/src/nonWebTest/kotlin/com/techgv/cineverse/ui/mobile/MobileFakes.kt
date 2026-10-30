@@ -113,6 +113,8 @@ internal class MobileCatalogApi : MobileUnusedTmdbApi() {
     override suspend fun configuration() = ConfigurationDto()
     override suspend fun movieDetail(id: Int, language: String, append: String, sessionId: String?) =
         MovieDetailDto(id, title = "Detail title $id", overview = "Navigation fixture overview", releaseDate = "2026-01-02")
+    override suspend fun tvDetail(id: Int, language: String, append: String, sessionId: String?) =
+        TvDetailDto(id, name = "TV detail title $id", overview = "Navigation fixture overview", firstAirDate = "2026-01-02")
     override suspend fun genres(media: MediaType, language: String): GenreListDto {
         genreCalls++
         genreGate?.await()

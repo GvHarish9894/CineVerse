@@ -44,8 +44,9 @@ class MobileSearchScreenTest {
         onNodeWithText("TV").performClick()
         onNodeWithTag("mobile-search").performScrollToNode(hasText("search-Tv-fixture-en-US-false 1"))
         onNodeWithText("search-Tv-fixture-en-US-false 1").performClick()
-        onNodeWithText("Internal placeholder · tv 101").assertIsDisplayed()
-        onNodeWithText("Back").performClick()
+        onNodeWithTag("mobile-detail").assertExists()
+        onNodeWithText("TV detail title 101").assertIsDisplayed()
+        onNodeWithContentDescription("Back").performClick()
         onNodeWithText("People").performClick()
         onNodeWithTag("mobile-search").performScrollToNode(hasText("search-Person-fixture-en-US-false 1"))
         onNodeWithText("search-Person-fixture-en-US-false 1").performClick()
@@ -62,10 +63,11 @@ class MobileSearchScreenTest {
         onNodeWithText("Movies").performClick()
         onNodeWithTag("mobile-search").performScrollToNode(hasText("search-Movie-fixture-en-US-false 10"))
         onNodeWithText("search-Movie-fixture-en-US-false 10").performClick()
-        onNodeWithText("Internal placeholder · movie 110").assertIsDisplayed()
+        onNodeWithTag("mobile-detail").assertExists()
+        onNodeWithText("Detail title 110").assertIsDisplayed()
         onNode(hasText("Home") and hasClickAction()).performClick()
         onNode(hasText("Search") and hasClickAction()).performClick()
-        onNodeWithText("Internal placeholder · movie 110").assertIsDisplayed()
+        onNodeWithText("Detail title 110").assertIsDisplayed()
         onNode(hasText("Search") and hasClickAction()).performClick() // Pop entry, not a new owner.
         onNodeWithText("search-Movie-fixture-en-US-false 10").assertIsDisplayed()
         onNodeWithTag("search-input").assertTextContains("fixture")
@@ -84,8 +86,10 @@ class MobileSearchScreenTest {
         onNode(hasText("Home") and hasClickAction()).performClick()
         onNode(hasText("Search") and hasClickAction()).performClick()
         onNodeWithTag("search-input").assertTextContains("editable fixture")
+        // Leaving the tab blurs the field; Compose CoreTextField deselect-on-blur collapses (3,7) to a caret at its
+        // end (7). A fresh TextFieldValue(query) has its caret at 0, so 7 proves the editor value itself was retained.
         onNodeWithTag("search-input").assert(SemanticsMatcher.expectValue(
-            androidx.compose.ui.semantics.SemanticsProperties.TextSelectionRange, androidx.compose.ui.text.TextRange(3, 7)))
+            androidx.compose.ui.semantics.SemanticsProperties.TextSelectionRange, androidx.compose.ui.text.TextRange(7, 7)))
     }
 
     @Test fun overBudgetRawTextIsEditableAndMalformedStateRejectsWithoutDefaultFetch() = runComposeUiTest {

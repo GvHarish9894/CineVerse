@@ -83,7 +83,8 @@ class MobileCatalogRootTest {
             assertNotNull(first.state.value.context)
         }
         onNodeWithTag("season-option-7").performClick()
-        onNodeWithText("Season 7").assertIsDisplayed()
+        // The season chips repeat "Season N"; the heading is the owner's own season.
+        onNodeWithTag("season-title").assertTextEquals("Season 7").assertIsDisplayed()
         onNodeWithText("Actual episode 7-1").assertExists()
         lateinit var second: MobileSeasonViewModel
         runOnIdle {
@@ -98,7 +99,7 @@ class MobileCatalogRootTest {
                 state.fixture.api.catalogCalls.filter { it.startsWith("season/") })
         }
         onNodeWithContentDescription("Back").performClick()
-        onNodeWithText("Season 3").assertIsDisplayed()
+        onNodeWithTag("season-title").assertTextEquals("Season 3").assertIsDisplayed()
         runOnIdle {
             assertNull(second.state.value.context)
             assertSame(first, state.seasons.first(), "Back must restore the retained entry owner, not retarget the newer one")
