@@ -30,8 +30,9 @@ class MobileExploreScreenTest {
         onNodeWithText("People").performClick()
         onNodeWithText("Popular people").assertIsDisplayed()
         onNodeWithText("people-en-US 1").performClick()
-        onNodeWithText("Internal placeholder · Person 101").assertIsDisplayed()
-        onNodeWithText("Back").performClick()
+        onNodeWithTag("mobile-person").assertExists()
+        onNodeWithText("Person 101 en-US").assertIsDisplayed()
+        onNodeWithContentDescription("Back").performClick()
         onNodeWithText("Movies").performClick()
         onNodeWithText("Movies · Upcoming").assertIsDisplayed()
     }

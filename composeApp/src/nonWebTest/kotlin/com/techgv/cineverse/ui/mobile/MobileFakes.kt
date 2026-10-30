@@ -122,6 +122,8 @@ internal class MobileCatalogApi : MobileUnusedTmdbApi() {
     override suspend fun movieList(list: MovieList, language: String, region: String, page: Int) = page("$list-$language-$region", page, "movie")
     override suspend fun tvList(list: TvList, language: String, timezone: String?, page: Int) = page("tv-$language", page, "tv")
     override suspend fun popularPeople(language: String, page: Int) = page("people-$language", page, "person")
+    override suspend fun person(id: Int, language: String, append: String) =
+        PersonDetailDto(id, name = "Person $id $language", biography = "Fixture biography $id", combinedCredits = CombinedCreditsDto())
     override suspend fun videos(media: MediaType, id: Int, language: String): VideosDto {
         calls += "videos/$id/$language"
         trailerGate?.await()

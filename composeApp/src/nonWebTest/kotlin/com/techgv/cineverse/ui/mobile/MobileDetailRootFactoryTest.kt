@@ -16,6 +16,37 @@ import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MobileDetailRootFactoryTest {
+    @Test fun personAndSeasonFactoriesUseExactScalarsSavedStateAndColdSettings() = runTest {
+        val f = MobileDetailRootFixture(backgroundScope)
+        runCurrent()
+        val personSaved = SavedStateHandle(mapOf("bioExpanded" to true, "person.index" to 2, "person.offset" to 3))
+        val seasonSaved = SavedStateHandle(mapOf("selectedSeason" to 3, "mobileSeason.index" to 4, "mobileSeason.offset" to 5))
+        val person = f.graph.person(431, personSaved, backgroundScope)
+        val season = f.graph.season(42, 3, seasonSaved, backgroundScope)
+        val subscriptions = f.store.subscriptions
+        runCurrent()
+        assertEquals(subscriptions, f.store.subscriptions)
+        assertTrue(f.api.catalogCalls.isEmpty())
+
+        person.setActive(true)
+        season.setActive(true)
+        runCurrent()
+
+        assertEquals(431, person.id)
+        assertTrue(person.state.value.expanded)
+        assertEquals(2, person.state.value.index)
+        assertEquals(3, person.state.value.offset)
+        assertEquals(42, season.seriesId)
+        assertEquals(3, season.seasonNumber)
+        assertEquals(MobileSeasonScroll(4, 5), season.scrollTarget)
+        assertEquals(listOf("person/431/en-US", "tv/42/en-US", "season/42/3/en-US"), f.api.catalogCalls)
+        assertTrue(f.store.subscriptions >= subscriptions + 2, "Both factories must collect the real cold settings reader")
+
+        person.close()
+        season.close()
+        f.graph.close()
+    }
+
     @Test fun factoryUsesExactRouteSavedHandleRawSettingsAndActualGuestOrigin() = runTest {
         val f = MobileDetailRootFixture(backgroundScope)
         f.auth.emissions.emit(null)

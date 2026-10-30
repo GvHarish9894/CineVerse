@@ -75,17 +75,25 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
     val entry by controller.currentBackStackEntryAsState()
     val atRoot = entry?.destination?.hasRoute<MobileTabRoot>() == true
     val detailBinding = rememberMobileDetailRootBinding(graph, controller)
+    val catalogBinding = rememberMobileCatalogRootBinding(controller)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var resumed by remember(lifecycle) { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
-    DisposableEffect(lifecycle, detailBinding) {
+    DisposableEffect(lifecycle, detailBinding, catalogBinding) {
         detailBinding.setResumed(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        catalogBinding.setResumed(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
         val observer = LifecycleEventObserver { _, _ ->
             resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
             detailBinding.setResumed(resumed)
+            catalogBinding.setResumed(resumed)
             if (!resumed) home.setActive(false)
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); detailBinding.setResumed(false); home.setActive(false) }
+        onDispose {
+            lifecycle.removeObserver(observer)
+            detailBinding.setResumed(false)
+            catalogBinding.setResumed(false)
+            home.setActive(false)
+        }
     }
     val active = resumed && selected == MobileTab.Home && atRoot
     DisposableEffect(active, home) {
@@ -94,6 +102,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
     }
     fun select(tab: MobileTab) {
         detailBinding.leave()
+        catalogBinding.leave()
         home.setActive(false)
         if (tab == selected) {
             if (!atRoot) controller.popBackStack<MobileTabRoot>(inclusive = false)
@@ -105,14 +114,17 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
         // Re-select at the root does not change the active effect's key.
         if (resumed && tab == MobileTab.Home && controllers[tab.ordinal].currentDestination?.hasRoute<MobileTabRoot>() == true) home.setActive(true)
         detailBinding.currentChanged(controllers[tab.ordinal].currentBackStackEntry)
+        catalogBinding.currentChanged(controllers[tab.ordinal].currentBackStackEntry)
     }
     fun back() {
         detailBinding.leave()
+        catalogBinding.leave()
         home.setActive(false)
         controller.popBackStack()
     }
     val navigator = MobileNavigator { destination ->
         detailBinding.leave()
+        catalogBinding.leave()
         home.setActive(false)
         if (destination is MobileDestination.Browse) {
             selected = MobileTab.Explore
@@ -125,6 +137,7 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
         if (selected == MobileTab.Explore && entry != null && row != null) {
             pendingBrowse = null
             detailBinding.leave()
+            catalogBinding.leave()
             controller.navigate(MobileBrowseRoute(row, pendingTrend))
         }
     }
@@ -161,11 +174,10 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel) {
                     MobileDetailRouteEntry(graph, route, detailBinding, navigator, ::back)
                 }
                 composable<MobilePersonRoute> { route ->
-                    MobilePlaceholder("Person", "Internal placeholder · Person ${route.toRoute<MobilePersonRoute>().id}", ::back)
+                    MobilePersonRouteEntry(graph, route, catalogBinding, navigator, ::back)
                 }
                 composable<MobileSeasonRoute> { route ->
-                    val season = route.toRoute<MobileSeasonRoute>()
-                    MobilePlaceholder("Season ${season.number}", "Internal placeholder · Series ${season.seriesId}", ::back)
+                    MobileSeasonRouteEntry(graph, route, catalogBinding, navigator, ::back)
                 }
                 composable<MobileTrailerRoute> { route ->
                     val trailer = route.toRoute<MobileTrailerRoute>()

@@ -77,6 +77,7 @@ internal class MobileDetailRootGuest : GuestLibraryStore {
 
 internal class MobileDetailRootApi(private val home: MobileCatalogApi = MobileCatalogApi()) : TmdbApi by home {
     val detailCalls = mutableListOf<String>()
+    val catalogCalls = mutableListOf<String>()
     var gate: CompletableDeferred<Unit>? = null
     override suspend fun movieDetail(id: Int, language: String, append: String, sessionId: String?): MovieDetailDto {
         detailCalls += "movie/$id/$language"
@@ -85,5 +86,24 @@ internal class MobileDetailRootApi(private val home: MobileCatalogApi = MobileCa
             credits = CreditsDto(listOf(CastDto(431, "Root actor", "Root role"))),
             videos = VideosDto(listOf(VideoDto(key = "aB3_dE5-gH7", name = "Root trailer", site = "YouTube", type = "Trailer"))),
             recommendations = PageDto(1, listOf(MediaItemDto(765, title = "Root recommendation", mediaType = "movie")), 1))
+    }
+
+    override suspend fun person(id: Int, language: String, append: String): PersonDetailDto {
+        catalogCalls += "person/$id/$language"
+        return PersonDetailDto(id, name = "Root actor $id", biography = "Root biography $id",
+            knownForDepartment = "Acting", combinedCredits = CombinedCreditsDto())
+    }
+
+    override suspend fun tvDetail(id: Int, language: String, append: String, sessionId: String?): TvDetailDto {
+        catalogCalls += "tv/$id/$language"
+        return TvDetailDto(id, name = "Actual show $id $language", seasons = listOf(
+            SeasonSummaryDto(100, 3, "Third chapter"), SeasonSummaryDto(101, 7, "Seventh chapter")))
+    }
+
+    override suspend fun season(seriesId: Int, seasonNumber: Int, language: String): SeasonDto {
+        catalogCalls += "season/$seriesId/$seasonNumber/$language"
+        return SeasonDto(200 + seasonNumber, seasonNumber, name = "Chapter $seasonNumber", episodes = listOf(
+            EpisodeDto(300 + seasonNumber, episodeNumber = 1, seasonNumber = seasonNumber,
+                name = "Actual episode $seasonNumber-1", overview = "Root episode overview")))
     }
 }

@@ -49,8 +49,9 @@ class MobileSearchScreenTest {
         onNodeWithText("People").performClick()
         onNodeWithTag("mobile-search").performScrollToNode(hasText("search-Person-fixture-en-US-false 1"))
         onNodeWithText("search-Person-fixture-en-US-false 1").performClick()
-        onNodeWithText("Internal placeholder · Person 101").assertIsDisplayed()
-        onNodeWithText("Back").performClick()
+        onNodeWithTag("mobile-person").assertExists()
+        onNodeWithText("Person 101 en-US").assertIsDisplayed()
+        onNodeWithContentDescription("Back").performClick()
         runOnIdle { assertEquals(0, f.store.edits) }
     }
 

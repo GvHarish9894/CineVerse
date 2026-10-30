@@ -25,7 +25,7 @@ import com.techgv.cineverse.ui.components.*
 import com.techgv.cineverse.ui.theme.displayStyle
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-/** Root explicitly activates this entry and closes its owner when removed from the back stack. */
+/** Composition renders only; the route host owns activation and the entry store owns final close. */
 @Composable
 internal fun MobilePersonScreen(model: MobilePersonViewModel, navigator: MobileNavigator, onBack: () -> Unit) {
     val snapshot by model.state.collectAsState()

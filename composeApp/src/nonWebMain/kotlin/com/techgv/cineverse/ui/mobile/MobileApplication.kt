@@ -87,6 +87,12 @@ class MobileApplication(
             emitAll(library.stateWithOrigin(MediaRef(type, id)))
         }, parentScope)
 
+    internal fun person(id: Int, savedState: SavedStateHandle, parentScope: CoroutineScope? = null) =
+        MobilePersonViewModel(this, id, savedState, settingsFlow, parentScope)
+
+    internal fun season(seriesId: Int, number: Int, savedState: SavedStateHandle, parentScope: CoroutineScope? = null) =
+        MobileSeasonViewModel(this, seriesId, number, savedState, settingsFlow, parentScope)
+
     private fun invalidateDetailContext() {
         actions.closeRate()
         // GenerationCounter is a snapshot, so notify roots at the actual graph invalidation boundary.

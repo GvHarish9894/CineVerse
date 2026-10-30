@@ -64,7 +64,7 @@ internal class MobileSeasonViewModel(
     private val savedState: SavedStateHandle,
     private val rawSettings: Flow<Settings>,
     parentScope: CoroutineScope? = null,
-) : ViewModel() {
+) : ViewModel(), MobileCatalogEntryModel {
     private val initial = validateMobileSeason(seriesId, seasonNumber, savedState)
     val scrollTarget: MobileSeasonScroll?
         get() = if (initial == null) null else validateMobileSeason(seriesId, seasonNumber, savedState)?.scroll
@@ -209,7 +209,7 @@ internal class MobileSeasonViewModel(
             settingsFailed = snapshot.settingsFailed || graph.settingsFailed.value,
             stale = snapshot.retainedShow != null || snapshot.retainedSeason != null) else snapshot
 
-    fun setActive(active: Boolean) {
+    override fun setActive(active: Boolean) {
         if (!alive() || visible == active) return
         visible = active
         if (active && initial != null && !state.value.invalid) restartReader() else resetReader()

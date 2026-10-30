@@ -46,7 +46,7 @@ internal class MobilePersonViewModel(
     private val savedState: SavedStateHandle,
     private val rawSettings: Flow<Settings> = graph.settingsFlow,
     parentScope: CoroutineScope? = null,
-) : ViewModel() {
+) : ViewModel(), MobileCatalogEntryModel {
     private val parent = parentScope ?: viewModelScope
     private val job = SupervisorJob(parent.coroutineContext[Job])
     private val scope = CoroutineScope(parent.coroutineContext + job)
@@ -164,7 +164,7 @@ internal class MobilePersonViewModel(
         }
     }
 
-    fun setActive(value: Boolean) {
+    override fun setActive(value: Boolean) {
         if (closed || active == value) return
         active = value
         val token = revoke()
