@@ -70,7 +70,7 @@ private val catalogRules = listOf(
         "discover/tv", CacheTtl.List, language, page, withGenres, voteCountGte,
         "sort_by" to oneOf("popularity.desc", "vote_average.desc", "first_air_date.desc", "name.asc"),
     ),
-    CatalogRule("search/multi", CacheTtl.List, query, language, includeAdult, page),
+    CatalogRule("search/(multi|movie|tv|person)", CacheTtl.List, query, language, includeAdult, page),
     CatalogRule(
         "movie/$ID", CacheTtl.Detail, language,
         "append_to_response" to appendOf("credits", "videos", "recommendations", "reviews", "release_dates", "keywords"),
@@ -161,6 +161,7 @@ fun Route.catalogRoutes(tmdb: Tmdb, cache: CatalogCache, missBudget: ClientBudge
         val path = call.parameters.getAll("path").orEmpty().joinToString("/")
         val rule = catalogRules.firstOrNull { it.path.matches(path) } ?: throw NOT_ALLOWED
         val query = canonicalQuery(call.request.queryParameters, rule.params)
+        if (path.startsWith("search/") && query.none { it.first == "query" }) throw NOT_ALLOWED
         val key = path + "?" + query.joinToString("&") { (k, v) -> "$k=${v.encodeURLParameter()}" }
         val body = cache.get(key) ?: run {
             missBudget.consume(call.clientIp())

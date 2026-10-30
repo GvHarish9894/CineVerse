@@ -48,7 +48,7 @@ clients pick their own IP and escape every per-IP limit).
 | `GET /api/tmdb/{v3 path}` | — | allow-listed catalog read → `https://api.themoviedb.org/3/{path}` with the read token |
 | `GET /api/session` | — | `AuthSession` JSON; emits no `cv_session` Set-Cookie header (never sets or deletes it, whatever cookie is presented); still issues the `cv_csrf` cookie if missing (see "Cookie deletion") |
 | `POST /api/auth/start` | CSRF | creates a v4 request token; `{approveUrl, attemptId}` + attempt cookie |
-| `GET /api/auth/callback?attempt=` | attempt cookie | TMDB redirect target; exchange → convert → account; sets `cv_session`; 302 to `${PUBLIC_ORIGIN}/?signedIn=1` |
+| `GET /api/auth/callback?attempt=` | attempt cookie | TMDB redirect target; exchange → convert → account; sets `cv_session`; 302 to `${PUBLIC_ORIGIN}/` (no query hint; the client's `/api/session` read is the proof) |
 | `POST /api/auth/logout` | CSRF | local sign-out of this browser's current session (also one a running callback committed but has not delivered yet) + cancels its pending sign-ins, then best-effort TMDB revocation; clears `cv_session`; returns signed-out `AuthSession` |
 | `POST /api/auth/cancel[?attempt=]` | CSRF | "Not now": cancels every pending/in-flight sign-in of this browser; the current session stays; `204` |
 | `GET /api/account/{movie\|tv}/{watchlist\|favorites\|rated}?page&sort_by&language` | session | v4 account list (user token) |
@@ -114,7 +114,7 @@ never relayed. TMDB codes map per spec §3.3:
 2. Every POST/DELETE sends `X-CV-CSRF: <cv_csrf cookie value>` (read from `document.cookie`); the browser adds
    `Origin`. On `403 csrf_token`, call `/api/session` once and retry (nothing reached TMDB).
 3. Sign-in: `POST /api/auth/start` → open `approveUrl` in a new tab. TMDB redirects that tab to the callback, which
-   lands on `/?signedIn=1` signed in; that tab broadcasts `{sessionGeneration}` and the original tab refetches
+   lands on `/` signed in; that tab broadcasts `{sessionGeneration}` and the original tab refetches
    `/api/session`. `409 not_approved` means "not approved yet". "Not now"/close: `POST /api/auth/cancel?attempt=…`
    (or simply `POST /api/auth/logout`); both invalidate every outstanding attempt of this browser, including a
    callback already talking to TMDB, which then ends in `409 attempt_superseded` without signing in. Any

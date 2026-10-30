@@ -70,9 +70,12 @@ class LibraryRepository(
     val listRevision: StateFlow<Long> = revision.asStateFlow()
 
     /** Per-title button state; signed in, `account_states` is re-read on every collection. */
-    fun state(ref: MediaRef): Flow<LibraryState> = session.distinctUntilChanged().flatMapLatest { c ->
+    fun state(ref: MediaRef): Flow<LibraryState> = stateWithOrigin(ref).map { it.state }
+
+    /** Source proof travels with the producer payload, never a later session or UI identity observation. */
+    fun stateWithOrigin(ref: MediaRef): Flow<LibraryStateSnapshot> = session.distinctUntilChanged().flatMapLatest { c ->
         if (c == null) {
-            guest.observeState(ref)
+            guest.observeState(ref).map { LibraryStateSnapshot(it, sourceIdentityKnown = true) }
         } else {
             channelFlow {
                 enter(c)
@@ -85,7 +88,12 @@ class LibraryRepository(
                         }
                     }
                 }
-                store.map { if (it.identity == c) it.slots[ref]?.shown ?: LibraryState.Unknown else LibraryState.Unknown }
+                store.map { s ->
+                    if (s.identity == c) LibraryStateSnapshot(
+                        s.slots[ref]?.shown ?: LibraryState.Unknown,
+                        sourceIdentityKnown = true, sourceIdentity = s.identity,
+                    ) else LibraryStateSnapshot(LibraryState.Unknown)
+                }
                     .distinctUntilChanged()
                     .collect { send(it) }
             }

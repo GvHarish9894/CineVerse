@@ -8,17 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class WebAuthenticationSessionApprovalFlowTest {
-    @Test fun replacingWindowCannotBeDetachedByTheOldHost() {
-        val opener = IosWebAuthenticationSessionOpener()
-        val old = platform.UIKit.UIWindow()
-        val current = platform.UIKit.UIWindow()
-        opener.attach(old)
-        opener.attach(current)
-        kotlin.test.assertFalse(opener.detach(old))
-        kotlin.test.assertTrue(opener.detach(current))
-        kotlin.test.assertFalse(opener.detach(current))
-    }
-
+    // Real-window replacement assertions run in hosted NativeApprovalWindowTests, not bare test.kexe.
     @Test fun injectedPlatformBoundaryPersistsOpensAndVerifies() = runTest {
         var opens = 0
         approvalFlowBoundaryFixture { auth, pending ->

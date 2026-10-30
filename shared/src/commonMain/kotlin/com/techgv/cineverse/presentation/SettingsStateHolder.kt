@@ -17,6 +17,7 @@ import com.techgv.cineverse.data.settings.Settings
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.AccountDto
 import com.techgv.cineverse.data.tmdb.TmdbException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -107,7 +108,7 @@ class SettingsStateHolder(
             if (failure is StorageException) onStorageFailure(failure) else throw failure
         } }.stateIn(this.scope, SharingStarted.WhileSubscribed(5_000), null)
 
-    fun toggle(toggle: Toggle) = edit {
+    fun toggle(toggle: Toggle, canEdit: () -> Boolean = { true }) = edit(canEdit) {
         when (toggle) {
             Toggle.Haptics -> it.copy(haptics = !it.haptics)
             Toggle.Sounds -> it.copy(sounds = !it.sounds)
@@ -117,7 +118,7 @@ class SettingsStateHolder(
         }
     }
 
-    fun cycle(choice: Choice, delta: Int) = edit {
+    fun cycle(choice: Choice, delta: Int, canEdit: () -> Boolean = { true }) = edit(canEdit) {
         when (choice) {
             Choice.Strength -> it.copy(strength = HapticStrength.entries.cycle(it.strength, delta))
             Choice.Language -> it.copy(language = Settings.LANGUAGES.cycle(it.language, delta))
@@ -156,6 +157,8 @@ class SettingsStateHolder(
                     signedOut = true
                     signOutEvents.trySend(true)
                 }
+                // A web sign-out can return normally while the follow-up read still shows a session: report it, never hang.
+                if (!signedOut) signOutEvents.trySend(false)
             } catch (e: IOException) {
                 if (!signedOut) signOutEvents.trySend(false)
             } catch (e: TmdbException) {
@@ -166,10 +169,15 @@ class SettingsStateHolder(
         }
     }
 
-    private fun edit(transform: (Settings) -> Settings) {
+    private fun edit(canEdit: () -> Boolean, transform: (Settings) -> Settings) {
         scope.launch {
-            try { settings.update(transform) }
-            catch (failure: StorageException) { onStorageFailure(failure) }
+            try {
+                settings.update {
+                    // Revalidate inside the transaction; queued edits can outlive their caller's context.
+                    if (!canEdit()) throw CancellationException("Settings edit context revoked")
+                    transform(it)
+                }
+            } catch (failure: StorageException) { onStorageFailure(failure) }
         }
     }
 }

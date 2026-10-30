@@ -1,6 +1,7 @@
 package com.techgv.cineverse.data.settings
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.IOException as DataStoreIOException
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
@@ -8,18 +9,41 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.techgv.cineverse.data.storage.StorageException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import okio.IOException
 import okio.Path
 
 /** [SettingsStore] over a Preferences DataStore; keys are DataStore keys of the matching type. */
 class DataStoreSettingsStore(private val dataStore: DataStore<Preferences>) : SettingsStore {
-    override val data: Flow<SettingsValues> = dataStore.data.map(::PreferencesValues)
+    override val data: Flow<SettingsValues> = dataStore.data
+        .catch { throw storageFailure(it) }
+        .map(::PreferencesValues)
 
     override suspend fun edit(transform: (MutableSettingsValues) -> Unit) {
-        dataStore.edit { transform(MutablePreferencesValues(it)) }
+        var transformFailure: Throwable? = null
+        try {
+            dataStore.edit {
+                try {
+                    transform(MutablePreferencesValues(it))
+                } catch (failure: Throwable) {
+                    transformFailure = failure
+                    throw failure
+                }
+            }
+        } catch (failure: Throwable) {
+            if (failure === transformFailure) throw failure
+            throw storageFailure(failure)
+        }
     }
+
+    // DataStore corruption and Okio file I/O have separate native exception hierarchies.
+    private fun storageFailure(failure: Throwable): Throwable =
+        if (failure is DataStoreIOException || failure is IOException) StorageException("Settings storage unavailable")
+        else failure
 
     private open class PreferencesValues(private val p: Preferences) : SettingsValues {
         // A key stored with another type reads as null (DataStore throws ClassCastException on the typed get).

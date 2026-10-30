@@ -366,7 +366,8 @@ fun Route.authRoutes(config: ServerConfig, tmdb: Tmdb, store: AuthStore, cookies
                 call.setCookie(cookies.session(session.id))
                 call.setCookie(cookies.csrf(randomId()))
                 call.setCookie(cookies.clearAttempt())
-                call.respondRedirect("${config.publicOrigin}/?signedIn=1")
+                // No query hint: the cookie plus the client's own session read are the only proof.
+                call.respondRedirect("${config.publicOrigin}/")
             }
 
             post("/api/auth/logout") {

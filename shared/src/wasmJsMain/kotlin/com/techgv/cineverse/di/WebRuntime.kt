@@ -4,6 +4,8 @@ import com.techgv.cineverse.data.auth.AccountDefaultsMetadata
 import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryImporter
 import com.techgv.cineverse.data.library.LibraryRepository
+import com.techgv.cineverse.data.library.LibraryStateSnapshot
+import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.storage.*
 import com.techgv.cineverse.data.tmdb.CatalogRepository
@@ -11,10 +13,15 @@ import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.TmdbException
 import com.techgv.cineverse.data.web.WebApprovalAttempt
 import com.techgv.cineverse.data.web.WebProxyException
+import com.techgv.cineverse.data.web.WebProxyHttp
+import com.techgv.cineverse.data.web.WebWriteOutcome
+import com.techgv.cineverse.data.web.decodeWebSession
 import com.techgv.cineverse.presentation.*
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.SerializationException
 
 /** Unknown/failed verification is distinct from a verified guest. The old identity is never replaced by a hint. */
 sealed interface WebSessionState {
@@ -45,9 +52,15 @@ class WebRuntime internal constructor(
     private var started = false
     private var closed = false
     private var syncing: Job? = null
+    private var softReading: Job? = null
     private var syncRevision = 0L
+    /** Read-only (GET) proxy for soft session reads: no CSRF, no auth repository revision or state. */
+    private val sessionReads = WebProxyHttp(http) { null }
     private val completedImports = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val importsCompleted: Flow<Unit> = completedImports.asSharedFlow()
+    private val cacheInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    /** Every TmdbCache generation bump this runtime performs plus session/storage changes: a re-read hint, never identity. */
+    val contextInvalidations: Flow<Unit> = merge(cacheInvalidations, session.drop(1).map { }, storageFailure.drop(1).map { })
     val settingsHolder = SettingsStateHolder(settings, browserAuth, scope, ::reportStorageFailure)
     val importController = ImportLibraryStateHolder(importer, scope,
         onImported = { completedImports.tryEmit(Unit) }, onStorageFailure = ::reportStorageFailure)
@@ -58,6 +71,9 @@ class WebRuntime internal constructor(
 
     fun libraryActions(uiScope: CoroutineScope, onOutcome: (LibraryWriteOutcome) -> Unit) =
         LibraryActionsStateHolder(library, scope, uiScope, onOutcome, ::reportStorageFailure)
+
+    /** Detail's origin-tagged account state: the snapshot names the identity it was read under. */
+    fun libraryStateWithOrigin(ref: MediaRef): Flow<LibraryStateSnapshot> = library.stateWithOrigin(ref)
 
     fun reportStorageFailure(failure: StorageException) {
         storageIssue.value = (failure as? BrowserStorageException)?.failure ?: BrowserStorageFailure.Unavailable
@@ -77,21 +93,25 @@ class WebRuntime internal constructor(
             }.distinctUntilChanged().drop(1).collect {
                 catalog.onContentSettingsChanged()
                 invalidateLibrary()
+                cacheInvalidations.tryEmit(Unit)
             }
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var previous = changes.changes.value
             changes.changes.drop(1).collect { revision ->
-                if (revision.session != previous.session || revision.revalidate != previous.revalidate) revalidateSession()
+                if (revision.session != previous.session || revision.revalidate != previous.revalidate) softRevalidate()
                 if (revision.library != previous.library) invalidateLibrary()
                 previous = revision
             }
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             auth.session.drop(1).collect { identity ->
-                if (sessionState.value != WebSessionState.Checking && auth.isVerifiedSession(identity)) {
+                val state = sessionState.value
+                // A hard read that already rendered this identity applied it: a late collector must not bump again.
+                if (state != WebSessionState.Checking && state != WebSessionState.Ready(identity) && auth.isVerifiedSession(identity)) {
                     catalog.onAccountChanged()
                     invalidateLibrary()
+                    cacheInvalidations.tryEmit(Unit)
                     sessionState.value = WebSessionState.Ready(identity)
                 }
             }
@@ -105,6 +125,7 @@ class WebRuntime internal constructor(
             auth.sessionExpired.collect {
                 catalog.onAccountChanged()
                 invalidateLibrary()
+                cacheInvalidations.tryEmit(Unit)
             }
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -120,12 +141,37 @@ class WebRuntime internal constructor(
         auth.session.value?.let(library::onExternalWrites)
     }
 
-    /** Focus/visibility/session messages are hints: revoke tickets BEFORE dispatching authoritative verification. */
+    /**
+     * Focus/visibility/peer-session hints: a background read that keeps the current state and invalidates nothing.
+     * Only a verified identity that differs from the rendered Ready session takes the hard path. Latest hint wins.
+     */
+    private fun softRevalidate() {
+        if (closed || sessionState.value == WebSessionState.Checking) return
+        softReading?.cancel()
+        val ticket = syncRevision
+        softReading = scope.launch {
+            // A failed hint read keeps the current state: it is not evidence against a verified identity.
+            val changed = try { readsOtherSession() } catch (_: TmdbException) { false }
+            if (changed && !closed && ticket == syncRevision) revalidateSession()
+        }
+    }
+
+    /** True unless the server's identity equals the rendered Ready session that auth still verifies. Changes no state. */
+    private suspend fun readsOtherSession(): Boolean {
+        val identity = try { decodeWebSession(sessionReads.call("/api/session")) }
+        catch (_: SerializationException) { throw WebProxyException("malformed_session", null, null, WebWriteOutcome.NotApplicable, TmdbError.Malformed) }
+        val ready = sessionState.value as? WebSessionState.Ready
+        return ready == null || ready.session != identity || !auth.isVerifiedSession(identity)
+    }
+
+    /** Hard verification (boot, explicit retry, recoveries, identity change): revoke tickets BEFORE the authoritative read. */
     fun revalidateSession() {
         if (closed) return
+        softReading?.cancel()
         auth.invalidateSession()
         catalog.onAccountChanged()
         invalidateLibrary()
+        cacheInvalidations.tryEmit(Unit)
         importController.later()
         sessionState.value = WebSessionState.Checking
         syncing?.cancel()
@@ -152,15 +198,25 @@ class WebRuntime internal constructor(
 
     suspend fun startApproval(): WebApprovalAttempt = auth.startApproval()
 
-    /** Browser UI uses this explicit controller, never native RequestCode/AccountDto defaults. */
+    /**
+     * Browser UI uses this explicit controller, never native RequestCode/AccountDto defaults. A soft read; only a
+     * changed identity runs (and awaits) the hard transition. Read failures propagate; the state is kept.
+     */
     suspend fun approvalReturned() {
-        try { auth.onApprovalReturned() }
-        finally { changes.publish(BrowserChangeTopic.Session) }
+        try {
+            if (readsOtherSession() && !closed) {
+                revalidateSession()
+                syncing?.join()
+            }
+        } finally { changes.publish(BrowserChangeTopic.Session) }
     }
 
     suspend fun cancelApproval() {
         try { auth.cancelApproval() }
-        finally { changes.publish(BrowserChangeTopic.Session) }
+        catch (failure: TmdbException) {
+            revalidateSession() // An unconfirmed cancel/read must not leave the old verified guest rendered.
+            throw failure
+        } finally { changes.publish(BrowserChangeTopic.Session) }
     }
 
     /** Re-subscribe failed settings reads. Failed mutations require an explicit consumer action, never replay here. */

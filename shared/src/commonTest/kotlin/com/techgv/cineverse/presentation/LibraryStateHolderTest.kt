@@ -103,15 +103,20 @@ class LibraryStateHolderTest {
         holder.loadMore(MediaType.Movie); runCurrent()
         assertEquals(listOf(1), holder.state.value.movies.ids())
         assertEquals(SectionErrorKind.Generic, holder.state.value.movies.moreError)
+        assertEquals(1, holder.state.value.movies.loadedPage)
+        assertEquals(identity.value, holder.state.value.sourceIdentity)
         assertFalse(holder.state.value.movies.loadingMore)
         source.failPage = null
         holder.retry(MediaType.Movie); runCurrent()
         assertEquals(listOf(1, 2), holder.state.value.movies.ids())
+        assertEquals(2, holder.state.value.movies.loadedPage)
         assertNull(holder.state.value.movies.moreError)
         source.failPage = 1
         holder.revalidate(); runCurrent()
         assertEquals(listOf(1, 2), holder.state.value.movies.ids())
         assertEquals(SectionErrorKind.Generic, holder.state.value.movies.refreshError)
+        assertEquals(2, holder.state.value.movies.loadedPage)
+        assertEquals(identity.value, holder.state.value.sourceIdentity)
         holder.retry(MediaType.Movie); runCurrent()
         assertEquals(listOf(1, 2), holder.state.value.movies.ids(), "retry must not clear prior real entries")
         source.failPage = null
@@ -127,6 +132,7 @@ class LibraryStateHolderTest {
         val holder = LibraryStateHolder(repository, SavedStateHandleStateSaver(handle), backgroundScope)
         runCurrent()
         assertEquals(SectionState.Error(SectionErrorKind.Generic), holder.state.value.movies.section)
+        assertNull(holder.state.value.movies.loadedPage)
         source.failPage = null
         holder.retry(MediaType.Movie); runCurrent()
         assertEquals(listOf(1), holder.state.value.movies.ids())

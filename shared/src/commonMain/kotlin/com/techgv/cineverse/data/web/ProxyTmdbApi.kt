@@ -57,6 +57,10 @@ class ProxyTmdbApi(private val http: WebProxyHttp) : TmdbApi {
     override suspend fun person(id: Int, language: String, append: String): PersonDetailDto =
         call("person/$id", "language" to language, "append_to_response" to append)
 
+    override suspend fun search(facet: SearchFacet, query: String, language: String, includeAdult: Boolean, page: Int): PageDto<MediaItemDto> =
+        call<PageDto<MediaItemDto>>("search/${facet.path}", *searchQuery(query, language, includeAdult, page).toTypedArray())
+            .withSearchProvenance(facet)
+
     override suspend fun searchMulti(query: String, language: String, includeAdult: Boolean, page: Int): PageDto<MediaItemDto> =
         call("search/multi", "query" to query, "language" to language, "include_adult" to includeAdult, "page" to page)
 

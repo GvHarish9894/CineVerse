@@ -2,9 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- This app is deployed at the origin root, including on nested history routes. -->
+    <base href="/">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CineVerse</title>
+    <style>html, body { margin: 0; height: 100%; background: #07060F; } #cineverse-root { position: fixed; inset: 0; }</style>
     <script type="application/javascript" src="composeApp.js"></script>
 </head>
-<body></body>
+<!-- Compose mounts in this light-DOM sibling so body-appended overlays (trailer iframe) can render above it. -->
+<body><div id="cineverse-root"></div></body>
 </html>

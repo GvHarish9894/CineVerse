@@ -10,11 +10,15 @@ import com.techgv.cineverse.data.auth.AuthSession
 import com.techgv.cineverse.data.library.LibraryEntry
 import com.techgv.cineverse.data.library.LibraryPage
 import com.techgv.cineverse.data.library.LibraryRepository
+import com.techgv.cineverse.data.tmdb.TmdbError
 import com.techgv.cineverse.data.tmdb.TmdbException
 import com.techgv.cineverse.domain.LibraryKind
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +44,8 @@ data class LibraryGroup(
     val moreError: SectionErrorKind? = null,
     /** A revalidation failed: the shown items may be stale; "Try again" reloads. */
     val refreshError: SectionErrorKind? = null,
+    /** Last account page in this completed result (1..500); null before a read or for unpaged guest data. */
+    val loadedPage: Int? = null,
 )
 
 data class LibraryUiState(
@@ -49,6 +55,10 @@ data class LibraryUiState(
     val tab: LibraryTab = LibraryTab.Watchlist,
     val movies: LibraryGroup = LibraryGroup(),
     val tv: LibraryGroup = LibraryGroup(),
+    /** False until the repository emits a source; known null means guest source, not verified web guest. */
+    val sourceIdentityKnown: Boolean = false,
+    /** Token-free identity captured for these groups; compare the full value with authoritative web Ready. */
+    val sourceIdentity: AuthSession? = null,
 ) {
     fun group(media: MediaType) = if (media == MediaType.Movie) movies else tv
 }
@@ -73,7 +83,9 @@ class LibraryStateHolder(
     val state: StateFlow<LibraryUiState> = _state.asStateFlow()
 
     private val generations = MediaType.entries.associateWith { GenerationCounter() }
-    private val loadedPages = MediaType.entries.associateWith { 0 }.toMutableMap()
+    // Defer one-shot paging until replacement succeeds, so retained and fresh pages never mix.
+    private val reloading = mutableSetOf<MediaType>()
+    private val pendingMore = mutableSetOf<MediaType>()
 
     /** The signed-in scope the account groups load for; null for a guest. */
     private var listScope: Pair<AuthSession, LibraryTab>? = null
@@ -82,17 +94,26 @@ class LibraryStateHolder(
         this.scope.launch {
             combine(repository.session.distinctUntilChanged(), tab) { c, t -> c to t }.collectLatest { (c, t) ->
                 generations.values.forEach { it.bump() }
-                MediaType.entries.forEach { loadedPages[it] = 0 }
+                reloading.clear()
+                pendingMore.clear()
                 listScope = c?.let { it to t }
-                _state.update { it.copy(accountName = c?.displayName, signedIn = c != null, tab = t, movies = LibraryGroup(), tv = LibraryGroup()) }
+                _state.update { it.copy(
+                    accountName = c?.displayName, signedIn = c != null, tab = t,
+                    movies = LibraryGroup(), tv = LibraryGroup(),
+                    sourceIdentityKnown = true, sourceIdentity = c,
+                ) }
                 if (c == null) {
                     guestReads.flatMapLatest { combine(repository.guestEntries(t.kind, MediaType.Movie), repository.guestEntries(t.kind, MediaType.Tv)) { m, tv ->
                         LibraryGroup(m.toSection()) to LibraryGroup(tv.toSection())
                     }.catch { failure ->
                         if (failure !is StorageException) throw failure
+                        currentCoroutineContext().ensureActive()
                         onStorageFailure(failure)
                         MediaType.entries.forEach { media -> setGroup(media) { it.refreshFailed(SectionErrorKind.Generic) } }
-                    } }.collect { (m, tv) -> _state.update { it.copy(movies = m, tv = tv) } }
+                    } }.collect { (m, tv) ->
+                        currentCoroutineContext().ensureActive()
+                        _state.update { it.copy(movies = m, tv = tv) }
+                    }
                 } else {
                     MediaType.entries.forEach(::reload)
                     repository.listRevision.drop(1).collect { MediaType.entries.forEach(::reload) }
@@ -125,32 +146,38 @@ class LibraryStateHolder(
     fun loadMore(media: MediaType) {
         val (c, t) = listScope ?: return
         val group = _state.value.group(media)
-        if (!group.hasMore || group.loadingMore || group.section !is SectionState.Content) return
-        val generation = generations.getValue(media).current
-        setGroup(media) { it.copy(loadingMore = true, moreError = null) }
+        val loadedPage = group.loadedPage ?: return
+        if (!group.hasMore || group.section !is SectionState.Content || loadedPage >= MAX_PAGE) return
+        if (media in reloading) { pendingMore += media; return }
+        if (group.loadingMore) return
+        val generation = generations.getValue(media).bump()
+        val next = loadedPage + 1
+        setAccountGroup(media, c, t, generation) { it.copy(loadingMore = true, moreError = null) }
         scope.launch {
-            val next = loadedPages.getValue(media) + 1
             try {
-                val page = repository.accountPage(c, t.kind, media, next)
+                val page = repository.accountPage(c, t.kind, media, next).checked(next)
+                currentCoroutineContext().ensureActive()
                 if (!generations.getValue(media).isCurrent(generation)) return@launch
-                loadedPages[media] = next
-                setGroup(media) {
+                setAccountGroup(media, c, t, generation) {
                     val shown = (it.section as? SectionState.Content)?.value.orEmpty()
                     val known = shown.mapTo(HashSet()) { e -> e.title.ref }
                     // Items shift between pages when the list changes remotely: never show a title twice.
                     it.copy(
                         section = SectionState.Content(shown + page.entries.filter { e -> e.title.ref !in known }),
-                        hasMore = page.hasMore, loadingMore = false, moreError = null,
+                        hasMore = page.hasMore && page.page < MAX_PAGE, loadingMore = false, moreError = null,
+                        loadedPage = page.page,
                     )
                 }
             } catch (failure: StorageException) {
+                currentCoroutineContext().ensureActive()
                 if (generations.getValue(media).isCurrent(generation)) {
                     onStorageFailure(failure)
-                    setGroup(media) { it.copy(loadingMore = false, moreError = SectionErrorKind.Generic) }
+                    setAccountGroup(media, c, t, generation) { it.copy(loadingMore = false, moreError = SectionErrorKind.Generic) }
                 }
             } catch (e: TmdbException) {
+                currentCoroutineContext().ensureActive()
                 if (generations.getValue(media).isCurrent(generation)) {
-                    setGroup(media) { it.copy(loadingMore = false, moreError = e.toSectionErrorKind()) }
+                    setAccountGroup(media, c, t, generation) { it.copy(loadingMore = false, moreError = e.toSectionErrorKind()) }
                 }
             }
         }
@@ -160,43 +187,74 @@ class LibraryStateHolder(
     private fun reload(media: MediaType) {
         val (c, t) = listScope ?: return
         val generation = generations.getValue(media).bump()
-        val pageCount = loadedPages.getValue(media).coerceAtLeast(1)
-        if (_state.value.group(media).section !is SectionState.Content) setGroup(media) { LibraryGroup() }
+        val pageCount = _state.value.group(media).loadedPage ?: 1
+        reloading += media
+        pendingMore -= media
+        if (_state.value.group(media).loadedPage == null) setAccountGroup(media, c, t, generation) { LibraryGroup() }
         scope.launch {
+            var completed = false
             try {
                 val pages = mutableListOf<LibraryPage>()
                 for (n in 1..pageCount) {
-                    pages += repository.accountPage(c, t.kind, media, n)
+                    pages += repository.accountPage(c, t.kind, media, n).checked(n)
+                    currentCoroutineContext().ensureActive()
+                    if (!generations.getValue(media).isCurrent(generation)) return@launch
                     if (!pages.last().hasMore) break
                 }
-                if (!generations.getValue(media).isCurrent(generation)) return@launch
-                loadedPages[media] = pages.size
-                setGroup(media) { LibraryGroup(pages.flatMap { it.entries }.distinctBy { it.title.ref }.toSection(), pages.last().hasMore) }
+                setAccountGroup(media, c, t, generation) { LibraryGroup(
+                    pages.flatMap { it.entries }.distinctBy { it.title.ref }.toSection(),
+                    pages.last().hasMore && pages.last().page < MAX_PAGE,
+                    loadedPage = pages.last().page,
+                ) }
+                completed = true
             } catch (failure: StorageException) {
+                currentCoroutineContext().ensureActive()
                 if (generations.getValue(media).isCurrent(generation)) {
                     onStorageFailure(failure)
-                    setGroup(media) { it.refreshFailed(SectionErrorKind.Generic) }
+                    setAccountGroup(media, c, t, generation) { it.refreshFailed(SectionErrorKind.Generic) }
                 }
             } catch (e: TmdbException) {
+                currentCoroutineContext().ensureActive()
                 if (!generations.getValue(media).isCurrent(generation)) return@launch
                 // A failed revalidation keeps the items already shown, marked stale with the error and a retry.
-                setGroup(media) { it.refreshFailed(e.toSectionErrorKind()) }
+                setAccountGroup(media, c, t, generation) { it.refreshFailed(e.toSectionErrorKind()) }
+            } finally {
+                if (generations.getValue(media).isCurrent(generation)) {
+                    reloading -= media
+                    val requestedMore = pendingMore.remove(media)
+                    if (completed && requestedMore && currentCoroutineContext().isActive && listScope == (c to t)) loadMore(media)
+                }
             }
         }
+    }
+
+    private fun LibraryPage.checked(expectedPage: Int): LibraryPage {
+        if (page != expectedPage || page !in 1..MAX_PAGE) throw TmdbException(TmdbError.Malformed)
+        return this
     }
 
     private fun setGroup(media: MediaType, change: (LibraryGroup) -> LibraryGroup) = _state.update {
         if (media == MediaType.Movie) it.copy(movies = change(it.movies)) else it.copy(tv = change(it.tv))
     }
 
+    private fun setAccountGroup(
+        media: MediaType, identity: AuthSession, selectedTab: LibraryTab, generation: Long,
+        change: (LibraryGroup) -> LibraryGroup,
+    ) = _state.update {
+        if (!it.sourceIdentityKnown || it.sourceIdentity != identity || it.tab != selectedTab ||
+            !generations.getValue(media).isCurrent(generation)) it
+        else if (media == MediaType.Movie) it.copy(movies = change(it.movies)) else it.copy(tv = change(it.tv))
+    }
+
     private fun LibraryGroup.refreshFailed(error: SectionErrorKind): LibraryGroup =
         if (section is SectionState.Content) copy(loadingMore = false, refreshError = error)
-        else LibraryGroup(SectionState.Error(error))
+        else LibraryGroup(SectionState.Error(error), loadedPage = loadedPage)
 
     private fun List<LibraryEntry>.toSection(): SectionState<List<LibraryEntry>> =
         if (isEmpty()) SectionState.Empty else SectionState.Content(this)
 
     private companion object {
         const val TAB = "library.tab"
+        const val MAX_PAGE = 500
     }
 }
