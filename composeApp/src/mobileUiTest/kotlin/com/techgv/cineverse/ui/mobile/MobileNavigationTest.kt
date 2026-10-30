@@ -65,7 +65,8 @@ class MobileNavigationTest {
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
         onNodeWithText("Profile", useUnmergedTree = true).performClick()
         restoration.emulateSaveAndRestore()
-        onNodeWithText("Internal placeholder · This tab is not implemented in M1.").assertIsDisplayed()
+        onNodeWithTag("mobile-profile").assertIsDisplayed()
+        onNodeWithText("Not signed in · library stays on this device").assertIsDisplayed()
         onNodeWithText("Home", useUnmergedTree = true).performClick()
         onNodeWithText("Detail title 101").assertIsDisplayed()
         // Re-selecting the active tab pops its stack.
