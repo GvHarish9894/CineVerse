@@ -275,6 +275,12 @@ C3 header: 83ceb1d5 aria-label copy WORKS — focused textbox now named 'Search 
 
 C5 chunk 4 267a4e88 review CLEAR with P1 race: owner on Default while UI calls import holder on Main. Fix: MobileApplication accountContext param, MobileModule passes Dispatchers.Main.immediate, MobileApplicationTest setMain/resetMain. Then host + native5.
 
+### Checkpoint 2026-10-30d
+
+C5 chunk 4 at 712a2288: host 184/184 + native 5/5 GREEN (3 reds were fixture: advanceUntilIdle skipped backgroundScope work; coordinator needs its own SupervisorJob like the app). Next: chunk 5 Library/Profile tabs, then Android runtime.
+
+C3 real page 5/6 at 1980d0ca: modal, header, narrow logo, rating submit, rating disposed PASS. aria-valuetext '' was an AX-tree vs DOM-attribute layer difference, not product (DOM has '1.0, Poor'). Compose-web semantics flush is debounced 100 ms (forced at 1000) — AX text checks must be bounded waits. Case 6 trailer: 'initial Close AX focus' wait is the same over-translation (AX focus not mirrored for canvas focus); prove functionally: canvas active -> Tab -> iframe active, Shift+Tab -> canvas again, etc. P2 framework finding retained.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
