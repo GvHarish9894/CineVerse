@@ -281,6 +281,12 @@ C5 chunk 4 at 712a2288: host 184/184 + native 5/5 GREEN (3 reds were fixture: ad
 
 C3 real page 5/6 at 1980d0ca: modal, header, narrow logo, rating submit, rating disposed PASS. aria-valuetext '' was an AX-tree vs DOM-attribute layer difference, not product (DOM has '1.0, Poor'). Compose-web semantics flush is debounced 100 ms (forced at 1000) — AX text checks must be bounded waits. Case 6 trailer: 'initial Close AX focus' wait is the same over-translation (AX focus not mirrored for canvas focus); prove functionally: canvas active -> Tab -> iframe active, Shift+Tab -> canvas again, etc. P2 framework finding retained.
 
+### Checkpoint 2026-10-30e
+
+NATIVE ROOT INTEGRATION SOURCE-COMPLETE at C5 154d1778: chunks 1-5 reviewed CLEAR; host 184/184; native 5/5. mobileUiTest = 16 classes / 128 @Test. Next: Android runtime per-class on owned AVD (emulator-5556), then hosted iOS full suite on the C5 head.
+
+C3 real page 5/6 at a5e1b438. Case 6 reverse: Shift modifier DOES reach Compose (probe). Observed: Shift+Tab from Close keeps focus on Close. Root cause (parent): cluster-3 fix `if(!moveFocus(dir)){clearFocus; closeFocus.requestFocus()}` wraps BOTH directions to Close — regression vs the Kotlin contract (WebTrailerDocumentTest L48-49: Close -> Shift+Tab -> Teaser; Teaser -> Shift+Tab -> iframe). Backward wrap must enter the dialog from its LAST stop, without the illegal 1D `requestFocus(Previous)`. Fix tests-first (harness already encodes it), smallest production change in DialogProperties.wasmJs.kt, verify Karma trap tests + real page.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
