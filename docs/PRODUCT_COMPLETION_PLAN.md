@@ -323,6 +323,14 @@ Candidate cebbab17 compile smoke ALL GREEN: wasm main/test, host 184/184, native
 
 C3 ae65d5fb independently CLEAR (P2 notes only) — the head to integrate. C3 non-web paths (Buttons.kt showTooltip, Overlays.kt CvDialog hooks, Dialog actuals no-ops, HomeStateHolder canStartTrailer + test, build.gradle.kts harness) are untouched by C5/C2 since d1bc075; `git merge-tree` dry run: no conflicts. Merge after the TV gate lane releases the integration worktree (no checkout during a running build).
 
+### Checkpoint 2026-10-30k — full candidate assembled
+
+product-integration@82aed66c = master 37c45ffe + C5 903dc927 + C2 630c0765 + C3 ae65d5fb. All merges clean except the two predicted test conflicts (resolved). Verified: C2 files identical to C2 head; C3 files identical to C3 head; Explore identical to C5.
+
+Gates at cebbab17 (pre-C3; C3 touches no tvApp/server and only HomeStateHolder in shared): shared jvm 554/554 + androidHost 548/548, room-in-wasm 0; server 60/60 incl. security suites; TV unit 63/63, lint 0 errors, debug+release assembled. TV instrumented on owned CineVerse_TV_1080p_API36: 36 OK / 2 FAIL / 1 ignored vs baseline 38/1. Both failures = ExitDialogOverPlayerTest precondition `needs a guest (signed-out) install`; the AVD's old user-0 data holds a REAL signed-in TMDB session (raw log contains display name — treat as sensitive). Not a code regression. DECISION: do NOT sign out / clear user 0 (that is the old data the upgrade fixture protects). Use a secondary Android user on the owned TV AVD for the guest-precondition instrumented run; keep user 0 for the install-over-old-data fixture. TV install on AVD is now the candidate debug build (release->debug install over data succeeded, data inode preserved, settings hash unchanged). Fixture steps (debug launch checks, signed release copy over data, debug back) still owed.
+
+Remaining on candidate 82aed66c: Wasm compile + Karma 58 + fonts 21 + real page 7 + web regression groups; Android 17 classes/130 on owned phone AVD; iOS full (blocked: Xcode first-launch); TV instrumented (secondary user) + upgrade fixture; dist/secrets; integrated review; push identity.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
