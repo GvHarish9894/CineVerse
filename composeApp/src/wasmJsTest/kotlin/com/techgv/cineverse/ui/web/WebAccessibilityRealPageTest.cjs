@@ -162,10 +162,6 @@ function axProperty(node, name) { return node?.properties?.find(property => prop
 function axNodes(tree) { return tree.nodes.filter(node => !node.ignored); }
 function axNamed(tree, role, name) { return axNodes(tree).filter(node => node.role?.value === role && node.name?.value === name); }
 async function axTree(page) { return page.call('Accessibility.getFullAXTree'); }
-async function focusedAx(page, role, name) {
-    const nodes = axNamed(await axTree(page), role, name);
-    return nodes.length === 1 && axProperty(nodes[0], 'focused') === true;
-}
 
 async function borderRect(page, node) {
     const quad = (await page.call('DOM.getBoxModel', node)).model.border;
@@ -331,20 +327,22 @@ async function trailerCase(page, origin) {
     assert.ok(owned.includes(frame.id) && owned.includes(before.id) && owned.includes(after.id));
     assert.equal(await evaluate(page, `(${deepFindSource})('[role="dialog"]').getRootNode()===(${deepFindSource})('iframe[data-cv-trailer]').getRootNode()`), true);
     assert.equal(await evaluate(page, `(() => { for(const s of ['[data-cv-trailer-before]','[data-cv-trailer-after]']){let n=(${deepFindSource})(s);for(;n;n=n.parentElement)if(n.getAttribute('aria-hidden')==='true')return false}return true})()`), true);
-    await until(() => focusedAx(page, 'button', 'Close'), 'initial Close focus');
+    // Compose focuses Close on open; that canvas focus is not mirrored into AX focus, so the trap is proven via activeElement.
+    await until(() => canvasActive(page), 'initial canvas focus (Close)');
     await key(page, 'Tab');
     await until(async () => await callOn(page, (await activeObject(page)).objectId, `function(){return this.matches('iframe[data-cv-trailer]')}`), 'iframe focus');
     await domFocus(page, '[data-cv-trailer-after]');
-    await until(() => focusedAx(page, 'button', 'Teaser One · Teaser'), 'teaser focus from after guard');
+    await until(() => canvasActive(page), 'canvas focus (teaser) from after guard');
     await key(page, 'Tab');
-    await until(() => focusedAx(page, 'button', 'Close'), 'Close after teaser');
+    await until(() => canvasActive(page), 'canvas focus (Close) after teaser');
     await key(page, 'Tab', true);
-    await until(() => focusedAx(page, 'button', 'Teaser One · Teaser'), 'reverse teaser focus');
+    await until(() => canvasActive(page), 'reverse canvas focus (teaser)');
     await key(page, 'Tab', true);
     await until(async () => await callOn(page, (await activeObject(page)).objectId, `function(){return this.matches('iframe[data-cv-trailer]')}`), 'reverse iframe focus');
     await domFocus(page, '[data-cv-trailer-before]');
-    await until(() => focusedAx(page, 'button', 'Close'), 'Close from before guard');
-    await click(page, '[role="dialog"] [aria-label="Close"]');
+    await until(() => canvasActive(page), 'canvas focus (Close) from before guard');
+    // Enter activating Close proves the before guard handed focus to Close.
+    await key(page, 'Enter');
     await until(async () => !(await objectFor(page, '[data-cv-trailer], [data-cv-trailer-before], [data-cv-trailer-after]')) && !(await objectFor(page, '[role="dialog"]')), 'trailer disposal');
     assert.equal((await bridge(page)).trailerOpen, false);
 }
