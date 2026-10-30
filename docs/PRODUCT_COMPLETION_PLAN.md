@@ -317,6 +317,12 @@ C3 at ae65d5fb: Karma 58/58, Home 12/12, native 5/5, real page 7/7. Two test-onl
 
 Integration (C1 slot reused per recipe d8c68796; l3-design untouched): branch product-integration from master 37c45ffe; master had no non-docs commits beyond the C5 merge-base (git cherry verified). Merged C5 903dc927 -> 001126f5 (clean). Merged C2 630c0765 -> cebbab17: conflicts only in MobileExploreScreenTest (took C5, which already contained C2's hunk) and MobileNavigationTest.selectedTab... (C2 runOnIdle restore + C5 real Profile assertions). C2 owned files identical to C2 head; Explore identical to C5. Next: compile smoke on candidate; merge C3 final head after review CLEAR; then full gate list (shared, host 184, native 5, server, TV incl. instrumented+upgrade fixture, Wasm compile+Karma 58+fonts 21+real page 7+web regression groups, Android 17 classes/130, iOS full once first-launch done, dist/secrets).
 
+### Checkpoint 2026-10-30j
+
+Candidate cebbab17 compile smoke ALL GREEN: wasm main/test, host 184/184, native 5, tvApp+server compile. Shared/server/TV gates running (incl. TV instrumented + upgrade fixture on owned TV AVD).
+
+C3 ae65d5fb independently CLEAR (P2 notes only) — the head to integrate. C3 non-web paths (Buttons.kt showTooltip, Overlays.kt CvDialog hooks, Dialog actuals no-ops, HomeStateHolder canStartTrailer + test, build.gradle.kts harness) are untouched by C5/C2 since d1bc075; `git merge-tree` dry run: no conflicts. Merge after the TV gate lane releases the integration worktree (no checkout during a running build).
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
