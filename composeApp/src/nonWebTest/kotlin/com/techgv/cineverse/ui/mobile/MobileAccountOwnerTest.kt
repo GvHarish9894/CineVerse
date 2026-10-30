@@ -11,7 +11,6 @@ import com.techgv.cineverse.presentation.ImportPrompt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
@@ -102,7 +101,7 @@ class MobileAccountOwnerTest {
         runCurrent()
         val replaced = ana.copy(sessionGeneration = 2)
         signInThroughApproval(f) { f.auth.emissions.emit(replaced); SignInOutcome.SignedIn(ana, hindiUs) }
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(MobileIdentity(replaced), f.graph.identity.value)
         assertTrue(f.settings.pendingAccountDefaults.first().isEmpty())
         assertNull(f.dialog())
@@ -122,12 +121,12 @@ class MobileAccountOwnerTest {
         f.auth.emissions.emit(again)
         runCurrent()
         f.graph.account.resolveDefaults(rendered, apply = true)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals("en-US", f.settings.current().language, "A stale Apply writes nothing")
         val current = f.dialog() as MobileAccountDialog.Defaults
         assertEquals(again, current.session)
         f.graph.account.resolveDefaults(current, apply = true)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals("hi-IN", f.settings.current().language)
         assertEquals("US", f.settings.current().region)
         assertNull(f.dialog())
@@ -141,12 +140,12 @@ class MobileAccountOwnerTest {
         f.auth.emissions.emit(null)
         runCurrent()
         f.graph.account.resolveDefaults(bobDialog, apply = false)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(mapOf("bob" to bobOffer), f.settings.pendingAccountDefaults.first(), "A stale Dismiss resolves nothing")
         f.auth.emissions.emit(bob)
         runCurrent()
         f.graph.account.resolveDefaults(f.dialog() as MobileAccountDialog.Defaults, apply = false)
-        advanceUntilIdle()
+        runCurrent()
         assertTrue(f.settings.pendingAccountDefaults.first().isEmpty())
         assertEquals("hi-IN", f.settings.current().language, "Dismiss keeps current settings")
         f.graph.close()
@@ -183,12 +182,12 @@ class MobileAccountOwnerTest {
         runCurrent()
         f.codeFailure = TmdbException(TmdbError.Network)
         f.graph.account.onSignIn()
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(MobileAccountDialog.Approval(MobileApprovalPhase.StartFailed), f.dialog())
         assertEquals(1, f.codes)
         f.codeFailure = null
         f.graph.account.startAgain()
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(2, f.codes)
         assertEquals(MobileAccountDialog.Approval(MobileApprovalPhase.Waiting), f.dialog())
 
@@ -196,7 +195,7 @@ class MobileAccountOwnerTest {
         val edits = f.store.edits
         f.auth.approval = { f.auth.emissions.emit(ana); SignInOutcome.SignedIn(ana, hindiUs) }
         f.graph.account.checkAgain()
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(edits + 1, f.store.edits)
         assertTrue(f.settings.pendingAccountDefaults.first().isEmpty())
         assertNull(f.dialog())
@@ -205,7 +204,7 @@ class MobileAccountOwnerTest {
         f.auth.signOutFailure = StorageException("fake credential clear")
         f.graph.account.onSignOut(ana)
         f.graph.account.confirmSignOut(f.dialog() as MobileAccountDialog.SignOut)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(MobileAccountDialog.SignOut(ana, MobileSignOutPhase.Failed), f.dialog())
         assertEquals(1, f.auth.signOuts)
         assertEquals(edits + 1, f.store.edits)
@@ -234,17 +233,17 @@ class MobileAccountOwnerTest {
         f.auth.emissions.emit(bob)
         runCurrent()
         f.graph.account.importLibrary(stale as MobileAccountDialog.Import)
-        advanceUntilIdle()
+        runCurrent()
         assertTrue(f.account.writes.isEmpty(), "A stale prompt cannot import into the current account")
         val current = f.dialog() as MobileAccountDialog.Import
         assertEquals(bob, current.session)
         f.graph.account.importLibrary(current)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(listOf(bob to f.guest.rows.value.single().ref), f.account.writes)
         assertNull(f.dialog())
         assertEquals(listOf("Guest library imported"), messages)
         f.auth.emissions.emit(null)
-        advanceUntilIdle()
+        runCurrent()
         assertNull(f.dialog())
         assertEquals(listOf("ana", "bob"), f.imports.offerReads)
         f.graph.close()
@@ -258,7 +257,7 @@ class MobileAccountOwnerTest {
         val seen = mutableListOf<MobileAccountDialog?>()
         backgroundScope.launch { f.graph.account.dialog.collect { seen += it } }
         signInThroughApproval(f) { f.auth.emissions.emit(ana); SignInOutcome.SignedIn(ana, hindiUs) }
-        advanceUntilIdle()
+        runCurrent()
         val defaults = f.dialog()
         assertEquals(MobileAccountDialog.Defaults(ana, anaOffer), defaults)
         assertTrue(seen.none { it is MobileAccountDialog.Import }, "Defaults precede import after sign-in: $seen")
@@ -269,7 +268,7 @@ class MobileAccountOwnerTest {
         f.graph.account.dismissSignOut(signOut as MobileAccountDialog.SignOut)
         assertEquals(defaults, f.dialog())
         f.graph.account.resolveDefaults(defaults as MobileAccountDialog.Defaults, apply = false)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(MobileAccountDialog.Import(ana, ImportPrompt.Ask("Ana", 1)), f.dialog())
         f.graph.close()
     }

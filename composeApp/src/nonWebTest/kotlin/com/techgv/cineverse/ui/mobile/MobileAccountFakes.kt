@@ -9,6 +9,8 @@ import com.techgv.cineverse.data.tmdb.CatalogRepository
 import com.techgv.cineverse.domain.*
 import com.techgv.cineverse.util.GenerationCounter
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -34,11 +36,12 @@ internal class MobileAccountFixture(scope: CoroutineScope, val pending: PendingA
     var codes = 0
     var codeFailure: Exception? = null
     val library = LibraryRepository(auth.session, GuestLibrarySource(guest), account)
+    // Own SupervisorJob as in production: a failed exchange surfaces through await, not backgroundScope's failure reporter.
     val approval = NativeApprovalCoordinator(auth, pending, opener, {
         codes++
         codeFailure?.let { throw it }
         RequestCode("token-$codes")
-    }, scope)
+    }, CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job])))
     val graph = MobileApplication(CatalogRepository(MobileCatalogApi(), generation, settings::current), generation, settings, auth,
         library, RecentQueryStore(store), scope, approval, LibraryImporter(imports, imports, GuestLibrarySource(guest), account, library))
 
