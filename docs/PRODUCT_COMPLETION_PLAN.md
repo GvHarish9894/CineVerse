@@ -259,6 +259,14 @@ C3: build script compiles at 58fdf9fc but KGP creates no webpack task for the cu
 
 C2 iOS: helper fix a7ce668 green (steps 1-2 pass). Step 3 at 21ad9c17 now fails post-restore at line 119: Home scroll not visible after emulated restore. Runtime is SkikoComposeUiTest in-memory scene, not UIKit window — iOS UI results are component-level, not "hosted window" acceptance. Diagnose: VM/data recreated under disposed LocalViewModelStoreOwner (fixture) vs LazyListState not saved (product). Fix smallest, test-only unless product defect proven.
 
+### Checkpoint 2026-10-30b
+
+C5 chunk 3 at 5cb90f23: host 175/175 (at 71386ce; 5cb90f23 is an iOS-only import fix) + native 5/5 compile green. Next: chunk 4 account owner/dialogs (source), then chunk 5 Library/Profile tabs, then Android 68 + remaining classes on owned emulator.
+
+C3 harness: staging fixed (e67937bc) via binary linkSyncTask + js-joda import map; case 1 modal-owned-replacement PASS on real page. Case 2 header: canvas click focuses the field, but AX focus lands on Compose's unnamed hidden IME <input>, not the named `#header-search-input` mirror (tabindex=-1 by bridge design). PRODUCT FINDING P1: focused search field has no accessible name for AT. Plan: tests-first in harness (focused textbox must have name 'Search movies, TV and people' and geometry of the search field; Shift+Tab return checked the same way), then smallest production fix in the header focus bridge (mirror aria-label/aria-labelledby onto the focused Compose input), review, rerun six cases.
+
+C2 iOS: 8/11 green at aa36e6d4 (fixture fixes only: VM-store hoist, Today chip scroll, scroll-by-key so See all is not under FloatingTabBar). Step 9 home-settings-recovery Retry likely under the tab bar too; diagnose/fix test-only, run 9-11. iOS UI runtime = in-memory SkikoComposeUiTest scene (component-level evidence).
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
