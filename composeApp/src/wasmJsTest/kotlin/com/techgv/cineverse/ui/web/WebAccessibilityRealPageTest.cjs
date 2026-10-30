@@ -12,6 +12,7 @@ const artifacts = fs.mkdtempSync(path.join(os.tmpdir(), 'cineverse-accessibility
 const profile = path.join(artifacts, 'chrome-profile');
 const mime = {'.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.mjs': 'application/javascript', '.wasm': 'application/wasm', '.ttf': 'font/ttf', '.json': 'application/json'};
 const fonts = ['bricolage_grotesque_medium.ttf', 'bricolage_grotesque_bold.ttf', 'bricolage_grotesque_extrabold.ttf', 'inter_regular.ttf', 'inter_medium.ttf', 'inter_semibold.ttf', 'inter_bold.ttf'];
+const scripts = ['/CineVerse-composeApp-accessibilityHarness.mjs', '/skiko.mjs'];
 const cases = ['modal-owned-replacement', 'header-signin-tab', 'narrow-logo-entry', 'rating-slider-submit', 'rating-disposed-replacement', 'trailer-forward-guards'];
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const deepFindSource = `(selector) => {
@@ -169,12 +170,14 @@ async function assertResources(page, origin) {
         const responses = [...page.responses.entries()].filter(([id]) => page.finished.has(id)).map(([, response]) => response);
         const fontResponses = responses.filter(response => response.url.includes('/composeResources/') && response.url.endsWith('.ttf'));
         const wasmResponses = responses.filter(response => new URL(response.url).pathname.endsWith('.wasm'));
-        const script = responses.find(response => response.url === origin + '/composeApp.js');
-        return script && wasmResponses.length >= 2 && fonts.every(font => fontResponses.some(response => response.url.endsWith('/' + font)));
-    }, 'composeApp.js, Kotlin/Skiko Wasm and seven fonts', 15000);
+        const scriptsLoaded = scripts.every(script => responses.some(response => response.url === origin + script));
+        return scriptsLoaded && wasmResponses.length >= 2 && fonts.every(font => fontResponses.some(response => response.url.endsWith('/' + font)));
+    }, 'harness/Skiko modules, Kotlin/Skiko Wasm and seven fonts', 15000);
     const responses = [...page.responses.entries()];
-    const script = responses.find(([, response]) => response.url === origin + '/composeApp.js');
-    assert.ok(script && script[1].status === 200 && script[1].mimeType.includes('javascript') && page.finished.has(script[0]));
+    for (const name of scripts) {
+        const script = responses.find(([, response]) => response.url === origin + name);
+        assert.ok(script && script[1].status === 200 && script[1].mimeType.includes('javascript') && page.finished.has(script[0]), 'Missing module ' + name);
+    }
     const wasms = responses.filter(([, response]) => new URL(response.url).pathname.endsWith('.wasm'));
     assert.ok(wasms.length >= 2, 'Expected Kotlin and Skiko Wasm');
     assert.ok(wasms.every(([id, response]) => response.status === 200 && response.mimeType === 'application/wasm' && page.finished.has(id)));

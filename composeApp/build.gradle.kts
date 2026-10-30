@@ -2,10 +2,12 @@ import groovy.json.JsonSlurper
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import org.jetbrains.kotlin.gradle.targets.js.dsl.KotlinJsBinaryMode
+import org.jetbrains.kotlin.gradle.targets.js.ir.JsIrBinary
 import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrCompilation
 import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrTarget
 import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsExec
-import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpack
+import org.jetbrains.kotlin.gradle.targets.js.npm.npmProject
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -148,22 +150,23 @@ kotlin {
 val accessibilityHarnessCompilation =
     (kotlin.targets.getByName("wasmJs") as KotlinJsIrTarget).compilations.getByName("accessibilityHarness") as KotlinJsIrCompilation
 val accessibilityHarnessDist = layout.buildDirectory.dir("dist/wasmJs/accessibilityHarnessDevelopmentExecutable")
-val accessibilityHarnessWebpack = tasks.withType<KotlinWebpack>().matching {
-    name.contains("AccessibilityHarness") && name.endsWith("DevelopmentWebpack")
-}
+// KGP only creates browser webpack tasks for the main compilation, so stage the unbundled ES-module link output.
+val accessibilityHarnessBinary =
+    accessibilityHarnessCompilation.binaries.withType<JsIrBinary>().single { it.mode == KotlinJsBinaryMode.DEVELOPMENT }
+val accessibilityHarnessNpm = accessibilityHarnessCompilation.npmProject
 
 val webAccessibilityHarnessDistribution = tasks.register<Sync>("webAccessibilityHarnessDistribution") {
     group = "verification"
     description = "Stages the isolated real-page accessibility harness distribution."
-    dependsOn(accessibilityHarnessWebpack)
-    from(accessibilityHarnessWebpack)
-    from(tasks.named(accessibilityHarnessCompilation.processResourcesTaskName))
+    // Harness .mjs/.wasm, Skiko runtime (skiko.mjs/.wasm) and processed resources (index.html).
+    from(accessibilityHarnessBinary.linkSyncTask)
+    // kotlinx-datetime imports bare '@js-joda/core'; index.html maps it to this file with an import map.
+    dependsOn(accessibilityHarnessNpm.nodeJsRoot.npmInstallTaskProvider)
+    from(accessibilityHarnessNpm.nodeModulesDir.map { it.file("@js-joda/core/dist/js-joda.esm.js") })
     from(layout.projectDirectory.dir("src/commonMain/composeResources/font")) {
         into("composeResources/com.techgv.cineverse.ui.resources/font")
     }
     into(accessibilityHarnessDist)
-    val webpackNames = accessibilityHarnessWebpack.names.sorted()
-    doFirst { check(webpackNames.size == 1) { "Expected one accessibilityHarness development webpack task, found $webpackNames" } }
 }
 
 NodeJsExec.register(accessibilityHarnessCompilation, "webAccessibilityRealPageTest") {
