@@ -29,7 +29,8 @@ class MobileExploreScreenTest {
         onNodeWithText("TV shows · On TV").assertIsDisplayed()
         onNodeWithText("People").performClick()
         onNodeWithText("Popular people").assertIsDisplayed()
-        onNodeWithText("people-en-US 1").performClick()
+        // Viewport paging loads page 2, whose fixture person 201 reuses the label; the first node is person 101.
+        onAllNodesWithText("people-en-US 1")[0].performClick()
         onNodeWithText("Internal placeholder · Person 101").assertIsDisplayed()
         onNodeWithText("Back").performClick()
         onNodeWithText("Movies").performClick()
