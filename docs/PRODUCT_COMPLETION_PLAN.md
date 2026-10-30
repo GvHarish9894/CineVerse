@@ -243,6 +243,14 @@ C2 iOS9f2e507 independently CLEAR: portable saveable registry and state waits. H
 
 C3 real-page plan approved: custom `accessibilityHarness` Wasm compilation associated withwasmJsMain, dedicated test sources/resources, real ComposeViewport/production components/bridge, Node22 CDP runner one fresh browser context/page per six cases, real assets/AX/DOM, page close disposal. No production files. First add runner+harness/build tasks while invalid runCompose tests remain; execute six real-page cases; only after green remove/replace six invalid methods and normal compile. Source implementation parallel C5 execution.
 
+### Model policy change + parallel state (2026-10-30)
+
+Operator switched parent to claude-fable-5-1 and subagents to `cliproxyapi/claude-opus-5-5` (supersedes gpt-5.6-sol). No fallback.
+
+C5: host56/56 at68e50fd retained. Native compile RED twice on test-only JVM clash (`isActive` also maps to setActive). Fixed c556683 renaming flag `activeState`; rerun native5 next.
+
+C3 harness ee9e288 review7fa2a3a4 BLOCK: P0-1 doFirst captures script vals/outer task → configuration-cache failure (fix: names val + configuration-time args); P0-2 DOM.focus(body) not focusable (fix: blur + assert activeElement===body); P1-1 Node22 pin affects all Wasm tasks → decision: remove pin, CJS asserts Node>=22; P1-2 disposed-slider assert only valuenow/valuetext null per original contract; P2 font-finished check inside poll loop, Close focus via AX wait, SIGKILL fallback, drop redundant srcDir. Apply then first run `:composeApp:webAccessibilityRealPageTest` under lease.
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
