@@ -171,7 +171,7 @@ val webAccessibilityHarnessDistribution = tasks.register<Sync>("webAccessibility
 
 NodeJsExec.register(accessibilityHarnessCompilation, "webAccessibilityRealPageTest") {
     group = "verification"
-    description = "Runs the six isolated real-page accessibility cases in an owned Chrome using Node 22."
+    description = "Runs the seven isolated real-page accessibility cases in an owned Chrome using Node 22."
     dependsOn(webAccessibilityHarnessDistribution)
     inputFileProperty.set(layout.projectDirectory.file("src/wasmJsTest/kotlin/com/techgv/cineverse/ui/web/WebAccessibilityRealPageTest.cjs"))
     sourceMapStackTraces = false

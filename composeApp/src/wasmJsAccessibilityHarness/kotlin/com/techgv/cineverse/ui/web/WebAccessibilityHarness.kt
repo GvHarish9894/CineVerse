@@ -33,7 +33,8 @@ private const val NARROW = "narrow-logo-entry"
 private const val RATE = "rating-slider-submit"
 private const val DISPOSED_RATE = "rating-disposed-replacement"
 private const val TRAILER = "trailer-forward-guards"
-private val CASES = setOf(MODAL, HEADER, NARROW, RATE, DISPOSED_RATE, TRAILER)
+private const val REVERSE = "header-reverse-entry"
+private val CASES = setOf(MODAL, HEADER, NARROW, RATE, DISPOSED_RATE, TRAILER, REVERSE)
 
 private class HarnessState(val case: String) {
     var mountCount = 0
@@ -106,7 +107,7 @@ private fun AccessibilityHarness(state: HarnessState) {
             Box(Modifier.fillMaxSize()) {
                 when (state.case) {
                     MODAL -> ModalScene(state)
-                    HEADER -> HeaderScene(state, narrow = false)
+                    HEADER, REVERSE -> HeaderScene(state, narrow = false)
                     NARROW -> HeaderScene(state, narrow = true)
                     RATE, DISPOSED_RATE -> RateScene(state)
                     TRAILER -> TrailerScene(state)

@@ -13,7 +13,7 @@ const profile = path.join(artifacts, 'chrome-profile');
 const mime = {'.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.mjs': 'application/javascript', '.wasm': 'application/wasm', '.ttf': 'font/ttf', '.json': 'application/json'};
 const fonts = ['bricolage_grotesque_medium.ttf', 'bricolage_grotesque_bold.ttf', 'bricolage_grotesque_extrabold.ttf', 'inter_regular.ttf', 'inter_medium.ttf', 'inter_semibold.ttf', 'inter_bold.ttf'];
 const scripts = ['/CineVerse-composeApp-accessibilityHarness.mjs', '/skiko.mjs'];
-const cases = ['modal-owned-replacement', 'header-signin-tab', 'narrow-logo-entry', 'rating-slider-submit', 'rating-disposed-replacement', 'trailer-forward-guards'];
+const cases = ['modal-owned-replacement', 'header-signin-tab', 'narrow-logo-entry', 'rating-slider-submit', 'rating-disposed-replacement', 'trailer-forward-guards', 'header-reverse-entry'];
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const deepFindSource = `(selector) => {
     function find(root) {
@@ -352,6 +352,17 @@ async function trailerCase(page, origin) {
     assert.equal((await bridge(page)).trailerOpen, false);
 }
 
+async function reverseEntryCase(page, origin) {
+    await ready(page, origin, async () => axNamed(await axTree(page), 'button', 'Sign in').length === 1);
+    await evaluate(page, `(${activeSource})()?.blur?.()`);
+    assert.equal(await evaluate(page, 'document.activeElement === document.body'), true);
+    await key(page, 'Tab', true);
+    await until(() => canvasActive(page), 'canvas activeElement after Shift+Tab from body');
+    await key(page, 'Enter');
+    await until(async () => (await bridge(page)).signIns === 1, 'Enter activates LAST header stop (Sign in)');
+    assert.equal((await bridge(page)).homeNavigations, 0);
+}
+
 const implementations = {
     'modal-owned-replacement': modalCase,
     'header-signin-tab': headerCase,
@@ -359,6 +370,7 @@ const implementations = {
     'rating-slider-submit': ratingCase,
     'rating-disposed-replacement': disposedRatingCase,
     'trailer-forward-guards': trailerCase,
+    'header-reverse-entry': reverseEntryCase,
 };
 
 async function diagnostics(page, name, error) {
@@ -421,7 +433,7 @@ async function pageSocket(debugging, targetId) {
                 await browser.call('Target.disposeBrowserContext', {browserContextId}).catch(() => {}); remainingContexts.delete(browserContextId);
             }
         }
-        console.log('COMPLETE: six isolated accessibility real-page cases; evidence directory ' + artifacts);
+        console.log('COMPLETE: seven isolated accessibility real-page cases; evidence directory ' + artifacts);
     } finally {
         if (browser) {
             for (const targetId of remainingTargets) await browser.call('Target.closeTarget', {targetId}).catch(() => {});
