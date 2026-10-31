@@ -45,6 +45,7 @@ internal fun MobileAccountDialogHost(owner: MobileAccountOwner, dialog: MobileAc
                     PillButton(if (dialog.phase == Phase.StartFailed) "Try again" else "Start again", owner::startAgain)
                 Phase.Starting, Phase.Checking, Phase.Unavailable -> Unit
             }
+            if (dialog.phase == Phase.Resume) PillButton("Start over", owner::startAgain, variant = ButtonVariant.Ghost)
             PillButton(when (dialog.phase) {
                 Phase.Resume -> "Not now"
                 Phase.Starting, Phase.Waiting, Phase.Checking, Phase.StillWaiting -> "Cancel"

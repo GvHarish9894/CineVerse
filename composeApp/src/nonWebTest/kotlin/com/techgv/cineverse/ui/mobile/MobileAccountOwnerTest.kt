@@ -55,14 +55,17 @@ class MobileAccountOwnerTest {
         f.graph.close()
     }
 
-    @Test fun coldStartPendingAttemptPromptsAndManualCheckFinishesThroughAuthoritativeIdentity() = runTest {
+    @Test fun coldStartPendingAttemptResumesOnSignInAndManualCheckFinishesThroughAuthoritativeIdentity() = runTest {
         val pending = InMemoryPendingAttemptStore().apply { save(ApprovalAttempt.of(RequestCode("earlier"))) }
         val f = MobileAccountFixture(backgroundScope, pending)
         f.auth.emissions.emit(null)
         runCurrent()
+        assertNull(f.dialog(), "A cold start never prompts over Home")
+        f.graph.account.onSignIn()
+        runCurrent()
         assertEquals(MobileAccountDialog.Approval(MobileApprovalPhase.Resume), f.dialog())
-        assertEquals(0, f.codes)
-        assertEquals(0, f.auth.waits, "A cold start only offers the check")
+        assertEquals(0, f.codes, "Sign in with a pending attempt offers the check instead of a new request")
+        assertEquals(0, f.auth.waits, "Sign in only offers the check")
         f.auth.approval = { SignInOutcome.TimedOut }
         f.graph.account.checkAgain()
         runCurrent()
@@ -74,6 +77,23 @@ class MobileAccountOwnerTest {
         assertNull(f.dialog())
         assertEquals(2, f.auth.waits)
         assertEquals(0, f.codes)
+        f.graph.close()
+    }
+
+    @Test fun resumedPendingAttemptCanStartOverWithOneNewRequest() = runTest {
+        val pending = InMemoryPendingAttemptStore().apply { save(ApprovalAttempt.of(RequestCode("earlier"))) }
+        val f = MobileAccountFixture(backgroundScope, pending)
+        f.auth.emissions.emit(null)
+        runCurrent()
+        f.graph.account.onSignIn()
+        runCurrent()
+        assertEquals(MobileAccountDialog.Approval(MobileApprovalPhase.Resume), f.dialog())
+        f.graph.account.startAgain()
+        f.graph.account.startAgain()
+        runCurrent()
+        assertEquals(1, f.codes)
+        assertEquals(MobileAccountDialog.Approval(MobileApprovalPhase.Waiting), f.dialog())
+        assertEquals("token-1", pending.load()?.code?.requestToken)
         f.graph.close()
     }
 

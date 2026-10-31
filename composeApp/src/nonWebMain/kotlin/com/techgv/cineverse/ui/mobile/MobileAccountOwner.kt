@@ -103,18 +103,16 @@ class MobileAccountOwner internal constructor(
                 importAccount.value = session
             }
         }
-        scope.launch {
-            if (graph.identity.filterNotNull().first() != MobileIdentity(null)) return@launch
-            val pending = try { approval.pendingAttempt() } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
-            if (pending != null && guest()) request.compareAndSet(null, ApprovalRequest(resumed = true))
-        }
     }
 
-    /** Library/Profile guest Sign in. Single-flight while an approval dialog is showing. */
+    /**
+     * Library/Profile guest Sign in. Single-flight while an approval dialog is showing. An earlier attempt still pending
+     * (e.g. from a previous run) is offered as Resume instead of starting a new request.
+     */
     fun onSignIn() {
         if (approvalPhase() != null) return
         // A returning callback may be exchanging with no dialog showing: reattach to it instead of restarting.
-        if (approval.status.value == NativeApprovalStatus.Checking) request.compareAndSet(null, ApprovalRequest()) else begin()
+        if (approval.status.value == NativeApprovalStatus.Checking) request.compareAndSet(null, ApprovalRequest()) else begin(resumePending = true)
     }
 
     fun startAgain() {
@@ -218,14 +216,17 @@ class MobileAccountOwner internal constructor(
         action()
     }
 
-    private fun begin() {
+    private fun begin(resumePending: Boolean = false) {
         if (!guest()) return
         val next = ApprovalRequest(starting = true)
         request.value = next
         scope.launch {
+            val resume = resumePending &&
+                try { approval.pendingAttempt() != null } catch (e: CancellationException) { throw e } catch (_: Exception) { false }
             // Identity may have changed, or the dialog been dismissed, before this dispatch.
             if (request.value !== next) return@launch
             if (!guest()) { request.compareAndSet(next, null); return@launch }
+            if (resume) { request.compareAndSet(next, ApprovalRequest(resumed = true)); return@launch }
             try {
                 approval.begin()
                 request.compareAndSet(next, ApprovalRequest())
@@ -275,7 +276,7 @@ class MobileAccountOwner internal constructor(
     private companion object {
         val CHECKABLE = setOf(MobileApprovalPhase.Waiting, MobileApprovalPhase.Resume, MobileApprovalPhase.StillWaiting,
             MobileApprovalPhase.Cancelled, MobileApprovalPhase.CheckFailed)
-        val RESTARTABLE = setOf(MobileApprovalPhase.StartFailed, MobileApprovalPhase.Expired, MobileApprovalPhase.Rejected,
+        val RESTARTABLE = setOf(MobileApprovalPhase.Resume, MobileApprovalPhase.StartFailed, MobileApprovalPhase.Expired, MobileApprovalPhase.Rejected,
             MobileApprovalPhase.Failed)
         val OPEN = setOf(MobileApprovalPhase.Starting, MobileApprovalPhase.Waiting, MobileApprovalPhase.Checking,
             MobileApprovalPhase.StillWaiting)
