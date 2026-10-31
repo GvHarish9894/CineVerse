@@ -32,6 +32,19 @@ class MobileLibraryScreenTest {
         assertEquals(LibraryTab.Rated, selected)
     }
 
+    @Test fun bothGroupsEmptyShowOnlyTheEmptyHero() = runComposeUiTest {
+        setThemedContent {
+            LibraryContentFixture(LibraryUiState(tab = LibraryTab.Favourites, movies = LibraryGroup(SectionState.Empty),
+                tv = LibraryGroup(SectionState.Empty), sourceIdentityKnown = true))
+        }
+        onNodeWithTag("mobile-library").performScrollToNode(hasText("Explore movies"))
+        onAllNodesWithText("Your favourites is empty").assertCountEquals(1)
+        listOf("Favourites · 0 loaded", "Movies · 0 loaded", "TV shows · 0 loaded", "Movies", "TV shows",
+            "No movies in favourites.", "No tv shows in favourites.").forEach {
+            onNodeWithText(it).assertDoesNotExist()
+        }
+    }
+
     @Test fun movieTvCardsUseActualIdentifiersRatedBadgeAndHonestLoadedCounts() = runComposeUiTest {
         var opened: MediaRef? = null
         setThemedContent {
@@ -96,6 +109,11 @@ class MobileLibraryScreenTest {
                 tv = LibraryGroup(SectionState.Empty)), onRetry = { retries++ })
         }
         onNodeWithText("Library fixture Movie 1").assertExists()
+        onNodeWithText("Watchlist · 1 loaded").assertExists()
+        onNodeWithText("Movies · 1 loaded").assertExists()
+        onNodeWithTag("mobile-library").performScrollToNode(hasText("No tv shows in watchlist."))
+        onNodeWithText("TV shows · 0 loaded").assertExists()
+        onNodeWithText("Your watchlist is empty").assertDoesNotExist()
         onNodeWithTag("mobile-library").performScrollToNode(hasTestTag("library-Movie-retry"))
         assertEquals(0, retries)
         onNodeWithTag("library-Movie-retry").onChildren().filter(hasText("Retry")).onFirst().performClick()

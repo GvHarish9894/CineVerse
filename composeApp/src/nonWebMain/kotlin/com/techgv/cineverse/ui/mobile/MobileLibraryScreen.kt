@@ -73,6 +73,8 @@ internal fun MobileLibraryContent(
     scroll: LazyGridState = rememberLazyGridState(),
 ) {
     val library = state.library.takeUnless { state.invalid || state.failed }
+    // Both groups empty: the EmptyState hero alone says so; per-group titles/rows and the counter would repeat it.
+    val bothEmpty = library != null && library.movies.section == SectionState.Empty && library.tv.section == SectionState.Empty
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
         AmbientGlow(mobilePalette("library"))
         PullToRefreshBox(library != null && (library.movies.section == SectionState.Loading || library.tv.section == SectionState.Loading),
@@ -88,7 +90,7 @@ internal fun MobileLibraryContent(
                             SegmentedControl(LibraryTab.entries.map { it.label }, LibraryTab.entries.indexOf(library.tab), { onTab(LibraryTab.entries[it]) })
                             val movies = library.movies.loadedCount()
                             val tv = library.tv.loadedCount()
-                            if (movies != null && tv != null) Text("${library.tab.label} · ${movies + tv} loaded")
+                            if (movies != null && tv != null && !bothEmpty) Text("${library.tab.label} · ${movies + tv} loaded")
                             if (!library.signedIn) {
                                 Text("Sign in to sync your Library with TMDB.")
                                 PillButton("Sign in with TMDB", onSignIn)
@@ -107,12 +109,12 @@ internal fun MobileLibraryContent(
                         MediaType.entries.forEach { media ->
                             val group = library.group(media)
                             val label = if (media == MediaType.Movie) "Movies" else "TV shows"
-                            item("${media.name}-header", span = { GridItemSpan(maxLineSpan) }) {
+                            if (!bothEmpty) item("${media.name}-header", span = { GridItemSpan(maxLineSpan) }) {
                                 SectionTitle(group.loadedCount()?.let { "$label · $it loaded" } ?: label)
                             }
                             when (val section = group.section) {
                                 SectionState.Loading -> items(3, key = { "${media.name}-loading-$it" }) { PosterCardSkeleton(Modifier.fillMaxWidth()) }
-                                SectionState.Empty -> item("${media.name}-empty", span = { GridItemSpan(maxLineSpan) }) { Text("No ${label.lowercase()} in ${library.tab.label.lowercase()}.") }
+                                SectionState.Empty -> if (!bothEmpty) item("${media.name}-empty", span = { GridItemSpan(maxLineSpan) }) { Text("No ${label.lowercase()} in ${library.tab.label.lowercase()}.") }
                                 is SectionState.Error -> item("${media.name}-error", span = { GridItemSpan(maxLineSpan) }) {
                                     LibraryGroupRetry(media, "Couldn't load ${label.lowercase()}.", onRetry)
                                 }
@@ -135,7 +137,7 @@ internal fun MobileLibraryContent(
                                 PillButton("Load more $label", { onMore(media) })
                             }
                         }
-                        if (library.movies.section == SectionState.Empty && library.tv.section == SectionState.Empty) item("browse", span = { GridItemSpan(maxLineSpan) }) {
+                        if (bothEmpty) item("browse", span = { GridItemSpan(maxLineSpan) }) {
                             EmptyState("Your ${library.tab.label.lowercase()} is empty", "Find your next favourite.") {
                                 PillButton("Explore movies", onExplore)
                             }
