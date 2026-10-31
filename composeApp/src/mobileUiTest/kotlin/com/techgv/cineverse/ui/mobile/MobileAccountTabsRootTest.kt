@@ -45,7 +45,8 @@ class MobileAccountTabsRootTest {
         lateinit var state: AccountTabsState
         setContent { AccountTabsRoot(configure = { it.auth.emissions.tryEmit(null) }) { state = it } }
         tab("Library").performClick()
-        onNodeWithTag("mobile-library").performScrollToNode(hasText("Explore movies"))
+        // Scroll the empty-state item to the top; scrolling only until visible can leave the button under the floating tab bar.
+        onNodeWithTag("mobile-library").performScrollToKey("browse")
         onNodeWithText("Explore movies").performClick()
         onNodeWithText("Movies · Popular").assertIsDisplayed()
         runOnIdle { assertEquals(0, state.fixture.codes) }

@@ -284,7 +284,9 @@ class MobileDetailScreenTest {
         val list = onNodeWithTag("mobile-detail")
         // Retained topology: recovery, header, expanded summary, segments, cast, attribution.
         list.performScrollToIndex(3)
-        onNodeWithText("2026 · PG-13 · 2h 8m").assertIsNotDisplayed()
+        // Offscreen means composed out (iOS) or still composed but not displayed (Android).
+        if (onAllNodesWithText("2026 · PG-13 · 2h 8m").fetchSemanticsNodes().isNotEmpty())
+            onNodeWithText("2026 · PG-13 · 2h 8m").assertIsNotDisplayed()
         runOnIdle {
             assertTrue(model.state.value.stale)
             assertFalse(gate.isCompleted)
