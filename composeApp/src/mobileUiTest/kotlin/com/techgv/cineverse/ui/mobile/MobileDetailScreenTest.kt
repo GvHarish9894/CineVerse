@@ -69,20 +69,24 @@ class MobileDetailScreenTest {
         assertEquals(deep, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
     }
 
-    @Test fun selectingASegmentFromThePageTopNeitherMovesTheListNorRemountsTheHeader() = runComposeUiTest {
+    @Test fun selectingASegmentFromThePageTopScrollsUntilTheBarPinsSoItsContentIsVisible() = runComposeUiTest {
         lateinit var model: MobileDetailViewModel
         setContent { MobileDetailUiFixture(onReady = { m, _ -> model = m }) }
         val list = onNodeWithTag("mobile-detail")
         list.performScrollToNode(hasTestTag("detail-segments"))
-        val position = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         val poster = onNodeWithTag("detail-poster").fetchSemanticsNode().id
+        val barTop = onNodeWithTag("detail-segments").fetchSemanticsNode().boundsInRoot.top
+        val listTop = list.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(barTop > listTop, "precondition: the bar is not yet pinned")
         onNodeWithText("Cast", substring = false).performClick()
         runOnIdle { assertEquals(MobileDetailSegment.Cast, model.state.value.segment) }
-        assertEquals(position, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
-        assertEquals(poster, onNodeWithTag("detail-poster").fetchSemanticsNode().id, "segment switch remounted the header")
-        onNodeWithText("Overview", substring = false).performClick()
-        assertEquals(position, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
-        assertEquals(poster, onNodeWithTag("detail-poster").fetchSemanticsNode().id, "segment switch remounted the header")
+        // The tapped segment's content is on screen and the bar is pinned at the top of the list.
+        onNodeWithTag("detail-person-431").assertIsDisplayed()
+        // The tagged control sits inside the sticky item's 8dp vertical padding.
+        val pinnedTop = listTop + with(density) { 8.dp.toPx() }
+        assertEquals(pinnedTop, onNodeWithTag("detail-segments").fetchSemanticsNode().boundsInRoot.top, 1f)
+        // Header was not remounted on the way (same semantics id while it stays composed above the bar).
+        onAllNodesWithTag("detail-poster").fetchSemanticsNodes().firstOrNull()?.let { assertEquals(poster, it.id, "segment switch remounted the header") }
     }
 
     @Test fun castUsesActualPersonIdAndVideosUseActualYoutubeKey() = runComposeUiTest {

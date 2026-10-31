@@ -89,6 +89,15 @@ internal fun MobileDetailScreen(
         pendingOpen?.takeIf { it.first == segment }?.let { (_, open) ->
             SideEffect { scroll.requestScrollToItem(open.index, open.offset); pendingOpen = null }
         }
+        // From above the bar, a tapped segment scrolls the page up until the bar pins, so its content is on screen
+        // (one deliberate glide, instant under reduce motion); the header is not remounted.
+        var pendingReveal by remember { mutableStateOf<Pair<MobileDetailSegment, Int>?>(null) }
+        val reduceMotion = LocalReduceMotion.current
+        LaunchedEffect(pendingReveal, segment) {
+            val (_, bar) = pendingReveal?.takeIf { it.first == segment } ?: return@LaunchedEffect
+            if (reduceMotion) scroll.scrollToItem(bar) else scroll.animateScrollToItem(bar)
+            pendingReveal = null
+        }
         DisposableEffect(scroll) {
             onDispose { if (persist) model.saveScroll(currentSegment, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
         }
@@ -99,7 +108,7 @@ internal fun MobileDetailScreen(
         val seed = model.ref?.takeIf { seedPosterPath != null || seedTitle != null }
             ?.let { MobileDetailHeaderArt(it, seedPosterPath, seedTitle.orEmpty()) }
         // With the sticky bar pinned, a tapped segment keeps it pinned: it opens at its saved position when that is
-        // deeper than the bar, else exactly at the bar. With the bar not pinned (near the page top) the list stays put.
+        // deeper than the bar, else exactly at the bar. With the bar not pinned (near the page top) it glides to the bar.
         val onSegment: (MobileDetailSegment) -> Unit = { target ->
             if (persist) model.saveScroll(segment, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset)
             val bar = scroll.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "segments" }?.index
@@ -108,6 +117,8 @@ internal fun MobileDetailScreen(
                 val open = segmentOpenScroll(saved, bar) ?: saved
                 model.saveScroll(target, open.index, open.offset)
                 pendingOpen = target to open
+            } else if (bar != null) {
+                pendingReveal = target to bar
             }
             model.selectSegment(target)
             if (topologyReady && model.state.value.segment == target) restored = target
