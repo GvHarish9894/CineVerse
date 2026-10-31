@@ -37,15 +37,21 @@ class MobileDetailScreenTest {
         setContent { MobileDetailUiFixture() }
         // Healthy topology: header, summary, segments; index 2 pins the bar under the top bar.
         onNodeWithTag("mobile-detail").performScrollToIndex(2)
+        // Every segment here is shorter than the screen; the trailing fill must keep the bar pinned anyway.
+        fun barTop() = onNodeWithTag("detail-segments").getBoundsInRoot().top - onNodeWithTag("mobile-detail").getBoundsInRoot().top
+        val pinned = barTop()
+        fun assertBarPinned() = assertEquals(pinned, barTop())
         onNodeWithText("Cast", substring = false).performClick()
-        onNodeWithTag("detail-segments").assertIsDisplayed()
+        assertBarPinned()
         onNodeWithTag("detail-person-431").assertIsDisplayed()
         onNodeWithText("Videos", substring = false).performClick()
+        assertBarPinned()
         onNodeWithTag("detail-video-aB3_dE5-gH7").assertIsDisplayed()
         onNodeWithText("Reviews", substring = false).performClick()
+        assertBarPinned()
         onNodeWithText("Actual review body", substring = true).assertIsDisplayed()
         onNodeWithText("Overview", substring = false).performClick()
-        onNodeWithTag("detail-segments").assertIsDisplayed()
+        assertBarPinned()
         onNodeWithText("Top billed cast").assertIsDisplayed()
     }
 
@@ -314,7 +320,7 @@ class MobileDetailScreenTest {
         }
         waitUntil { f.api.calls.size == 2 }
         val list = onNodeWithTag("mobile-detail")
-        // Retained topology: recovery, header, expanded summary, segments, cast.
+        // Retained topology: recovery, header, expanded summary, segments, cast, fill.
         list.performScrollToIndex(3)
         // Offscreen means composed out (iOS) or still composed but not displayed (Android).
         if (onAllNodesWithText("2026 · PG-13 · 2h 8m").fetchSemanticsNodes().isNotEmpty())

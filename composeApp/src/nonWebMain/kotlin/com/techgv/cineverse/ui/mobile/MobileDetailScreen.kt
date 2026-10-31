@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -37,7 +38,9 @@ import com.techgv.cineverse.ui.components.*
 import com.techgv.cineverse.ui.design.Tokens
 import com.techgv.cineverse.ui.theme.LocalReduceMotion
 import com.techgv.cineverse.ui.theme.displayStyle
+import androidx.compose.runtime.snapshots.Snapshot
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 
 internal val LocalMobileDetailActionObserver = staticCompositionLocalOf<
     ((MobileDetailViewModel, MobileDetailAuthority?, (LibraryKind) -> Unit) -> Unit)?
@@ -138,6 +141,13 @@ private fun MobileDetailContent(
     // One "header" item call site for seed and Detail, so the shared poster is never remounted when data lands.
     val header = if (state.invalid) null else detail?.let { MobileDetailHeaderArt(it.ref, it.posterPath, it.title) } ?: seed?.takeIf { loading }
     val barHeight = with(LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() } + 52.dp
+    // "segment-fill" height in px; null = a full viewport, used for the first pass after a segment switch so the
+    // list is never clamped (moved) before the new segment's items have been measured.
+    val fill = remember(state.segment) { mutableStateOf<Int?>(null) }
+    val switchedLayout = remember(state.segment) { Snapshot.withoutReadObservation { scroll.layoutInfo } }
+    LaunchedEffect(scroll, state.segment) {
+        snapshotFlow { scroll.layoutInfo }.filter { it !== switchedLayout }.collect { fill.value = segmentFill(it, fill.value) }
+    }
     Box(Modifier.fillMaxSize()) {
         AmbientGlow(palette)
         // The backdrop sits behind both the bar and the list, so the bar is fully transparent over it until the
@@ -300,11 +310,35 @@ private fun MobileDetailContent(
                                 }
                             }
                         }
+                        item("segment-fill") {
+                            val height = fill.value
+                            Spacer(if (height == null) Modifier.fillParentMaxHeight() else Modifier.height(with(LocalDensity.current) { height.toDp() }))
+                        }
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Height for the trailing "segment-fill" spacer: tops a short segment up so the sticky bar can stay pinned at the
+ * list top. It never shrinks below what keeps the current position reachable (so it cannot clamp the list) and
+ * never grows past [current] while scrolling (null = a full viewport, right after a switch). Zero once the segment
+ * fills the viewport below the pinned bar; [current] is kept while that cannot be decided from [info].
+ */
+internal fun segmentFill(info: LazyListLayoutInfo, current: Int?): Int? {
+    val items = info.visibleItemsInfo
+    val bar = items.firstOrNull { it.key == "segments" } ?: return current
+    val pinned = items.none { it.index < bar.index }
+    val end = items.firstOrNull { it.key == "segment-fill" } ?: return if (pinned) 0 else current
+    val viewport = info.viewportSize.height - info.afterContentPadding
+    val between = items.filter { it.index > bar.index && it.index < end.index }
+    // Exact only when every segment item is laid out; otherwise some scrolled off the top, so the content is long.
+    val pinnable = if (between.size != end.index - bar.index - 1) 0
+        else viewport - bar.size - between.sumOf { it.size } - info.mainAxisItemSpacing * (between.size + 1)
+    val keepsPosition = viewport - end.offset
+    return maxOf(0, pinnable, if (current == null) keepsPosition else minOf(current, keepsPosition))
 }
 
 /** What the header's shared poster and title show: the opening card's seed until [Detail] loads, then Detail's own. */
