@@ -230,12 +230,12 @@ fun WebBackLink(label: String, onClick: () -> Unit, modifier: Modifier = Modifie
 
 /**
  * Whole-page loading placeholder in the house Skeleton style: a hero block (kicker, title, meta, overview, buttons)
- * and two poster rows. [label] is announced politely (the visual has no text).
+ * and two poster rows. [label] is announced politely (the visual has no text). Without [hero], only the rows (a real hero shows above).
  */
 @Composable
-fun WebLoadingSkeleton(label: String, modifier: Modifier = Modifier) {
+fun WebLoadingSkeleton(label: String, modifier: Modifier = Modifier, hero: Boolean = true) {
     Column(modifier.fillMaxWidth().semantics { contentDescription = label; liveRegion = LiveRegionMode.Polite }) {
-        WebHeroSkeleton(Modifier.padding(vertical = 96.dp))
+        if (hero) WebHeroSkeleton(Modifier.padding(vertical = 96.dp))
         repeat(2) { WebRowSkeleton(Modifier.padding(top = 44.dp)) }
     }
 }

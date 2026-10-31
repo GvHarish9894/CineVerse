@@ -175,7 +175,7 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                         }
                     } else WebRouteTransition(entry) { entry -> // Shadows on purpose: an exiting route keeps rendering its own entry.
                         if (entry.route == WebRoute.Home) {
-                            WebHome(entry, catalog, generation, settingsFlow, session, runtime, navigation::navigate,
+                            WebHome(entry, catalog, generation, settingsFlow, session, runtime, { route, seed -> navigation.navigate(route, seed = seed) },
                                 playTrailer = { videos, video -> trailer = Triple(entry, videos, video) }, signIn = approval::show)
                         } else if (entry.route is WebRoute.Browse || entry.route == WebRoute.People) {
                             WebBrowse(entry, catalog, generation, browseSettings, runtime, navigation::navigate)
