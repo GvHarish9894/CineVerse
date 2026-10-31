@@ -55,6 +55,20 @@ class MobileDetailScreenTest {
         onNodeWithText("Top billed cast").assertIsDisplayed()
     }
 
+    @Test fun aSegmentLeftDeeperThanThePinnedBarComesBackWhereTheUserLeftIt() = runComposeUiTest {
+        lateinit var model: MobileDetailViewModel
+        setContent { MobileDetailUiFixture(onReady = { m, _ -> model = m }) }
+        val list = onNodeWithTag("mobile-detail")
+        // Index 3 is the first Overview item under the pinned bar (header, summary, segments).
+        list.performScrollToIndex(3)
+        val deep = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        onNodeWithText("Cast", substring = false).performClick()
+        runOnIdle { assertEquals(MobileDetailScroll(3, 0), model.scroll(MobileDetailSegment.Overview)) }
+        onNodeWithText("Overview", substring = false).performClick()
+        runOnIdle { assertEquals(MobileDetailScroll(3, 0), model.scroll(MobileDetailSegment.Overview)) }
+        assertEquals(deep, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+    }
+
     @Test fun selectingASegmentFromThePageTopNeitherMovesTheListNorRemountsTheHeader() = runComposeUiTest {
         lateinit var model: MobileDetailViewModel
         setContent { MobileDetailUiFixture(onReady = { m, _ -> model = m }) }

@@ -78,8 +78,16 @@ internal fun MobileDetailScreen(
             restored = segment
         }
         LaunchedEffect(scroll, segment, restored, topologyReady) {
+            // restored moves to the tapped segment in the click, before this segment's collector is cancelled.
             if (persist) snapshotFlow { MobileDetailScroll(scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
-                .distinctUntilChanged().collect { if (persist) model.saveScroll(segment, it.index, it.offset) }
+                .distinctUntilChanged().collect { if (persist && restored == segment) model.saveScroll(segment, it.index, it.offset) }
+        }
+        // A tapped segment's open position. The selection reaches composition one dispatch after the click, so it is
+        // requested here, in the composition that has the new items; requesting it in the click would apply it to
+        // the old segment's items for a frame.
+        var pendingOpen by remember { mutableStateOf<Pair<MobileDetailSegment, MobileDetailScroll>?>(null) }
+        pendingOpen?.takeIf { it.first == segment }?.let { (_, open) ->
+            SideEffect { scroll.requestScrollToItem(open.index, open.offset); pendingOpen = null }
         }
         DisposableEffect(scroll) {
             onDispose { if (persist) model.saveScroll(currentSegment, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
@@ -99,8 +107,7 @@ internal fun MobileDetailScreen(
                 val saved = model.scroll(target)
                 val open = segmentOpenScroll(saved, bar) ?: saved
                 model.saveScroll(target, open.index, open.offset)
-                // Applied in the measure pass that composes the new segment's items: no animation, no frame at 0.
-                scroll.requestScrollToItem(open.index, open.offset)
+                pendingOpen = target to open
             }
             model.selectSegment(target)
             if (topologyReady && model.state.value.segment == target) restored = target
