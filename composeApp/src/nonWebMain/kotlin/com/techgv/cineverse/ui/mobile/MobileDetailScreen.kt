@@ -258,9 +258,9 @@ private fun DetailHeader(detail: Detail, imageBase: String, onNavigate: (MobileD
         }
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
             PaletteArt(imageUrl(imageBase, "w342", detail.posterPath), palette, ArtStyle.Poster,
-                Modifier.size(116.dp, 174.dp).clip(RoundedCornerShape(18.dp)))
+                mobileSharedPoster(detail.ref).size(116.dp, 174.dp).clip(RoundedCornerShape(18.dp)))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(detail.title, style = displayStyle(27.sp))
+                Text(detail.title, mobileSharedTitle(detail.ref), style = displayStyle(27.sp))
                 val metadata = listOfNotNull(detail.year, detail.certification?.takeIf { it.isNotBlank() }, detail.runtimeMinutes?.takeIf { it > 0 }?.let(::formatRuntime))
                 if (metadata.isNotEmpty()) Text(metadata.joinToString(" · "))
                 if (detail.genres.isNotEmpty()) Text(detail.genres.joinToString(", "))

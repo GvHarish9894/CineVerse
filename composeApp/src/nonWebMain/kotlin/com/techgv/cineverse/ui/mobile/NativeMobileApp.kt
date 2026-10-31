@@ -167,9 +167,9 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
     LaunchedEffect(accountOpen) { if (accountOpen) graph.actions.closeRate() }
     val stateHolder = rememberSaveableStateHolder()
     Box(Modifier.fillMaxSize()) {
-        stateHolder.SaveableStateProvider(selected.name) {
+        MobileSharedTransitionRoot { stateHolder.SaveableStateProvider(selected.name) {
             NavHost(controller, startDestination = MobileTabRoot) {
-                composable<MobileTabRoot> { root ->
+                composable<MobileTabRoot> { root -> MobileSharedRoute(this) {
                     if (selected == MobileTab.Home) MobileHomeScreen(graph, model, scrollHome, navigator,
                         onSearch = { select(MobileTab.Search) }, onProfile = { select(MobileTab.Profile) })
                     else if (selected == MobileTab.Explore) {
@@ -181,12 +181,12 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
                     } else if (selected == MobileTab.Library) {
                         MobileLibraryTabEntry(graph, root, catalogBinding, scrollLibrary, navigator) { select(MobileTab.Explore) }
                     } else MobileProfileTabEntry(graph, root, catalogBinding)
-                }
-                composable<MobileDetailRoute> { route ->
+                } }
+                composable<MobileDetailRoute> { route -> MobileSharedRoute(this) {
                     MobileDetailRouteEntry(graph, route, detailBinding, navigator, ::back) { ref ->
                         if (!external.share(ref.tmdbUrl())) toasts.show(ToastMessage("Couldn't open sharing."))
                     }
-                }
+                } }
                 composable<MobilePersonRoute> { route ->
                     MobilePersonRouteEntry(graph, route, catalogBinding, navigator, ::back)
                 }
@@ -196,14 +196,14 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
                 composable<MobileTrailerRoute> { route ->
                     MobileTrailerScreen(route.toRoute<MobileTrailerRoute>(), external, ::back)
                 }
-                composable<MobileBrowseRoute> { route ->
+                composable<MobileBrowseRoute> { route -> MobileSharedRoute(this) {
                     val selection = route.toRoute<MobileBrowseRoute>().selection()
                     val explore = viewModel { MobileExploreViewModel(graph, createSavedStateHandle(), selection) }
                     MobileExploreScreen(graph, explore, 0, navigator,
                         onInvalidBack = ::back, onBack = ::back)
-                }
+                } }
             }
-        }
+        } }
         FloatingTabBar(CineVerseTabs, selected.ordinal, { select(MobileTab.entries[it]) })
         MobileRootBackHandler(atRoot && selected != MobileTab.Home) { select(MobileTab.Home) }
         if (!accountOpen) MobileRootRateHost(graph, detailBinding)
