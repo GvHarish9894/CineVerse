@@ -355,6 +355,16 @@ Local acceptance summary at 1325cc8d (code identical to 82aed66c + one test-conf
 
 OUTSTANDING (require operator or external systems): (1) `sudo xcodebuild -runFirstLaunch`, then iOS full suite on 1325cc8d; (2) `gh auth switch -u GvHarish9894` then operator approval to promote (ff master <- product-integration) and push; (3) real-account TMDB approval/import/sign-out acceptance on all platforms; (4) deployment + deployed CSP/BFF check (server before web if separate); (5) Safari/mobile browsers + real screen readers; (6) human design review. Follow-ups: add webAccessibilityRealPageTest to CI; refine secret-grep gate to exclude the CI sentinel.
 
+### Checkpoint 2026-10-31 — FINAL candidate 44703bf8, all platforms green
+
+Operator: Xcode 27.2 first-launch done; authorized `gh auth switch -u GvHarish9894` (performed, verified active) and push; will review at the end.
+
+iOS on candidate: first full run 342 total / 340 pass / 2 fail. Both failures iOS test-scene only (probe-confirmed, never committed): 'Explore movies' under FloatingTabBar at 1024x768 -> performScrollToKey("browse"); header 'offscreen' node composed out of LazyColumn on iOS -> accept absent OR not displayed. Test-only commit 44703bf8 (+5/-2). Rerun: 47 suites / 342/342 / 0 skip; linkDebugFrameworkIosSimulatorArm64 OK; xcodebuild iosApp simulator build SUCCEEDED (destination OS 26.4.1 matches TOOLCHAIN; Xcode line in TOOLCHAIN says 27.1 vs 27.2 installed — doc follow-up). Android recheck of the two changed classes 22/22; other 15 classes unchanged since 130/130 => Android 130/130 at 44703bf8.
+
+FINAL LOCAL ACCEPTANCE at product-integration 44703bf8: compile all; host 184; shared 554+548+524; server 60; TV 63 + lint + builds + instrumented 38/1 + upgrade fixture; web 396 + real page 7 + dist/secrets; Android 130/130; iOS 342/342 + framework + app build. Promotion: ff master <- product-integration; push origin master as GvHarish9894.
+
+Still external/operator: real-account TMDB acceptance; deployment + deployed CSP/BFF (server before web if separate); Safari/mobile + screen readers; human design review; CI follow-ups (real-page test in CI; secret-grep sentinel exclusion; TOOLCHAIN Xcode line).
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
