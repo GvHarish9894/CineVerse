@@ -38,6 +38,20 @@ internal fun validateWebDetailEntry(entry: WebEntry): WebDetailEntry {
 }
 
 /**
+ * The opening card's title and poster, kept in the Detail entry's history scalars (never its URL) so the hero poster and
+ * its shared element exist on Detail's first frame. Display-only while the detail read is loading, never a source of truth;
+ * an entry without one (deep link, reload without history state, other openers) renders as before.
+ */
+internal class WebDetailSeed(val title: String, val posterPath: String?)
+
+internal fun Title.webDetailSeed(): Map<String, String> = buildMap {
+    put("detail.seedTitle", title)
+    posterPath?.let { put("detail.seedPoster", it) }
+}
+
+internal fun WebEntry.webDetailSeed(): WebDetailSeed? = getString("detail.seedTitle")?.let { WebDetailSeed(it, getString("detail.seedPoster")) }
+
+/**
  * A producer snapshot is actionable only when its source identity equals the rendered Ready session (full equality;
  * known null origin is guest data, so only a rendered guest). Anything else is Unknown; the snapshot is never relabelled.
  */

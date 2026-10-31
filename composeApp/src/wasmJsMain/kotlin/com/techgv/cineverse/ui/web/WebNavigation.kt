@@ -129,7 +129,8 @@ class WebNavigation(private val history: WebHistory) {
         entry.changed = { if (!closed && current.value === entry) history.replace(history.url, entry.encoded()) }
         if (entry.route != WebRoute.NotFound) history.replace(entry.route.url(), entry.encoded())
     }
-    fun navigate(route: WebRoute, replace: Boolean = false) {
+    /** [seed] starts the new entry's scalars (optional display data such as [webDetailSeed]); it never changes the URL. */
+    fun navigate(route: WebRoute, replace: Boolean = false, seed: Map<String, String> = emptyMap()) {
         if (closed) return
         val url = route.url()
         val valid = parseWebRoute(url)
@@ -138,7 +139,7 @@ class WebNavigation(private val history: WebHistory) {
             current.value.replaceSearch(valid) { history.replace(url, it) }
             return
         }
-        val values = mutableMapOf<String, String>()
+        val values = seed.toMutableMap()
         if (valid is WebRoute.Search) valid.saveSearchInput(values)
         val next = WebEntry(valid, values)
         if (replace) history.replace(url, next.encoded()) else history.push(url, next.encoded())

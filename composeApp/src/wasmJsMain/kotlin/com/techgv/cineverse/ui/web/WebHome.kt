@@ -52,11 +52,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * [playTrailer] opens the root trailer dialog with the validated YouTube list of the title whose Play-trailer event
- * arrived; [signIn] is the root's sign-in (approval) path.
+ * arrived; [signIn] is the root's sign-in (approval) path. [navigate] receives the new entry's display seed (empty for none).
  */
 @Composable
 internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: GenerationCounter, settings: Flow<Settings>, session: WebSessionState, runtime: WebRuntime,
-                     navigate: (WebRoute, Boolean) -> Unit, playTrailer: (List<Video>, Video) -> Unit, signIn: () -> Unit) {
+                     navigate: (WebRoute, Map<String, String>) -> Unit, playTrailer: (List<Video>, Video) -> Unit, signIn: () -> Unit) {
     val scope = rememberCoroutineScope()
     val holder = remember(entry) { HomeStateHolder(catalog, generation, settings, entry, scope, runtime::reportStorageFailure) }
     val storage by runtime.storageFailure.collectAsState()
@@ -98,8 +98,8 @@ internal fun WebHome(entry: WebEntry, catalog: CatalogRepository, generation: Ge
         (titles.firstOrNull { it.key == saved } ?: titles.firstOrNull())?.let { holder.selectHero(it) }
     }
     WebHomeContent(state, entry, session, { entry.putString("home.hero", null); holder.selectTrend(it) }, { holder.selectHero(it) }, holder::retry,
-        { if (holder.canStartTrailer) { requested = it; holder.playTrailer(it) } }, { navigate(it, false) }, retryStorage, storage, signIn, noTrailer,
-        canPlayTrailer = { holder.canStartTrailer })
+        { if (holder.canStartTrailer) { requested = it; holder.playTrailer(it) } }, { navigate(it, emptyMap()) }, retryStorage, storage, signIn, noTrailer,
+        canPlayTrailer = { holder.canStartTrailer }, openDetail = navigate)
 }
 
 /**
@@ -127,7 +127,8 @@ internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebS
                             selectTrend: (TrendingWindow) -> Unit, selectHero: (Hero) -> Unit,
                             retry: (HomeRow) -> Unit, playTrailer: (Title) -> Unit, navigate: (WebRoute) -> Unit,
                             retryStorage: () -> Unit, storage: BrowserStorageFailure?, signIn: () -> Unit,
-                            noTrailer: Set<MediaRef> = emptySet(), canPlayTrailer: () -> Boolean = { state.trailerLoading == null }) {
+                            noTrailer: Set<MediaRef> = emptySet(), canPlayTrailer: () -> Boolean = { state.trailerLoading == null },
+                            openDetail: (WebRoute, Map<String, String>) -> Unit = { route, _ -> navigate(route) }) {
     val scroll = savedScroll(saver, "page")
     var popularTv by remember { mutableStateOf(saver.getBoolean("home.popularTv") ?: false) }
     LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-home").semantics {
@@ -149,14 +150,14 @@ internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebS
         }
         item("hero") { HomeHero(state, { saver.putString("home.hero", it.key); selectHero(it) }, playTrailer, navigate, noTrailer, canPlayTrailer) }
         item("trending") {
-            HomeSection(HomeRow.Trending, state.rows[HomeRow.Trending] ?: SectionState.Loading, saver, retry, navigate) {
+            HomeSection(HomeRow.Trending, state.rows[HomeRow.Trending] ?: SectionState.Loading, saver, retry, navigate, openDetail) {
                 SegmentedControl(listOf("Today", "This week"), if (state.trend == TrendingWindow.Day) 0 else 1,
                     { selectTrend(if (it == 0) TrendingWindow.Day else TrendingWindow.Week) }, Modifier.width(196.dp))
             }
         }
         item("popular") {
             val row = if (popularTv) HomeRow.PopularTv else HomeRow.PopularMovies
-            HomeSection(row, state.rows[row] ?: SectionState.Loading, saver, retry, navigate, title = "What’s popular") {
+            HomeSection(row, state.rows[row] ?: SectionState.Loading, saver, retry, navigate, openDetail, title = "What’s popular") {
                 SegmentedControl(listOf("Movies", "On TV"), if (popularTv) 1 else 0,
                     { popularTv = it == 1; saver.putBoolean("home.popularTv", popularTv) }, Modifier.width(176.dp))
             }
@@ -173,7 +174,7 @@ internal fun WebHomeContent(state: HomeUiState, saver: StateSaver, session: WebS
         }
         if (session is WebSessionState.Ready && session.session == null) item("guest") { GuestCallToAction(signIn) }
         listOf(HomeRow.NowPlaying, HomeRow.Upcoming, HomeRow.PopularPeople, HomeRow.TopRatedMovies).forEach { row ->
-            item(row.key) { HomeSection(row, state.rows[row] ?: SectionState.Loading, saver, retry, navigate) }
+            item(row.key) { HomeSection(row, state.rows[row] ?: SectionState.Loading, saver, retry, navigate, openDetail) }
         }
         item("footer") { Footer(Modifier.padding(top = 56.dp)) }
     }
@@ -214,6 +215,7 @@ private fun savedScroll(saver: StateSaver, key: String): LazyListState {
 
 @Composable
 private fun HomeSection(row: HomeRow, section: SectionState<PagedItems>, saver: StateSaver, retry: (HomeRow) -> Unit, navigate: (WebRoute) -> Unit,
+                        openDetail: (WebRoute, Map<String, String>) -> Unit,
                         title: String = row.title, trailing: @Composable RowScope.() -> Unit = {}) {
     when (section) {
         SectionState.Loading -> ScrollRow(title, headerTrailing = trailing) { items(5) { PosterCardSkeleton() } }
@@ -232,7 +234,7 @@ private fun HomeSection(row: HomeRow, section: SectionState<PagedItems>, saver: 
                     when (hero) {
                         is Hero.OfPerson -> PersonCard(hero.person.name, hero.person.knownForDepartment, webPalette(hero.key), { navigate(hero.route()) }, imageUrl = webImage(hero.person.profilePath, "w185"))
                         is Hero.OfTitle -> PosterCard(hero.title.title, formatDate(hero.title.releaseDate)?.let { if (row == HomeRow.Upcoming) "Coming $it" else it },
-                            webPalette(hero.key), { navigate(hero.route()) }, modifier = Modifier.testTag("home-${row.key}-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"),
+                            webPalette(hero.key), { openDetail(hero.route(), hero.title.webDetailSeed()) }, modifier = Modifier.testTag("home-${row.key}-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"),
                             voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, artModifier = Modifier.webSharedPoster(hero.title.ref))
                     }
                 }

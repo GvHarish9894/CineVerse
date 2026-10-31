@@ -119,6 +119,8 @@ internal fun WebDetailContent(
     val scroll = remember(entry) { LazyListState() }
     var restored by remember(entry) { mutableStateOf(false) }
     val detail = ((state.section as? SectionState.Content)?.value ?: state.retained)?.takeIf { it.ref == validated.ref }
+    // The opening card's seed fills the hero only while the first read loads; errors and Empty render as without one.
+    val seed = if (detail == null && state.section == SectionState.Loading) entry.webDetailSeed() else null
     LaunchedEffect(scroll, detail != null) {
         if (detail == null || restored) return@LaunchedEffect
         // scrollToItem awaits layout and remeasures real sections, never the temporary Loading/Error list.
@@ -137,7 +139,7 @@ internal fun WebDetailContent(
         state.producer.completedWebDetail(validated.ref, renderedContext.appGeneration) != null
     LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("web-detail"), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         // History back: the origin page is not known here, so the link never claims one. With a hero it sits inside the band.
-        if (detail == null) item("back") { WebPage { WebBackLink("Back", back, Modifier.padding(top = 12.dp)) } }
+        if (detail == null && seed == null) item("back") { WebPage { WebBackLink("Back", back, Modifier.padding(top = 12.dp)) } }
         if (storage != null) item("storage") { WebPage { WebStorageNotice(storage, retryReads, Modifier.testTag("detail-storage-recovery")) } }
         if (state.freshnessUnverified) item("preferences") {
             WebPage {
@@ -147,16 +149,21 @@ internal fun WebDetailContent(
             }
         }
         when (val section = state.section) {
-            SectionState.Loading -> if (!state.freshnessUnverified) item("loading") { WebLoadingSkeleton("Loading title…") }
+            SectionState.Loading -> if (!state.freshnessUnverified && seed == null) item("loading") { WebLoadingSkeleton("Loading title…") }
             SectionState.Empty -> item("empty") { WebPage { Text("Title not found.") } }
             is SectionState.Error -> item("error") { WebPage { WebDetailError(section.kind, detail != null, retryDetail) } }
             is SectionState.Content -> Unit
         }
-        if (detail != null) {
-            item("hero") {
-                WebDetailHero(detail, account, actionable, { kind -> act(kind, renderedContext, renderedSession) }, playTrailer,
-                    { id -> navigate(WebRoute.Person(id)) }, back)
+        // One hero call site for seed and detail, so the poster (and its shared element) stays mounted when the detail arrives.
+        if (detail != null || seed != null) item("hero") {
+            WebDetailHero(validated.ref, if (detail != null) detail.posterPath else seed?.posterPath, detail?.backdropPath, back) { phone, modifier ->
+                if (detail != null) WebDetailInfo(detail, account, actionable, { kind -> act(kind, renderedContext, renderedSession) }, playTrailer,
+                    { id -> navigate(WebRoute.Person(id)) }, phone, modifier)
+                else if (seed != null) Text(seed.title, modifier.semantics { heading() }, style = detailTitleStyle(phone))
             }
+        }
+        if (seed != null && !state.freshnessUnverified) item("loading") { WebLoadingSkeleton("Loading title…", hero = false) }
+        if (detail != null) {
             if (detail.hasWebDetailBody()) item("body") { WebDetailBody(detail, navigate, playTrailer) }
             val recommendations = detail.recommendations.filter { it.ref.id > 0 && it.mediaType == it.ref.mediaType }.distinctBy { it.ref }
             if (recommendations.isNotEmpty()) item("recommendations") {
@@ -193,13 +200,12 @@ private fun Detail.hasWebDetailBody() = webDetailCast().isNotEmpty() || webDetai
     webDetailVideos().isNotEmpty() || webDetailAside().isNotEmpty()
 
 @Composable
-private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boolean, act: (LibraryKind) -> Unit,
-                          playTrailer: (Title, List<Video>, Video) -> Unit, openPerson: (Int) -> Unit, back: () -> Unit) {
+private fun WebDetailHero(ref: MediaRef, posterPath: String?, backdropPath: String?, back: () -> Unit, info: @Composable (phone: Boolean, modifier: Modifier) -> Unit) {
     // Full-bleed (the Detail list has no side padding); the whole backdrop shows on desktop, Crop applies only on taller (phone) bands.
     // No backdrop, no art to show: the band stays content-height.
-    Box(Modifier.fillMaxWidth().testTag("detail-hero").then(if (detail.backdropPath != null) Modifier.backdropBand() else Modifier),
+    Box(Modifier.fillMaxWidth().testTag("detail-hero").then(if (backdropPath != null) Modifier.backdropBand() else Modifier),
         contentAlignment = Alignment.CenterStart) {
-        if (detail.backdropPath != null) PaletteArt(webImage(detail.backdropPath, "w1280"), detailPalette, ArtStyle.Backdrop, Modifier.matchParentSize())
+        if (backdropPath != null) PaletteArt(webImage(backdropPath, "w1280"), detailPalette, ArtStyle.Backdrop, Modifier.matchParentSize())
         Box(Modifier.matchParentSize().webDetailHeroScrim())
         // Top padding reserves the Back row (16dp + its 48dp min height) so content that fills the band never sits under it.
         WebPage(Modifier.padding(top = 64.dp, bottom = 40.dp)) {
@@ -208,14 +214,13 @@ private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boo
                 val side = maxWidth >= 300.dp + 44.dp + 440.dp
                 val posterShape = RoundedCornerShape(22.dp)
                 val poster = @Composable {
-                    if (detail.posterPath != null) PaletteArt(webImage(detail.posterPath, "w342"), detailPalette, ArtStyle.Poster,
-                        Modifier.webSharedPoster(detail.ref).testTag("detail-poster").width(if (phone) 200.dp else 300.dp).aspectRatio(2f / 3f)
+                    if (posterPath != null) PaletteArt(webImage(posterPath, "w342"), detailPalette, ArtStyle.Poster,
+                        Modifier.webSharedPoster(ref).testTag("detail-poster").width(if (phone) 200.dp else 300.dp).aspectRatio(2f / 3f)
                             .dropShadow(posterShape, Shadow(60.dp, detailPalette.c1.copy(alpha = 0.55f), (-24).dp, DpOffset(0.dp, 40.dp)))
                             .clip(posterShape))
                 }
-                val info = @Composable { modifier: Modifier -> WebDetailInfo(detail, account, actionable, act, playTrailer, openPerson, phone, modifier) }
-                if (side) Row(horizontalArrangement = Arrangement.spacedBy(44.dp)) { poster(); info(Modifier.weight(1f)) }
-                else Column(verticalArrangement = Arrangement.spacedBy(28.dp)) { poster(); info(Modifier.fillMaxWidth()) }
+                if (side) Row(horizontalArrangement = Arrangement.spacedBy(44.dp)) { poster(); info(phone, Modifier.weight(1f)) }
+                else Column(verticalArrangement = Arrangement.spacedBy(28.dp)) { poster(); info(phone, Modifier.fillMaxWidth()) }
             }
         }
         WebPage(Modifier.align(Alignment.TopStart).padding(top = 16.dp)) { WebBackLink("Back", back) }
@@ -237,7 +242,7 @@ private fun WebDetailInfo(detail: Detail, account: LibraryState, actionable: Boo
             append(detail.title)
             detail.year?.let { withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = Tokens.Colors.TextPrimary.copy(alpha = 0.6f))) { append(" ($it)") } }
         }
-        Text(title, style = displayStyle(if (phone) 36.sp else 52.sp, trackingEm = -0.03f).copy(lineHeight = 1.05.em), modifier = Modifier.semantics { heading() })
+        Text(title, style = detailTitleStyle(phone), modifier = Modifier.semantics { heading() })
         WebDetailFactsLine(detail, Modifier.padding(top = 12.dp))
         FlowRow(Modifier.padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
             itemVerticalAlignment = Alignment.CenterVertically) {
@@ -282,6 +287,9 @@ private fun WebDetailInfo(detail: Detail, account: LibraryState, actionable: Boo
         }
     }
 }
+
+@Composable
+private fun detailTitleStyle(phone: Boolean) = displayStyle(if (phone) 36.sp else 52.sp, trackingEm = -0.03f).copy(lineHeight = 1.05.em)
 
 private val favouriteColor = Color(0xFFFF5C8A)
 
