@@ -17,3 +17,8 @@ local.properties
 # Local-only files
 cineverse-tv-prototype.html
 secrets.properties
+
+# Local credentials for manual TMDB acceptance (never committed); keep .env.example
+.env
+.env.*
+!.env.example

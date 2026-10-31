@@ -52,6 +52,8 @@ SHELL_CHANGES.md              integration record: shell contract, merge log, fol
    TMDB_READ_ACCESS_TOKEN=<your v4 "API Read Access Token" from https://www.themoviedb.org/settings/api>
    ```
    The build still compiles without it (empty token → API calls fail with a visible error).
+   For manual real-account checks (signing in on themoviedb.org), copy `.env.example` to `.env`
+   (git-ignored) and fill `TMDB_USERNAME` / `TMDB_PASSWORD`. Nothing in the build reads `.env`.
 2. **Android SDK** — set `ANDROID_HOME` (e.g. `~/Library/Android/sdk`). Requires AGP 9 / Kotlin 2.3 (see
    `docs/TOOLCHAIN.md`).
 3. **Build & run**
