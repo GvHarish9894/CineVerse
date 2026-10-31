@@ -311,6 +311,60 @@ ANDROID test changes a527b81f/903dc927 reviewed CLEAR (OK with notes). Full 16-c
 
 iOS on C5 head BLOCKED (infra): Xcode updated to 27.2 (27B52) at 23:15 IST; simctl requires `sudo xcodebuild -runFirstLaunch` (operator/admin). Stage 1 compile passed at 903dc927. Not bypassed. OPERATOR INPUT REQUIRED.
 
+### Checkpoint 2026-10-30i — integration candidate started
+
+C3 at ae65d5fb: Karma 58/58, Home 12/12, native 5/5, real page 7/7. Two test-only commits (4605799f: disabled trigger asserts real WebModalTrigger.focused + Focused!=true guard — ASSERTION CHANGED because Compose 1.11.1 disabled clickable drops the Focused key; ae65d5fb: Root rapid-trailer scroll-by-key + fixture reduceMotion for that test only). Independent review in flight.
+
+Integration (C1 slot reused per recipe d8c68796; l3-design untouched): branch product-integration from master 37c45ffe; master had no non-docs commits beyond the C5 merge-base (git cherry verified). Merged C5 903dc927 -> 001126f5 (clean). Merged C2 630c0765 -> cebbab17: conflicts only in MobileExploreScreenTest (took C5, which already contained C2's hunk) and MobileNavigationTest.selectedTab... (C2 runOnIdle restore + C5 real Profile assertions). C2 owned files identical to C2 head; Explore identical to C5. Next: compile smoke on candidate; merge C3 final head after review CLEAR; then full gate list (shared, host 184, native 5, server, TV incl. instrumented+upgrade fixture, Wasm compile+Karma 58+fonts 21+real page 7+web regression groups, Android 17 classes/130, iOS full once first-launch done, dist/secrets).
+
+### Checkpoint 2026-10-30j
+
+Candidate cebbab17 compile smoke ALL GREEN: wasm main/test, host 184/184, native 5, tvApp+server compile. Shared/server/TV gates running (incl. TV instrumented + upgrade fixture on owned TV AVD).
+
+C3 ae65d5fb independently CLEAR (P2 notes only) — the head to integrate. C3 non-web paths (Buttons.kt showTooltip, Overlays.kt CvDialog hooks, Dialog actuals no-ops, HomeStateHolder canStartTrailer + test, build.gradle.kts harness) are untouched by C5/C2 since d1bc075; `git merge-tree` dry run: no conflicts. Merge after the TV gate lane releases the integration worktree (no checkout during a running build).
+
+### Checkpoint 2026-10-30k — full candidate assembled
+
+product-integration@82aed66c = master 37c45ffe + C5 903dc927 + C2 630c0765 + C3 ae65d5fb. All merges clean except the two predicted test conflicts (resolved). Verified: C2 files identical to C2 head; C3 files identical to C3 head; Explore identical to C5.
+
+Gates at cebbab17 (pre-C3; C3 touches no tvApp/server and only HomeStateHolder in shared): shared jvm 554/554 + androidHost 548/548, room-in-wasm 0; server 60/60 incl. security suites; TV unit 63/63, lint 0 errors, debug+release assembled. TV instrumented on owned CineVerse_TV_1080p_API36: 36 OK / 2 FAIL / 1 ignored vs baseline 38/1. Both failures = ExitDialogOverPlayerTest precondition `needs a guest (signed-out) install`; the AVD's old user-0 data holds a REAL signed-in TMDB session (raw log contains display name — treat as sensitive). Not a code regression. DECISION: do NOT sign out / clear user 0 (that is the old data the upgrade fixture protects). Use a secondary Android user on the owned TV AVD for the guest-precondition instrumented run; keep user 0 for the install-over-old-data fixture. TV install on AVD is now the candidate debug build (release->debug install over data succeeded, data inode preserved, settings hash unchanged). Fixture steps (debug launch checks, signed release copy over data, debug back) still owed.
+
+Remaining on candidate 82aed66c: Wasm compile + Karma 58 + fonts 21 + real page 7 + web regression groups; Android 17 classes/130 on owned phone AVD; iOS full (blocked: Xcode first-launch); TV instrumented (secondary user) + upgrade fixture; dist/secrets; integrated review; push identity.
+
+### Checkpoint 2026-10-30l — candidate 82aed66c web + Android GREEN
+
+Web on candidate: wasm compile OK; :shared:wasmJsBrowserTest 524/524 (51 classes, Home 12/12 inside); :composeApp:wasmJsBrowserTest FULL 396/396 in one fresh Karma config (C3 seven = 58/58; fonts 13+7; WebSearchTest 16/16 incl. the exact Search method); real page 7/7; wasmJsBrowserDistribution + checkWasmHasNoSecrets clean (18 files); no secrets.properties/local.properties tracked; secret grep = 1 hit which is the CI sentinel TMDB_READ_ACCESS_TOKEN=SENTINEL_TMDB_TOKEN_DO_NOT_SHIP (.github/workflows/shared-server-linux.yml:54, from 711d339d) — not a token; no JWT match. Gate wording to refine: exclude the sentinel value.
+
+Android on candidate: 17 classes / 130 tests, 130/130 pass, 0 skip, on owned emulator-5556 (per-class, fresh XML, exact accounting). AGP default adb 5037 server disclosed again (phone never addressed; killed after).
+
+Remaining: TV instrumented via secondary Android user on owned TV AVD + install-over-old-data fixture; iOS full suite (operator: sudo xcodebuild -runFirstLaunch); integrated independent review of 82aed66c; push identity check; promotion to master only after review and operator approval.
+
+### Checkpoint 2026-10-30m — TV green; integrated review P1-1 fixed
+
+TV on candidate 82aed66c: unit 63/63; instrumented on secondary user 11 (created/removed) 38 OK / 1 ignored (both prior ExitDialogOverPlayer preconditions pass as guest); install-over-old-data fixture on user 0 (debug over data, launch alive, signed release COPY over data, debug back) PASS with settings hash 53e8cfbd... unchanged at every check; user 0 never signed out/cleared. Note: TV AVD quickboots from a saved snapshot and runs used -no-snapshot-save, so device changes are discarded each run (old release build returns) — disclosed. Existing TV profile user 10 untouched.
+
+Integrated review of 82aed66c: BLOCK on one P1-1 — the font Karma route lived only in owned artifacts; plain `wasmJsBrowserTest` (CI) would 404 fonts. FIXED at 1325cc8d: composeApp/karma.config.d/fonts.js (files pattern + proxy only). Plain CI-style run of composeApp 396 + shared 524 + real page 7 in flight. Review otherwise CLEAR: cross-lane seams OK, merge resolutions correct, user-data preservation compatible, security OK (P2: deploy server before web if separate), accessibility 3 product fixes + P2 framework note; changed-assertion table (Search caret 7,7; disabled trigger; harness AX->functional; Root reduceMotion) all judged acceptable. P2 follow-up: add webAccessibilityRealPageTest to CI.
+
+Push identity (read-only check): gh active account = harish-zuper; GvHarish9894 is logged in but not active. OPERATOR must switch (`gh auth switch -u GvHarish9894`) before any push; parent will not change auth.
+
+### Checkpoint 2026-10-30n — ALL LOCAL GATES GREEN on product-integration 1325cc8d
+
+Plain CI-style web (no init script/owned config): composeApp 396/396, shared 524/524, real page 7/7 — P1-1 resolved by checked-in karma.config.d/fonts.js. Integrated review otherwise CLEAR.
+
+Local acceptance summary at 1325cc8d (code identical to 82aed66c + one test-config file): compile all targets; host 184; shared jvm 554 + androidHost 548 + wasm 524; server 60 (security suites); TV unit 63 + lint 0 err + debug/release build + instrumented 38/1 (secondary user) + install-over-old-data fixture PASS; web composeApp 396 + real page 7 + distribution + secret scan; Android 17 classes/130 on owned emulator. iOS: 88/88 at pre-integration C2 head; integrated-head run BLOCKED on Xcode 27.2 first-launch (operator).
+
+OUTSTANDING (require operator or external systems): (1) `sudo xcodebuild -runFirstLaunch`, then iOS full suite on 1325cc8d; (2) `gh auth switch -u GvHarish9894` then operator approval to promote (ff master <- product-integration) and push; (3) real-account TMDB approval/import/sign-out acceptance on all platforms; (4) deployment + deployed CSP/BFF check (server before web if separate); (5) Safari/mobile browsers + real screen readers; (6) human design review. Follow-ups: add webAccessibilityRealPageTest to CI; refine secret-grep gate to exclude the CI sentinel.
+
+### Checkpoint 2026-10-31 — FINAL candidate 44703bf8, all platforms green
+
+Operator: Xcode 27.2 first-launch done; authorized `gh auth switch -u GvHarish9894` (performed, verified active) and push; will review at the end.
+
+iOS on candidate: first full run 342 total / 340 pass / 2 fail. Both failures iOS test-scene only (probe-confirmed, never committed): 'Explore movies' under FloatingTabBar at 1024x768 -> performScrollToKey("browse"); header 'offscreen' node composed out of LazyColumn on iOS -> accept absent OR not displayed. Test-only commit 44703bf8 (+5/-2). Rerun: 47 suites / 342/342 / 0 skip; linkDebugFrameworkIosSimulatorArm64 OK; xcodebuild iosApp simulator build SUCCEEDED (destination OS 26.4.1 matches TOOLCHAIN; Xcode line in TOOLCHAIN says 27.1 vs 27.2 installed — doc follow-up). Android recheck of the two changed classes 22/22; other 15 classes unchanged since 130/130 => Android 130/130 at 44703bf8.
+
+FINAL LOCAL ACCEPTANCE at product-integration 44703bf8: compile all; host 184; shared 554+548+524; server 60; TV 63 + lint + builds + instrumented 38/1 + upgrade fixture; web 396 + real page 7 + dist/secrets; Android 130/130; iOS 342/342 + framework + app build. Promotion: ff master <- product-integration; push origin master as GvHarish9894.
+
+Still external/operator: real-account TMDB acceptance; deployment + deployed CSP/BFF (server before web if separate); Safari/mobile + screen readers; human design review; CI follow-ups (real-page test in CI; secret-grep sentinel exclusion; TOOLCHAIN Xcode line).
+
 ## Subsequent delivery stages (not optional omissions)
 
 ### Web
