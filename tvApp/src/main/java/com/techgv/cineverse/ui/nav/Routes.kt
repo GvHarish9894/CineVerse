@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class BrowseKind { Movies, Tv, People }
 
-/** Typed routes (§1.2). Routes carry identifiers only; screens reload their own data. */
+/** Typed routes (§1.2). Routes carry identifiers only (plus Detail's optional display seed); screens reload their own data. */
 sealed interface Route {
     @Serializable data object Splash : Route
     @Serializable data object Home : Route
@@ -24,7 +24,18 @@ sealed interface Route {
     @Serializable data object Library : Route
     @Serializable data object Settings : Route
     @Serializable data object Login : Route
-    @Serializable data class Detail(val mediaType: MediaType, val id: Int) : Route
+    /**
+     * [posterPath], [backdropPath] and [title] are an optional display seed from the opening Home card: Detail shows
+     * them at once so its hero is the shared-element target from the first frame; the loaded detail replaces them.
+     * Never a source of truth; without a seed (deep link, Person, Search, …) Detail waits for its data.
+     */
+    @Serializable data class Detail(
+        val mediaType: MediaType,
+        val id: Int,
+        val posterPath: String? = null,
+        val backdropPath: String? = null,
+        val title: String? = null,
+    ) : Route
     @Serializable data class Person(val id: Int) : Route
     @Serializable data class Season(val seriesId: Int, val seasonNumber: Int) : Route
     @Serializable data class Player(val videoKey: String, val title: String, val kicker: String) : Route

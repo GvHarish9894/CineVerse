@@ -5,7 +5,10 @@ import com.techgv.cineverse.domain.LibraryKind
 import com.techgv.cineverse.domain.LibraryState
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
+import com.techgv.cineverse.domain.Hero
+import com.techgv.cineverse.domain.Person
 import com.techgv.cineverse.domain.Title
+import com.techgv.cineverse.ui.nav.Route
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -53,5 +56,17 @@ class HomeLogicTest {
         val known = LibraryState.Unknown.copy(known = true, watchlist = true)
         assertTrue(heroWatchlistEnabled(hasActions = true, state = known))
         assertFalse(heroWatchlistEnabled(hasActions = false, state = known))
+    }
+
+    @Test fun `home opens a title's Detail seeded with its artwork and name`() {
+        val title = Title(MediaRef(MediaType.Tv, 7), "Dark", "", "/p.jpg", "/b.jpg", null, 8.0, 10, emptyList(), MediaType.Tv)
+        assertEquals(
+            Route.Detail(MediaType.Tv, 7, posterPath = "/p.jpg", backdropPath = "/b.jpg", title = "Dark"),
+            Hero.OfTitle(title).homeRoute(),
+        )
+    }
+
+    @Test fun `home opens a person's profile unchanged`() {
+        assertEquals(Route.Person(3), Hero.OfPerson(Person(3, "P", null, null, emptyList())).homeRoute())
     }
 }

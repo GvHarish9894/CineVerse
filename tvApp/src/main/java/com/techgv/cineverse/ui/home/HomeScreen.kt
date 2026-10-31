@@ -82,6 +82,7 @@ import com.techgv.cineverse.ui.components.parseTmdbDate
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.nav.HomeBackHandle
+import com.techgv.cineverse.ui.nav.Route
 import com.techgv.cineverse.ui.browse.route
 import com.techgv.cineverse.ui.spikes.spikesMenuRoute
 import kotlinx.coroutines.launch
@@ -233,7 +234,7 @@ fun HomeScreen(
                                 openedItem = openedCard?.takeIf { it.first == row.key }?.second,
                                 onOpen = {
                                     openedCard = row.key to it.key
-                                    onOpen(it.route())
+                                    onOpen(it.homeRoute())
                                 },
                             )
                         }
@@ -250,6 +251,12 @@ fun HomeScreen(
             }
         }
     }
+}
+
+/** A title opens Detail seeded with the artwork and name Home already shows (see [Route.Detail]). */
+internal fun Hero.homeRoute(): Route = when (this) {
+    is Hero.OfTitle -> Route.Detail(title.mediaType, title.ref.id, title.posterPath, title.backdropPath, title.title)
+    is Hero.OfPerson -> route()
 }
 
 private fun trendingTitle(trend: TrendingWindow) = if (trend == TrendingWindow.Day) "Trending today" else "Trending this week"
@@ -339,7 +346,7 @@ private fun HeroButtons(
                     modifier = Modifier.button("play"),
                 )
                 HeroWatchlistButton(title, Modifier.button("watchlist"))
-                ActionButton("More info", ActionIcon.INFO, { onOpen(hero.route()) }, Modifier.button("info"))
+                ActionButton("More info", ActionIcon.INFO, { onOpen(hero.homeRoute()) }, Modifier.button("info"))
             }
             is Hero.OfPerson -> ActionButton(
                 "View profile", ActionIcon.USER, { onOpen(hero.route()) }, Modifier.button("profile"), style = ActionButtonStyle.Primary,
