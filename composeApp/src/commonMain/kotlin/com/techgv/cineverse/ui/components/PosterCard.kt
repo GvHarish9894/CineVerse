@@ -109,7 +109,7 @@ fun PosterCard(
     quickAction: QuickAction? = null,
     /** Show the "NR" ring when there are no votes (web Browse/Search grids); otherwise no ring without votes. */
     nrRing: Boolean = false,
-    /** Applied first to the poster art and the title text (e.g. shared-element tags). */
+    /** Lead the 2:3 art's and the title text's modifier chains (e.g. shared-element tags). */
     artModifier: Modifier = Modifier,
     titleModifier: Modifier = Modifier,
 ) {

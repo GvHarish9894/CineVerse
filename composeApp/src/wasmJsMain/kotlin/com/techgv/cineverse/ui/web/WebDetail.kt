@@ -209,7 +209,7 @@ private fun WebDetailHero(detail: Detail, account: LibraryState, actionable: Boo
                 val posterShape = RoundedCornerShape(22.dp)
                 val poster = @Composable {
                     if (detail.posterPath != null) PaletteArt(webImage(detail.posterPath, "w342"), detailPalette, ArtStyle.Poster,
-                        Modifier.width(if (phone) 200.dp else 300.dp).aspectRatio(2f / 3f)
+                        Modifier.webSharedPoster(detail.ref).testTag("detail-poster").width(if (phone) 200.dp else 300.dp).aspectRatio(2f / 3f)
                             .dropShadow(posterShape, Shadow(60.dp, detailPalette.c1.copy(alpha = 0.55f), (-24).dp, DpOffset(0.dp, 40.dp)))
                             .clip(posterShape))
                 }

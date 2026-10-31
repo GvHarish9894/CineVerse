@@ -173,14 +173,15 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                         else WebPage(Modifier.padding(vertical = 24.dp)) {
                             Text("Saved settings are unavailable. Retry storage to continue.", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                         }
-                    } else key(entry) {
+                    } else WebRouteTransition(entry) { entry -> // Shadows on purpose: an exiting route keeps rendering its own entry.
                         if (entry.route == WebRoute.Home) {
                             WebHome(entry, catalog, generation, settingsFlow, session, runtime, navigation::navigate,
                                 playTrailer = { videos, video -> trailer = Triple(entry, videos, video) }, signIn = approval::show)
                         } else if (entry.route is WebRoute.Browse || entry.route == WebRoute.People) {
                             WebBrowse(entry, catalog, generation, browseSettings, runtime, navigation::navigate)
-                        } else if (searchOwner != null) {
-                            WebSearch(searchOwner, storage, {
+                        } else if (entry.route is WebRoute.Search) {
+                            // The owner belongs to the shown entry; an exiting Search entry renders nothing while it leaves.
+                            if (searchOwner != null && searchOwner.entry === entry) WebSearch(searchOwner, storage, {
                                 runtime.retryStorage()
                                 searchOwner.holder.retrySettings()
                                 searchOwner.holder.retryRecentRead()

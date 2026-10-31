@@ -233,7 +233,7 @@ private fun HomeSection(row: HomeRow, section: SectionState<PagedItems>, saver: 
                         is Hero.OfPerson -> PersonCard(hero.person.name, hero.person.knownForDepartment, webPalette(hero.key), { navigate(hero.route()) }, imageUrl = webImage(hero.person.profilePath, "w185"))
                         is Hero.OfTitle -> PosterCard(hero.title.title, formatDate(hero.title.releaseDate)?.let { if (row == HomeRow.Upcoming) "Coming $it" else it },
                             webPalette(hero.key), { navigate(hero.route()) }, modifier = Modifier.testTag("home-${row.key}-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"),
-                            voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount)
+                            voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, artModifier = Modifier.webSharedPoster(hero.title.ref))
                     }
                 }
             }
