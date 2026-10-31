@@ -216,7 +216,8 @@ internal fun HomeSection(row: HomeRow, state: SectionState<PagedItems>, baseUrl:
                         else PosterCard(title.title, titleMeta(title), palette, click,
                             imageUrl = imageUrl(baseUrl, "w342", title.posterPath), voteAverage = title.voteAverage, voteCount = title.voteCount,
                             tag = if (title.mediaType == MediaType.Tv) "TV" else null,
-                            badge = title.releaseDate.takeIf { row == HomeRow.Upcoming })
+                            badge = title.releaseDate.takeIf { row == HomeRow.Upcoming },
+                            artModifier = mobileSharedPoster(title.ref), titleModifier = mobileSharedTitle(title.ref))
                     }
                 }
             }

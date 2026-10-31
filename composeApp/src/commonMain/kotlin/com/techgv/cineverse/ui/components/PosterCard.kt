@@ -109,6 +109,9 @@ fun PosterCard(
     quickAction: QuickAction? = null,
     /** Show the "NR" ring when there are no votes (web Browse/Search grids); otherwise no ring without votes. */
     nrRing: Boolean = false,
+    /** Applied first to the poster art and the title text (e.g. shared-element tags). */
+    artModifier: Modifier = Modifier,
+    titleModifier: Modifier = Modifier,
 ) {
     val web = LocalShellStyle.current == ShellStyle.Web
     val radius = posterRadius()
@@ -134,7 +137,7 @@ fun PosterCard(
                     imageUrl = imageUrl,
                     palette = palette,
                     style = ArtStyle.Poster,
-                    modifier = Modifier
+                    modifier = artModifier
                         .fillMaxWidth()
                         .aspectRatio(2f / 3f)
                         .dropShadow(shape, cardGlow(palette.c1, t))
@@ -151,6 +154,7 @@ fun PosterCard(
                 style = if (web) bodyStyle(15.sp, FontWeight.Bold) else bodyStyle(13.sp, FontWeight.SemiBold),
                 maxLines = if (web) 2 else 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = titleModifier,
             )
             if (subtitle != null) {
                 Text(

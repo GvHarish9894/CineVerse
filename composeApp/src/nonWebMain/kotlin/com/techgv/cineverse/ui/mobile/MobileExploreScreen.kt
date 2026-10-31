@@ -157,7 +157,8 @@ internal fun MobileExploreContent(
                                         { navigator.open(MobileDestination.Detail(hero.title.ref)) }, width = maxWidth,
                                         imageUrl = imageUrl(baseUrl, "w342", hero.title.posterPath),
                                         voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount,
-                                        tag = if (hero.title.mediaType == MediaType.Tv) "TV" else null)
+                                        tag = if (hero.title.mediaType == MediaType.Tv) "TV" else null,
+                                        artModifier = mobileSharedPoster(hero.title.ref), titleModifier = mobileSharedTitle(hero.title.ref))
                                 }
                             }
                         }
