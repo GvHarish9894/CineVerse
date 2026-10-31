@@ -57,13 +57,17 @@ fun posterSubtitle(title: Title, today: LocalDate): String {
     return listOfNotNull(date?.year?.toString(), score).joinToString(" · ")
 }
 
-/** 140×210 poster + title + sub-line (§6); "TV" tag for series, optional [badge] (e.g. "★ 8.0"). */
+/**
+ * 140×210 poster + title + sub-line (§6); "TV" tag for series, optional [badge] (e.g. "★ 8.0").
+ * [imageModifier] wraps the poster frame outside its focus scale (Home's shared-element tag).
+ */
 @Composable
 fun PosterCard(
     title: Title,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     badge: String? = null,
+    imageModifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val url = tmdbImageUrl(title.posterPath, ImageSize.POSTER)
@@ -80,7 +84,8 @@ fun PosterCard(
             modifier = Modifier
                 .onFocusChanged { focused = it.isFocused }
                 .semantics { contentDescription = description }
-                .size(POSTER_WIDTH, POSTER_HEIGHT),
+                .size(POSTER_WIDTH, POSTER_HEIGHT)
+                .then(imageModifier),
         ) {
             TmdbImage(url, seed, Modifier.fillMaxSize()) {
                 Text(

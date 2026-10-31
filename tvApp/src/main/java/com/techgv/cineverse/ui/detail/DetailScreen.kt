@@ -73,6 +73,9 @@ import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
+import com.techgv.cineverse.ui.components.rememberSharedMedia
+import com.techgv.cineverse.ui.components.sharedBackdropKey
+import com.techgv.cineverse.ui.components.sharedPosterKey
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.nav.Route
@@ -203,7 +206,7 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
         openReview = null
     }
 
-    Backdrop(tmdbImageUrl(imageBase, "w1280", detail.backdropPath))
+    Backdrop(tmdbImageUrl(imageBase, "w1280", detail.backdropPath), sharedBackdropKey(detail.ref))
     RevealVertically(ROW_TOP_INSET) {
         LazyColumn(state = outer, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
             item(key = "buttons") { Hero(detail, buttons, restorer, focusRow("buttons"), outer, imageBase) }
@@ -287,10 +290,11 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
 private class RowSpec(val key: String, val itemKeys: List<String>)
 
 @Composable
-private fun Backdrop(url: String?) {
+private fun Backdrop(url: String?, sharedKey: String) {
     if (url == null) return
     val background = MaterialTheme.colorScheme.background
-    Box(Modifier.fillMaxWidth().height(540.dp)) {
+    // Drawn in place during the transition: in the overlay it would cover the hero text until it lands.
+    Box(rememberSharedMedia(sharedKey, renderInOverlay = false).fillMaxWidth().height(540.dp)) {
         AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().alpha(0.45f))
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to background, 0.75f to Color.Transparent)))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to background)))
@@ -310,7 +314,7 @@ private fun Hero(
     Row(Modifier.fillMaxWidth().padding(start = SCREEN_INSET, end = SCREEN_INSET, top = 40.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
         DetailCardArt(
             tmdbImageUrl(imageBase, "w780", detail.posterPath), detail.title,
-            Modifier.size(240.dp, 360.dp).clip(RoundedCornerShape(16.dp)),
+            rememberSharedMedia(sharedPosterKey(detail.ref)).size(240.dp, 360.dp).clip(RoundedCornerShape(16.dp)),
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(

@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -75,6 +76,8 @@ import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.UiColors
 import com.techgv.cineverse.ui.components.bleedStart
+import com.techgv.cineverse.ui.components.homeCardSharedKey
+import com.techgv.cineverse.ui.components.rememberSharedMedia
 import com.techgv.cineverse.ui.components.parseTmdbDate
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
@@ -138,6 +141,9 @@ fun HomeScreen(
     var listFocused by remember { mutableStateOf(false) }
     val hero = state.hero
     val currentHero by rememberUpdatedState(hero)
+    // (row key, item key) of the card that opened Detail: only it shares its artwork, so a title shown in two
+    // rows returns to the card it left from.
+    var openedCard by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
 
     DisposableEffect(backHandle) {
         val unregister = backHandle.register(
@@ -204,7 +210,10 @@ fun HomeScreen(
                             origin = origin,
                             onOriginFocus = { originFocused = it },
                             onPlay = vm::playTrailer,
-                            onOpen = onOpen,
+                            onOpen = {
+                                openedCard = null
+                                onOpen(it)
+                            },
                             modifier = Modifier.onFocusChanged { buttonsFocused = it.hasFocus },
                         )
                     }
@@ -221,7 +230,11 @@ fun HomeScreen(
                                 focusRow = focusRows.first { it.rowKey == row.key },
                                 onRetry = { vm.retry(row) },
                                 onFocused = vm::onItemFocused,
-                                onOpen = { onOpen(it.route()) },
+                                openedItem = openedCard?.takeIf { it.first == row.key }?.second,
+                                onOpen = {
+                                    openedCard = row.key to it.key
+                                    onOpen(it.route())
+                                },
                             )
                         }
                     }
@@ -392,6 +405,7 @@ private fun HomeRowSection(
     focusRow: FocusRow,
     onRetry: () -> Unit,
     onFocused: (Hero) -> Unit,
+    openedItem: String?,
     onOpen: (Hero) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -411,7 +425,7 @@ private fun HomeRowSection(
                     itemsIndexed(paged.items, key = { _, item -> item.key }) { index, item ->
                         val modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, item.key, index) }
                             .onFocusChanged { if (it.isFocused) onFocused(item) }
-                        HomeCard(item, row.card, genres, { onOpen(item) }, modifier)
+                        HomeCard(item, row.card, genres, { onOpen(item) }, modifier, shared = item.key == openedItem)
                     }
                 }
             }
@@ -420,7 +434,8 @@ private fun HomeRowSection(
 }
 
 @Composable
-private fun HomeCard(item: Hero, card: HomeCard, genres: Map<Int, String>, onClick: () -> Unit, modifier: Modifier) {
+private fun HomeCard(item: Hero, card: HomeCard, genres: Map<Int, String>, onClick: () -> Unit, modifier: Modifier, shared: Boolean) {
+    val imageModifier = if (shared && item is Hero.OfTitle) rememberSharedMedia(homeCardSharedKey(item.title.ref, card)) else Modifier
     when (item) {
         is Hero.OfPerson -> PersonCard(
             name = item.person.name,
@@ -439,9 +454,10 @@ private fun HomeCard(item: Hero, card: HomeCard, genres: Map<Int, String>, onCli
                 seed = item.key,
                 onClick = onClick,
                 modifier = modifier,
+                imageModifier = imageModifier,
             )
         } else {
-            PosterCard(item.title, onClick, modifier)
+            PosterCard(item.title, onClick, modifier, imageModifier = imageModifier)
         }
     }
 }
