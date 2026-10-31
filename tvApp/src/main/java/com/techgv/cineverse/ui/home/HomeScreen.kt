@@ -67,6 +67,7 @@ import com.techgv.cineverse.ui.components.LandscapeCard
 import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.presentation.PagedItems
 import com.techgv.cineverse.ui.components.PersonCard
+import com.techgv.cineverse.ui.components.KeepInView
 import com.techgv.cineverse.ui.components.PinToStart
 import com.techgv.cineverse.ui.components.PosterCard
 import com.techgv.cineverse.ui.components.ScoreRing
@@ -397,7 +398,8 @@ private fun HomeRowSection(
     Column(Modifier.padding(top = 8.dp)) {
         RowTitle(title, Modifier.padding(start = CONTENT_INSET))
         Section(state, onRetry, Modifier.padding(start = CONTENT_INSET)) { paged ->
-            PinToStart(leadingInset = CONTENT_INSET) {
+            // Rows stay still while focus moves between visible cards; they scroll only at the edges.
+            KeepInView(inset = CONTENT_INSET) {
                 LazyRow(
                     state = listState,
                     // Section pads its messages; the row bleeds back to the content edge so a scaled card is not clipped.
