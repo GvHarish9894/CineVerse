@@ -314,7 +314,7 @@ class MobileDetailScreenTest {
         }
         waitUntil { f.api.calls.size == 2 }
         val list = onNodeWithTag("mobile-detail")
-        // Retained topology: recovery, header, expanded summary, segments, cast, attribution.
+        // Retained topology: recovery, header, expanded summary, segments, cast.
         list.performScrollToIndex(3)
         // Offscreen means composed out (iOS) or still composed but not displayed (Android).
         if (onAllNodesWithText("2026 · PG-13 · 2h 8m").fetchSemanticsNodes().isNotEmpty())

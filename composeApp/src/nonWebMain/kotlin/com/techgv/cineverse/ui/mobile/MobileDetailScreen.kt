@@ -295,7 +295,6 @@ private fun MobileDetailContent(
                                 }
                             }
                         }
-                        item("attribution") { Footer() }
                     }
                 }
             }

@@ -147,7 +147,6 @@ private fun PersonContent(
                                 Text("›")
                             }
                         }
-                        item("attribution") { Footer() }
                     }
                 }
             }
