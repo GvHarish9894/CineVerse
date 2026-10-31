@@ -36,7 +36,7 @@ class MobileHomeSectionTest {
         val content = PagedItems(listOf(Hero.OfTitle(title)), 1, true, moreError = SectionErrorKind.Offline)
         setThemedContent { HomeSection(HomeRow.Trending, SectionState.Content(content), "", MobileNavigator { destination = it }, {}, { more++ }) }
         onAllNodesWithText("Fixture title")[0].performClick()
-        assertEquals(MobileDestination.Detail(title.ref), destination)
+        assertEquals(MobileDestination.Detail(title.ref, title.posterPath, title.title), destination)
         assertEquals(0, more)
         onNodeWithText("Retry").performClick()
         assertEquals(1, more)

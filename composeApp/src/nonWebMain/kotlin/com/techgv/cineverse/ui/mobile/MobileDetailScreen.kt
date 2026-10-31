@@ -41,6 +41,8 @@ internal fun MobileDetailScreen(
     navigator: MobileNavigator,
     onBack: () -> Unit,
     onShare: ((MediaRef) -> Unit)? = null,
+    seedPosterPath: String? = null,
+    seedTitle: String? = null,
 ) {
     val state = model.state.collectAsState().value
     key(model, state.segment) {
@@ -68,7 +70,10 @@ internal fun MobileDetailScreen(
         val onAct: (LibraryKind) -> Unit = { model.act(it, state.authority) }
         val actionObserver = LocalMobileDetailActionObserver.current
         if (actionObserver != null) SideEffect { actionObserver(model, state.authority, onAct) }
-        MobileDetailContent(state, model.imageBase, scroll, model::selectSegment, model::setExpanded,
+        // The card's seed only stands in while the first fetch loads; any loaded/retained Detail replaces it.
+        val seed = model.ref?.takeIf { seedPosterPath != null || seedTitle != null }
+            ?.let { MobileDetailHeaderArt(it, seedPosterPath, seedTitle.orEmpty()) }
+        MobileDetailContent(state, seed, model.imageBase, scroll, model::selectSegment, model::setExpanded,
             onAct = onAct, onRetryReads = model::retryReads, onRetryDetail = model::retryDetail,
             onNavigate = { target -> model.browse { navigator.open(target) } }, onBack = { model.browse(onBack) },
             onShare = onShare?.let { share -> { ref -> model.browse { share(ref) } } })
@@ -79,6 +84,7 @@ internal fun MobileDetailScreen(
 @Composable
 private fun MobileDetailContent(
     state: MobileDetailState,
+    seed: MobileDetailHeaderArt?,
     imageBase: String,
     scroll: LazyListState,
     onSegment: (MobileDetailSegment) -> Unit,
@@ -133,14 +139,17 @@ private fun MobileDetailContent(
                     if (state.section is SectionState.Error) item("catalog-error") {
                         Column(Modifier.padding(horizontal = 20.dp)) { SectionFailure(state.section.kind, onRetryDetail) }
                     }
-                    if (detail == null && state.section == SectionState.Loading) item("loading") {
+                    val loading = detail == null && state.section == SectionState.Loading
+                    // One "header" item call site for seed and Detail, so the shared poster is never remounted when data lands.
+                    val header = detail?.let { MobileDetailHeaderArt(it.ref, it.posterPath, it.title) } ?: seed?.takeIf { loading }
+                    if (header != null) item("header") { DetailHeader(header, detail, imageBase, onNavigate) }
+                    if (loading) item("loading") {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            PosterCardSkeleton()
+                            if (seed == null) PosterCardSkeleton()
                             Text("Loading title…")
                         }
                     }
                     if (detail != null) {
-                        item("header") { DetailHeader(detail, imageBase, onNavigate) }
                         item("summary") {
                             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (detail.tagline.isNotBlank()) Text(detail.tagline + if (detail.taglineInEnglish) " (English)" else "", fontStyle = FontStyle.Italic)
@@ -249,27 +258,32 @@ private fun MobileDetailContent(
     }
 }
 
+/** What the header's shared poster and title show: the opening card's seed until [Detail] loads, then Detail's own. */
+private data class MobileDetailHeaderArt(val ref: MediaRef, val posterPath: String?, val title: String)
+
 @Composable
-private fun DetailHeader(detail: Detail, imageBase: String, onNavigate: (MobileDestination) -> Unit) {
-    val palette = mobilePalette(detail.ref.key)
+private fun DetailHeader(art: MobileDetailHeaderArt, detail: Detail?, imageBase: String, onNavigate: (MobileDestination) -> Unit) {
+    val palette = mobilePalette(art.ref.key)
     Column(verticalArrangement = Arrangement.spacedBy((-60).dp)) {
         Box(Modifier.fillMaxWidth().height(240.dp)) {
-            PaletteArt(imageUrl(imageBase, "w1280", detail.backdropPath), palette, ArtStyle.Backdrop, Modifier.matchParentSize(), bottomScrim = true)
+            PaletteArt(imageUrl(imageBase, "w1280", detail?.backdropPath), palette, ArtStyle.Backdrop, Modifier.matchParentSize(), bottomScrim = true)
         }
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
-            PaletteArt(imageUrl(imageBase, "w342", detail.posterPath), palette, ArtStyle.Poster,
-                mobileSharedPoster(detail.ref).size(116.dp, 174.dp).clip(RoundedCornerShape(18.dp)))
+            PaletteArt(imageUrl(imageBase, "w342", art.posterPath), palette, ArtStyle.Poster,
+                mobileSharedPoster(art.ref).size(116.dp, 174.dp).clip(RoundedCornerShape(18.dp)).testTag("detail-poster"))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(detail.title, mobileSharedTitle(detail.ref), style = displayStyle(27.sp))
-                val metadata = listOfNotNull(detail.year, detail.certification?.takeIf { it.isNotBlank() }, detail.runtimeMinutes?.takeIf { it > 0 }?.let(::formatRuntime))
-                if (metadata.isNotEmpty()) Text(metadata.joinToString(" · "))
-                if (detail.genres.isNotEmpty()) Text(detail.genres.joinToString(", "))
-                if (detail.voteCount > 0) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ScoreRing(detail.voteAverage, detail.voteCount)
-                    Text("User score")
-                }
-                detail.leadCrew?.takeIf { it.personId > 0 }?.let { person ->
-                    Text("${person.role}: ${person.name}", Modifier.cvClickable({ onNavigate(MobileDestination.Person(person.personId)) }))
+                Text(art.title, mobileSharedTitle(art.ref), style = displayStyle(27.sp))
+                if (detail != null) {
+                    val metadata = listOfNotNull(detail.year, detail.certification?.takeIf { it.isNotBlank() }, detail.runtimeMinutes?.takeIf { it > 0 }?.let(::formatRuntime))
+                    if (metadata.isNotEmpty()) Text(metadata.joinToString(" · "))
+                    if (detail.genres.isNotEmpty()) Text(detail.genres.joinToString(", "))
+                    if (detail.voteCount > 0) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ScoreRing(detail.voteAverage, detail.voteCount)
+                        Text("User score")
+                    }
+                    detail.leadCrew?.takeIf { it.personId > 0 }?.let { person ->
+                        Text("${person.role}: ${person.name}", Modifier.cvClickable({ onNavigate(MobileDestination.Person(person.personId)) }))
+                    }
                 }
             }
         }

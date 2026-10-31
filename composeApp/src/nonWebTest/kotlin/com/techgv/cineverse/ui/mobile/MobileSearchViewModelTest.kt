@@ -113,7 +113,7 @@ class MobileSearchViewModelTest {
                 is Hero.OfTitle -> {
                     assertEquals(101, hero.title.ref.id)
                     assertEquals(if (facet == SearchFacet.Tv) "tv" else "movie", hero.title.ref.mediaType.path)
-                    assertEquals(MobileDestination.Detail(hero.title.ref), hero.searchDestination())
+                    assertEquals(MobileDestination.Detail(hero.title.ref, hero.title.posterPath, hero.title.title), hero.searchDestination())
                 }
                 is Hero.OfPerson -> assertEquals(MobileDestination.Person(101), hero.searchDestination())
             }

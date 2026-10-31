@@ -116,7 +116,7 @@ internal fun MobileHomeScreen(
                         if (popular.isNotEmpty()) ScrollRow("10 Popular Movies") {
                             items(popular, key = { it.key }) { hero ->
                                 Top10Card(popular.indexOf(hero) + 1, hero.title.title, mobilePalette(hero.key),
-                                    { navigator.open(MobileDestination.Detail(hero.title.ref)) },
+                                    { navigator.open(hero.title.detailDestination()) },
                                     imageUrl = imageUrl(graph.catalog.imageBaseUrl(), "w342", hero.title.posterPath))
                             }
                         }
@@ -175,7 +175,7 @@ private fun HomeHero(graph: MobileApplication, home: HomeStateHolder, state: Hom
                             { if (graph.identity.value != null) graph.actions.toggleWatchlist(title) },
                             variant = ButtonVariant.Glass, icon = if (library.watchlist) CvIcons.Check else CvIcons.Plus,
                             enabled = identity != null && library.known && LibraryKind.WATCHLIST !in library.pending)
-                        RoundIconButton(CvIcons.Info, "Details for ${title.title}", { navigator.open(MobileDestination.Detail(title.ref)) })
+                        RoundIconButton(CvIcons.Info, "Details for ${title.title}", { navigator.open(title.detailDestination()) })
                     }
                 }
             }
@@ -210,7 +210,7 @@ internal fun HomeSection(row: HomeRow, state: SectionState<PagedItems>, baseUrl:
                         { navigator.open(MobileDestination.Person(hero.person.id)) }, imageUrl = imageUrl(baseUrl, "w185", hero.person.profilePath))
                     is Hero.OfTitle -> {
                         val title = hero.title
-                        val click = { navigator.open(MobileDestination.Detail(title.ref)) }
+                        val click = { navigator.open(title.detailDestination()) }
                         if (row.card == HomeCard.Landscape) LandscapeCard(title.title, titleMeta(title), palette, click,
                             imageUrl = imageUrl(baseUrl, "w780", title.backdropPath))
                         else PosterCard(title.title, titleMeta(title), palette, click,

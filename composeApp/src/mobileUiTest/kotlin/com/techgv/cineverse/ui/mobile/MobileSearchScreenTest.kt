@@ -137,7 +137,7 @@ class MobileSearchScreenTest {
         onNodeWithText("Movies").assertExists()
         onNodeWithText("People").assertExists()
         onNodeWithText("Fixture title").performClick()
-        assertEquals(MobileDestination.Detail(title.ref), destination)
+        assertEquals(MobileDestination.Detail(title.ref, title.posterPath, title.title), destination)
         onNodeWithTag("mobile-search").performScrollToNode(hasText("Retry"))
         assertEquals(0, more)
         onNodeWithText("Retry").performClick()

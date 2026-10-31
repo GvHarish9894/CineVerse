@@ -21,13 +21,16 @@ internal fun MobileDetailUiFixture(
     onBack: () -> Unit = {},
     onShare: ((MediaRef) -> Unit)? = null,
     libraryState: (MobileDetailComponentFixture) -> Flow<LibraryStateSnapshot> = { it.accountState },
+    seedPosterPath: String? = null,
+    seedTitle: String? = null,
+    reduceMotion: Boolean = true,
 ) {
     val scope = rememberCoroutineScope()
     val f = remember { MobileDetailComponentFixture(scope).also { if (knownGuest) it.guest(); configure(it) } }
     val model = remember { MobileDetailViewModel(f.graph, media, 42, savedState, f.rawSettings, libraryState(f), scope) }
     DisposableEffect(model) { model.setActive(true); onDispose { model.close(); f.graph.close() } }
     SideEffect { onReady(model, f) }
-    CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = true)) {
-        ProvideWindowClass { MobileDetailScreen(model, MobileNavigator(onNavigate), onBack, onShare) }
+    CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = reduceMotion)) {
+        ProvideWindowClass { MobileDetailScreen(model, MobileNavigator(onNavigate), onBack, onShare, seedPosterPath, seedTitle) }
     }
 }

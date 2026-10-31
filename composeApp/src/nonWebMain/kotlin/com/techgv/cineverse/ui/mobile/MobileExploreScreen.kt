@@ -154,7 +154,7 @@ internal fun MobileExploreContent(
                                         { navigator.open(MobileDestination.Person(hero.person.id)) },
                                         imageUrl = imageUrl(baseUrl, "w185", hero.person.profilePath), diameter = minOf(96.dp, maxWidth))
                                     is Hero.OfTitle -> PosterCard(hero.title.title, titleMeta(hero.title), mobilePalette(hero.key),
-                                        { navigator.open(MobileDestination.Detail(hero.title.ref)) }, width = maxWidth,
+                                        { navigator.open(hero.title.detailDestination()) }, width = maxWidth,
                                         imageUrl = imageUrl(baseUrl, "w342", hero.title.posterPath),
                                         voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount,
                                         tag = if (hero.title.mediaType == MediaType.Tv) "TV" else null,

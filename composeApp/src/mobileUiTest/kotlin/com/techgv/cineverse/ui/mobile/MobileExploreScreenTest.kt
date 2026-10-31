@@ -137,7 +137,7 @@ class MobileExploreScreenTest {
                 MobileNavigator { destination = it }, {}, {}, { retries++ }, {}, {}, { more++ })
         }
         onAllNodesWithText("Fixture title")[0].performClick()
-        assertEquals(MobileDestination.Detail(title.ref), destination)
+        assertEquals(MobileDestination.Detail(title.ref, title.posterPath, title.title), destination)
         onNodeWithTag("mobile-explore").performScrollToNode(hasText("Retry"))
         assertEquals(0, more)
         onNodeWithText("Retry").performClick()
