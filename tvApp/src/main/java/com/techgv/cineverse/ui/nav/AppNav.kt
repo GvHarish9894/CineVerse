@@ -2,6 +2,7 @@ package com.techgv.cineverse.ui.nav
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.padding
@@ -13,6 +14,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.techgv.cineverse.ui.browse.BrowseScreen
 import com.techgv.cineverse.ui.components.LocalToaster
+import com.techgv.cineverse.ui.components.ProvideSharedMediaVisibility
+import com.techgv.cineverse.ui.components.ProvideSharedTransition
 import com.techgv.cineverse.ui.components.ToastHost
 import com.techgv.cineverse.ui.components.Toaster
 import com.techgv.cineverse.ui.search.SearchScreen
@@ -137,28 +140,37 @@ fun AppNav(container: AppContainer) {
             ) {
                 // §7.12: the Rate dialog waits while the Player is up.
                 LibraryActionsHost(container.libraryRepository, container.appScope, playerActive = onPlayer) {
-                    NavHost(nav, startDestination = Route.Splash) {
-                        composable<Route.Splash> {
-                            SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
+                    // Home card artwork ↔ Detail hero artwork (ui/components/SharedMedia.kt).
+                    SharedTransitionLayout {
+                        ProvideSharedTransition(this) {
+                            NavHost(nav, startDestination = Route.Splash) {
+                                composable<Route.Splash> {
+                                    SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
+                                }
+                                composable<Route.Home> {
+                                    ProvideSharedMediaVisibility(this) { HomeScreen(container, onOpen = { nav.navigate(it) }, backHandle = homeBack) }
+                                }
+                                composable<Route.Browse> { BrowseScreen(container, it.toRoute<Route.Browse>().kind, onOpen = { route -> nav.navigate(route) }) }
+                                composable<Route.Search> { SearchScreen(container, onOpen = { route -> nav.navigate(route) }) }
+                                composable<Route.Library> {
+                                    LibraryScreen(
+                                        container,
+                                        onOpenTitle = { nav.navigate(Route.Detail(it.mediaType, it.id)) },
+                                        onExplore = { nav.reset(Route.Browse(BrowseKind.Movies)) },
+                                        onSignIn = { nav.navigate(Route.Login) },
+                                    )
+                                }
+                                composable<Route.Settings> { SettingsScreen(onSignIn = { nav.navigate(Route.Login) }) }
+                                composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, onSignedIn = leaveLogin, message = loginMessage) }
+                                composable<Route.Detail> {
+                                    ProvideSharedMediaVisibility(this) { DetailScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
+                                }
+                                composable<Route.Person> { PersonScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
+                                composable<Route.Season> { SeasonScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
+                                composable<Route.Player> { PlayerScreen(it.toRoute(), onBack = { nav.popBackStack() }) }
+                                spikeDestinations(nav, container)
+                            }
                         }
-                        composable<Route.Home> { HomeScreen(container, onOpen = { nav.navigate(it) }, backHandle = homeBack) }
-                        composable<Route.Browse> { BrowseScreen(container, it.toRoute<Route.Browse>().kind, onOpen = { route -> nav.navigate(route) }) }
-                        composable<Route.Search> { SearchScreen(container, onOpen = { route -> nav.navigate(route) }) }
-                        composable<Route.Library> {
-                            LibraryScreen(
-                                container,
-                                onOpenTitle = { nav.navigate(Route.Detail(it.mediaType, it.id)) },
-                                onExplore = { nav.reset(Route.Browse(BrowseKind.Movies)) },
-                                onSignIn = { nav.navigate(Route.Login) },
-                            )
-                        }
-                        composable<Route.Settings> { SettingsScreen(onSignIn = { nav.navigate(Route.Login) }) }
-                        composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, onSignedIn = leaveLogin, message = loginMessage) }
-                        composable<Route.Detail> { DetailScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
-                        composable<Route.Person> { PersonScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
-                        composable<Route.Season> { SeasonScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
-                        composable<Route.Player> { PlayerScreen(it.toRoute(), onBack = { nav.popBackStack() }) }
-                        spikeDestinations(nav, container)
                     }
                 }
             }

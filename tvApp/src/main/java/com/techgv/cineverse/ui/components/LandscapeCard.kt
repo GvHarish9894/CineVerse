@@ -28,7 +28,8 @@ val LANDSCAPE_HEIGHT = 140.dp
 /**
  * 248×140 backdrop + title + [subtitle] (§6). Callers build the sub-line from what they know (network
  * name only when known; Home's Popular TV: first genre). [seed] keys the fallback colour. [imageUrl] overrides
- * the TMDB backdrop for non-TMDB art (Detail's video row: YouTube thumbnails).
+ * the TMDB backdrop for non-TMDB art (Detail's video row: YouTube thumbnails). [imageModifier] wraps the image
+ * frame outside its focus scale (Home's shared-element tag).
  */
 @Composable
 fun LandscapeCard(
@@ -39,6 +40,7 @@ fun LandscapeCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     imageUrl: String? = tmdbImageUrl(imagePath, ImageSize.BACKDROP),
+    imageModifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val glow = if (focused) rememberPaletteColor(imageUrl, fallbackColor(seed)) else fallbackColor(seed)
@@ -50,7 +52,8 @@ fun LandscapeCard(
             modifier = Modifier
                 .onFocusChanged { focused = it.isFocused }
                 .semantics { contentDescription = listOf(title, subtitle).filter { it.isNotEmpty() }.joinToString(", ") }
-                .size(LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT),
+                .size(LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT)
+                .then(imageModifier),
         ) {
             TmdbImage(imageUrl, seed, Modifier.fillMaxSize()) {
                 Text(
