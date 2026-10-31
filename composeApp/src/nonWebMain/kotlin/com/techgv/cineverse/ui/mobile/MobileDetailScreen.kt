@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -14,6 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontStyle
@@ -164,11 +169,18 @@ private fun MobileDetailContent(
                     if (state.section is SectionState.Error) item("catalog-error") {
                         Column(Modifier.padding(horizontal = 20.dp)) { SectionFailure(state.section.kind, onRetryDetail) }
                     }
-                    if (header != null) item("header") { DetailHeader(header, detail, imageBase, onNavigate) }
+                    if (header != null || loading) item("header") { DetailHeader(header, detail, imageBase, onNavigate) }
                     if (loading) item("loading") {
-                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (seed == null) PosterCardSkeleton()
-                            Text("Loading title…")
+                        // Shimmer shaped like the summary, actions and segment bar; one announced label instead of visible text.
+                        Column(Modifier.padding(horizontal = 20.dp).clearAndSetSemantics {
+                            contentDescription = "Loading title…"; liveRegion = LiveRegionMode.Polite
+                        }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Box(Modifier.fillMaxWidth(0.6f).height(14.dp).shimmer())
+                            SkeletonLines(3)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                repeat(3) { Box(Modifier.weight(1f).height(66.dp).shimmer(RoundedCornerShape(18.dp))) }
+                            }
+                            Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(36.dp).shimmer(RoundedCornerShape(14.dp)))
                         }
                     }
                     if (detail != null) {
@@ -283,18 +295,28 @@ private fun MobileDetailContent(
 /** What the header's shared poster and title show: the opening card's seed until [Detail] loads, then Detail's own. */
 private data class MobileDetailHeaderArt(val ref: MediaRef, val posterPath: String?, val title: String)
 
+/** [art] null = no card seed (deep link) and still loading: skeleton poster and title; [detail] null = skeleton metadata. */
 @Composable
-private fun DetailHeader(art: MobileDetailHeaderArt, detail: Detail?, imageBase: String, onNavigate: (MobileDestination) -> Unit) {
-    val palette = mobilePalette(art.ref.key)
+private fun DetailHeader(art: MobileDetailHeaderArt?, detail: Detail?, imageBase: String, onNavigate: (MobileDestination) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy((-60).dp)) {
         Spacer(Modifier.fillMaxWidth().height(240.dp)) // backdrop slot; the image is drawn behind the list
 
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
-            PaletteArt(imageUrl(imageBase, "w342", art.posterPath), palette, ArtStyle.Poster,
+            if (art == null) Box(Modifier.size(116.dp, 174.dp).shimmer(RoundedCornerShape(18.dp)).testTag("detail-poster-skeleton"))
+            else PaletteArt(imageUrl(imageBase, "w342", art.posterPath), mobilePalette(art.ref.key), ArtStyle.Poster,
                 mobileSharedPoster(art.ref).size(116.dp, 174.dp).clip(RoundedCornerShape(18.dp)).testTag("detail-poster"))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(art.title, mobileSharedTitle(art.ref), style = displayStyle(27.sp))
-                if (detail != null) {
+                if (art == null) Box(Modifier.fillMaxWidth(0.8f).height(28.dp).shimmer())
+                else Text(art.title, mobileSharedTitle(art.ref), style = displayStyle(27.sp))
+                if (detail == null) {
+                    Box(Modifier.fillMaxWidth(0.6f).height(14.dp).shimmer())
+                    Box(Modifier.fillMaxWidth(0.85f).height(14.dp).shimmer())
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(44.dp).shimmer(CircleShape))
+                        Box(Modifier.width(72.dp).height(12.dp).shimmer())
+                    }
+                    Box(Modifier.fillMaxWidth(0.7f).height(14.dp).shimmer())
+                } else {
                     val metadata = listOfNotNull(detail.year, detail.certification?.takeIf { it.isNotBlank() }, detail.runtimeMinutes?.takeIf { it > 0 }?.let(::formatRuntime))
                     if (metadata.isNotEmpty()) Text(metadata.joinToString(" · "))
                     if (detail.genres.isNotEmpty()) Text(detail.genres.joinToString(", "))

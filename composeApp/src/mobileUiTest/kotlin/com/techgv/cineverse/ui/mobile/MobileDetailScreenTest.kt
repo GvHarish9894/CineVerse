@@ -186,7 +186,7 @@ class MobileDetailScreenTest {
                 MobileDetailUiFixture(savedState = saved, configure = { it.api.gate = gate }, onReady = { m, fixture -> model = m; f = fixture })
             }
         }
-        onNodeWithText("Loading title…").assertIsDisplayed()
+        onNodeWithContentDescription("Loading title…").assertIsDisplayed()
         runOnIdle { assertTarget(saved); assertFalse(gate.isCompleted) }
         runOnIdle { gate.complete(Unit) }
         onNodeWithText("Read less").assertExists()
@@ -216,7 +216,7 @@ class MobileDetailScreenTest {
         setContent {
             if (shown) MobileDetailUiFixture(savedState = saved, configure = { it.api.gate = gate }, onBack = { shown = false })
         }
-        onNodeWithText("Loading title…").assertIsDisplayed()
+        onNodeWithContentDescription("Loading title…").assertIsDisplayed()
         runOnIdle { assertTarget(saved) }
         onNodeWithContentDescription("Back").performClick()
         onNodeWithTag("mobile-detail").assertDoesNotExist()
@@ -237,7 +237,7 @@ class MobileDetailScreenTest {
         val gate = CompletableDeferred<Unit>()
         runOnIdle { f.api.failure = false; f.api.gate = gate }
         onNodeWithText("Retry").performClick()
-        onNodeWithText("Loading title…").assertIsDisplayed()
+        onNodeWithContentDescription("Loading title…").assertIsDisplayed()
         runOnIdle { assertTarget(saved); gate.complete(Unit) }
         onNodeWithText("Read less").assertExists()
         val list = onNodeWithTag("mobile-detail")

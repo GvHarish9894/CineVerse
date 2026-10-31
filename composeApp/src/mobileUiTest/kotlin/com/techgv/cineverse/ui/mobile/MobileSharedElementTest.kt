@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -88,22 +89,27 @@ class MobileSharedElementTest {
             MobileDetailUiFixture(configure = { it.api.gate = gate }, seedPosterPath = title.posterPath, seedTitle = title.title)
         }
         onNodeWithText("Fixture title").assertExists()
-        onNodeWithText("Loading title…").assertExists()
+        onNodeWithContentDescription("Loading title…").assertExists()
+        onNodeWithText("Loading title…").assertDoesNotExist()
+        onNodeWithTag("detail-poster-skeleton").assertDoesNotExist()
         val seeded = onNodeWithTag("detail-poster").fetchSemanticsNode().id
         runOnIdle { gate.complete(Unit) }
         onNodeWithText("Detail movie en-US").assertExists()
         onNodeWithText("Fixture title").assertDoesNotExist()
-        onNodeWithText("Loading title…").assertDoesNotExist()
+        onNodeWithContentDescription("Loading title…").assertDoesNotExist()
         assertEquals(seeded, onNodeWithTag("detail-poster").fetchSemanticsNode().id, "Detail poster remounted when data loaded")
     }
 
-    @Test fun unseededDetailKeepsTheLoadingPlaceholderWithoutAHeader() = runComposeUiTest {
+    @Test fun unseededDetailShowsASkeletonPosterUntilDetailLoads() = runComposeUiTest {
         val gate = CompletableDeferred<Unit>()
         setThemedContent { MobileDetailUiFixture(configure = { it.api.gate = gate }) }
-        onNodeWithText("Loading title…").assertExists()
+        onNodeWithContentDescription("Loading title…").assertExists()
         onNodeWithTag("detail-poster").assertDoesNotExist()
+        onNodeWithTag("detail-poster-skeleton").assertExists()
         runOnIdle { gate.complete(Unit) }
         onNodeWithText("Detail movie en-US").assertExists()
         onNodeWithTag("detail-poster").assertExists()
+        onNodeWithTag("detail-poster-skeleton").assertDoesNotExist()
+        onNodeWithContentDescription("Loading title…").assertDoesNotExist()
     }
 }
