@@ -52,27 +52,30 @@ internal fun MobileDetailScreen(
     seedTitle: String? = null,
 ) {
     val state = model.state.collectAsState().value
-    key(model, state.segment) {
+    // One list for every segment: a segment switch swaps only that segment's items, never the header or bar.
+    key(model) {
         val segment = state.segment
-        val position = remember { model.scroll(segment) }
+        val currentSegment by rememberUpdatedState(segment)
         val scroll = remember { LazyListState() }
-        var restored by remember { mutableStateOf(false) }
+        // The segment whose saved position has been applied (or deliberately kept); its scroll is persisted.
+        var restored by remember { mutableStateOf<MobileDetailSegment?>(null) }
         val content = (state.section as? SectionState.Content)?.value
         val topologyReady = content?.ref == model.ref && content != null && !state.stale &&
             !state.settingsFailed && !state.libraryFailed && !state.identityFailed
-        val persist by rememberUpdatedState(restored && topologyReady)
-        LaunchedEffect(scroll, topologyReady) {
-            if (!topologyReady || restored) return@LaunchedEffect
+        val persist by rememberUpdatedState(restored == segment && topologyReady)
+        LaunchedEffect(scroll, segment, topologyReady) {
+            if (!topologyReady || restored == segment) return@LaunchedEffect
             // scrollToItem remeasures the current composed provider without requiring a visible anchor.
+            val position = model.scroll(segment)
             scroll.scrollToItem(position.index, position.offset)
-            restored = true
+            restored = segment
         }
-        LaunchedEffect(scroll, restored, topologyReady) {
+        LaunchedEffect(scroll, segment, restored, topologyReady) {
             if (persist) snapshotFlow { MobileDetailScroll(scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
                 .distinctUntilChanged().collect { if (persist) model.saveScroll(segment, it.index, it.offset) }
         }
         DisposableEffect(scroll) {
-            onDispose { if (persist) model.saveScroll(segment, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
+            onDispose { if (persist) model.saveScroll(currentSegment, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset) }
         }
         val onAct: (LibraryKind) -> Unit = { model.act(it, state.authority) }
         val actionObserver = LocalMobileDetailActionObserver.current
@@ -80,12 +83,20 @@ internal fun MobileDetailScreen(
         // The card's seed only stands in while the first fetch loads; any loaded/retained Detail replaces it.
         val seed = model.ref?.takeIf { seedPosterPath != null || seedTitle != null }
             ?.let { MobileDetailHeaderArt(it, seedPosterPath, seedTitle.orEmpty()) }
-        // A tapped segment opens with the sticky segment bar under the top bar (its content visible), unless the
-        // user had already scrolled deeper in that segment; a fresh segment's saved position is otherwise 0 = page top.
+        // With the sticky bar pinned, a tapped segment keeps it pinned: it opens at its saved position when that is
+        // deeper than the bar, else exactly at the bar. With the bar not pinned (near the page top) the list stays put.
         val onSegment: (MobileDetailSegment) -> Unit = { target ->
+            if (persist) model.saveScroll(segment, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset)
             val bar = scroll.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "segments" }?.index
-            segmentOpenScroll(model.scroll(target), bar)?.let { model.saveScroll(target, it.index, it.offset) }
+            if (bar != null && scroll.firstVisibleItemIndex >= bar) {
+                val saved = model.scroll(target)
+                val open = segmentOpenScroll(saved, bar) ?: saved
+                model.saveScroll(target, open.index, open.offset)
+                // Applied in the measure pass that composes the new segment's items: no animation, no frame at 0.
+                scroll.requestScrollToItem(open.index, open.offset)
+            }
             model.selectSegment(target)
+            if (topologyReady && model.state.value.segment == target) restored = target
         }
         MobileDetailContent(state, seed, model.imageBase, scroll, onSegment, model::setExpanded,
             onAct = onAct, onRetryReads = model::retryReads, onRetryDetail = model::retryDetail,

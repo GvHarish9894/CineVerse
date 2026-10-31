@@ -33,12 +33,12 @@ class MobileDetailScreenTest {
         runOnIdle { assertEquals(MediaRef(MediaType.Movie, 42), f.guest.rows.value.single().ref) }
     }
 
-    @Test fun selectingASegmentShowsThatSegmentsContentWithoutFurtherScrolling() = runComposeUiTest {
+    @Test fun selectingASegmentWithTheBarPinnedShowsThatSegmentsContentUnderTheBar() = runComposeUiTest {
         setContent { MobileDetailUiFixture() }
-        onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-segments"))
-        // From the page top the segment bar sits far below the fold; each tap must bring the chosen
-        // segment's content on screen, not leave the previous segment's header/summary showing.
+        // Healthy topology: header, summary, segments; index 2 pins the bar under the top bar.
+        onNodeWithTag("mobile-detail").performScrollToIndex(2)
         onNodeWithText("Cast", substring = false).performClick()
+        onNodeWithTag("detail-segments").assertIsDisplayed()
         onNodeWithTag("detail-person-431").assertIsDisplayed()
         onNodeWithText("Videos", substring = false).performClick()
         onNodeWithTag("detail-video-aB3_dE5-gH7").assertIsDisplayed()
@@ -47,6 +47,22 @@ class MobileDetailScreenTest {
         onNodeWithText("Overview", substring = false).performClick()
         onNodeWithTag("detail-segments").assertIsDisplayed()
         onNodeWithText("Top billed cast").assertIsDisplayed()
+    }
+
+    @Test fun selectingASegmentFromThePageTopNeitherMovesTheListNorRemountsTheHeader() = runComposeUiTest {
+        lateinit var model: MobileDetailViewModel
+        setContent { MobileDetailUiFixture(onReady = { m, _ -> model = m }) }
+        val list = onNodeWithTag("mobile-detail")
+        list.performScrollToNode(hasTestTag("detail-segments"))
+        val position = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val poster = onNodeWithTag("detail-poster").fetchSemanticsNode().id
+        onNodeWithText("Cast", substring = false).performClick()
+        runOnIdle { assertEquals(MobileDetailSegment.Cast, model.state.value.segment) }
+        assertEquals(position, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        assertEquals(poster, onNodeWithTag("detail-poster").fetchSemanticsNode().id, "segment switch remounted the header")
+        onNodeWithText("Overview", substring = false).performClick()
+        assertEquals(position, list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value())
+        assertEquals(poster, onNodeWithTag("detail-poster").fetchSemanticsNode().id, "segment switch remounted the header")
     }
 
     @Test fun castUsesActualPersonIdAndVideosUseActualYoutubeKey() = runComposeUiTest {
