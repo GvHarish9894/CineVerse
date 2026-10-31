@@ -1,6 +1,9 @@
 package com.techgv.cineverse.ui.components
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,7 +28,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,7 +42,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -282,11 +293,37 @@ fun EpisodeCard(
     }
 }
 
-/** Review: avatar initials, author, date, gold score, text (mobile `.rev` / web `.rev`). */
+private val HttpUrl = Regex("""https?://[^\s<>"]+""")
+
+/**
+ * [text] with each http(s) URL as a [LinkAnnotation.Url] (opened through LocalUriHandler by Text). Trailing
+ * sentence punctuation, and a `)` that does not close a `(` inside the URL, stay plain text.
+ */
+fun linkifyUrls(text: String, styles: TextLinkStyles? = null): AnnotatedString = buildAnnotatedString {
+    append(text)
+    HttpUrl.findAll(text).forEach { match ->
+        var end = match.range.last + 1
+        while (end > match.range.first) {
+            val url = text.substring(match.range.first, end)
+            val last = url.last()
+            if (last in ".,;:!?'\"" || (last == ')' && url.count { it == ')' } > url.count { it == '(' })) end-- else break
+        }
+        addLink(LinkAnnotation.Url(text.substring(match.range.first, end), styles), match.range.first, end)
+    }
+}
+
+/**
+ * Review: avatar initials, author, date, gold score, text (mobile `.rev` / web `.rev`). Text past [maxLines] gets a
+ * Read more / Read less toggle; URLs in it are accent links.
+ */
 @Composable
 fun ReviewCard(author: String, date: String, rating: Double?, text: String, modifier: Modifier = Modifier, maxLines: Int = 6) {
     val web = LocalShellStyle.current == ShellStyle.Web
     val shape = RoundedCornerShape(if (web) 20.dp else 18.dp)
+    var expanded by remember(text) { mutableStateOf(false) }
+    var overflows by remember(text) { mutableStateOf(false) }
+    val reduceMotion = LocalReduceMotion.current
+    val linked = remember(text) { linkifyUrls(text, TextLinkStyles(SpanStyle(color = Tokens.Colors.Accent, textDecoration = TextDecoration.Underline))) }
     Column(
         modifier.fillMaxWidth().clip(shape).background(Color.White.copy(alpha = if (web) 0.05f else 0.06f))
             .then(if (web) Modifier.border(1.dp, Color.White.copy(alpha = 0.06f), shape) else Modifier)
@@ -304,10 +341,13 @@ fun ReviewCard(author: String, date: String, rating: Double?, text: String, modi
             if (rating != null) GoldBadge("★ ${oneDecimal(rating)}")
         }
         Text(
-            text, style = bodyStyle(if (web) 15.5.sp else 14.sp).copy(lineHeight = if (web) 24.8.sp else 21.sp),
-            color = Tokens.Colors.TextPrimary.copy(alpha = 0.86f), maxLines = maxLines, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = if (web) 12.dp else 10.dp),
+            linked, style = bodyStyle(if (web) 15.5.sp else 14.sp).copy(lineHeight = if (web) 24.8.sp else 21.sp),
+            color = Tokens.Colors.TextPrimary.copy(alpha = 0.86f), maxLines = if (expanded) Int.MAX_VALUE else maxLines,
+            overflow = TextOverflow.Ellipsis, onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow },
+            modifier = Modifier.padding(top = if (web) 12.dp else 10.dp).animateContentSize(if (reduceMotion) snap() else spring()),
         )
+        if (overflows || expanded) PillButton(if (expanded) "Read less" else "Read more", { expanded = !expanded },
+            Modifier.padding(top = 6.dp), variant = ButtonVariant.Ghost, small = true)
     }
 }
 

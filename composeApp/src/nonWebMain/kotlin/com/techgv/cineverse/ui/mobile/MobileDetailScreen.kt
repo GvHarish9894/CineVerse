@@ -1,5 +1,8 @@
 package com.techgv.cineverse.ui.mobile
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -32,6 +35,7 @@ import com.techgv.cineverse.domain.*
 import com.techgv.cineverse.presentation.*
 import com.techgv.cineverse.ui.components.*
 import com.techgv.cineverse.ui.design.Tokens
+import com.techgv.cineverse.ui.theme.LocalReduceMotion
 import com.techgv.cineverse.ui.theme.displayStyle
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -201,6 +205,7 @@ private fun MobileDetailContent(
                                 if (detail.overview.isNotBlank()) {
                                     var overflows by remember(detail.overview) { mutableStateOf(false) }
                                     Text(detail.overview + if (detail.overviewInEnglish) " (English)" else "",
+                                        Modifier.animateContentSize(if (LocalReduceMotion.current) snap() else spring()),
                                         maxLines = if (state.expanded) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis,
                                         onTextLayout = { if (!state.expanded) overflows = it.hasVisualOverflow })
                                     if (overflows || state.expanded) PillButton(if (state.expanded) "Read less" else "Read more",
