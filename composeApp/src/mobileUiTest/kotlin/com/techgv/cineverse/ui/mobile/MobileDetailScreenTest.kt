@@ -33,6 +33,22 @@ class MobileDetailScreenTest {
         runOnIdle { assertEquals(MediaRef(MediaType.Movie, 42), f.guest.rows.value.single().ref) }
     }
 
+    @Test fun selectingASegmentShowsThatSegmentsContentWithoutFurtherScrolling() = runComposeUiTest {
+        setContent { MobileDetailUiFixture() }
+        onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-segments"))
+        // From the page top the segment bar sits far below the fold; each tap must bring the chosen
+        // segment's content on screen, not leave the previous segment's header/summary showing.
+        onNodeWithText("Cast", substring = false).performClick()
+        onNodeWithTag("detail-person-431").assertIsDisplayed()
+        onNodeWithText("Videos", substring = false).performClick()
+        onNodeWithTag("detail-video-aB3_dE5-gH7").assertIsDisplayed()
+        onNodeWithText("Reviews", substring = false).performClick()
+        onNodeWithText("Actual review body", substring = true).assertIsDisplayed()
+        onNodeWithText("Overview", substring = false).performClick()
+        onNodeWithTag("detail-segments").assertIsDisplayed()
+        onNodeWithText("Top billed cast").assertIsDisplayed()
+    }
+
     @Test fun castUsesActualPersonIdAndVideosUseActualYoutubeKey() = runComposeUiTest {
         val destinations = mutableListOf<MobileDestination>()
         setContent { MobileDetailUiFixture(onNavigate = destinations::add) }

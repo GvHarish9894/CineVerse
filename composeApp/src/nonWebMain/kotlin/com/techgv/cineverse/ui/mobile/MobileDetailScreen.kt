@@ -73,12 +73,23 @@ internal fun MobileDetailScreen(
         // The card's seed only stands in while the first fetch loads; any loaded/retained Detail replaces it.
         val seed = model.ref?.takeIf { seedPosterPath != null || seedTitle != null }
             ?.let { MobileDetailHeaderArt(it, seedPosterPath, seedTitle.orEmpty()) }
-        MobileDetailContent(state, seed, model.imageBase, scroll, model::selectSegment, model::setExpanded,
+        // A tapped segment opens with the sticky segment bar under the top bar (its content visible), unless the
+        // user had already scrolled deeper in that segment; a fresh segment's saved position is otherwise 0 = page top.
+        val onSegment: (MobileDetailSegment) -> Unit = { target ->
+            val bar = scroll.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "segments" }?.index
+            segmentOpenScroll(model.scroll(target), bar)?.let { model.saveScroll(target, it.index, it.offset) }
+            model.selectSegment(target)
+        }
+        MobileDetailContent(state, seed, model.imageBase, scroll, onSegment, model::setExpanded,
             onAct = onAct, onRetryReads = model::retryReads, onRetryDetail = model::retryDetail,
             onNavigate = { target -> model.browse { navigator.open(target) } }, onBack = { model.browse(onBack) },
             onShare = onShare?.let { share -> { ref -> model.browse { share(ref) } } })
     }
 }
+
+/** Position a newly selected segment opens at: the sticky bar's index unless the user was already deeper in it. */
+internal fun segmentOpenScroll(saved: MobileDetailScroll, barIndex: Int?): MobileDetailScroll? =
+    if (barIndex != null && saved.index < barIndex) MobileDetailScroll(barIndex, 0) else null
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
