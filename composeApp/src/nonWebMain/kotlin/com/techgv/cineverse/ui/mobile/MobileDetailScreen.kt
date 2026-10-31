@@ -18,6 +18,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.data.tmdb.formatRuntime
@@ -112,10 +114,22 @@ private fun MobileDetailContent(
     val solid = rememberTopBarSolid(scroll, 250.dp)
     val segments = if (detail?.ref?.mediaType == MediaType.Tv) listOf(MobileDetailSegment.Seasons) + MobileDetailSegment.entries.filter { it != MobileDetailSegment.Seasons }
         else MobileDetailSegment.entries.filter { it != MobileDetailSegment.Seasons }
+    val loading = detail == null && state.section == SectionState.Loading
+    // One "header" item call site for seed and Detail, so the shared poster is never remounted when data lands.
+    val header = if (state.invalid) null else detail?.let { MobileDetailHeaderArt(it.ref, it.posterPath, it.title) } ?: seed?.takeIf { loading }
+    val barHeight = with(LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() } + 52.dp
     Box(Modifier.fillMaxSize()) {
         AmbientGlow(palette)
+        // The backdrop sits behind both the bar and the list, so the bar is fully transparent over it until the
+        // header scrolls away (then it frosts as before). It follows the header item's scroll offset; the item
+        // itself only reserves the 240dp slot. Lazy lists clip their items, so it cannot be drawn from inside.
+        if (header != null) PaletteArt(imageUrl(imageBase, "w1280", detail?.backdropPath), mobilePalette(header.ref.key),
+            ArtStyle.Backdrop, Modifier.fillMaxWidth().height(barHeight + 240.dp).testTag("detail-backdrop").graphicsLayer {
+                val item = scroll.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "header" }
+                if (item == null) alpha = 0f else translationY = item.offset.toFloat()
+            }, bottomScrim = true)
         Column {
-            GlassTopBar(solid, title = detail?.title?.takeIf { solid },
+            GlassTopBar(solid, title = detail?.title?.takeIf { solid }, scrim = false,
                 navigation = { RoundIconButton(CvIcons.ChevronLeft, "Back", onBack) },
                 actions = {
                     if (detail != null) {
@@ -150,9 +164,6 @@ private fun MobileDetailContent(
                     if (state.section is SectionState.Error) item("catalog-error") {
                         Column(Modifier.padding(horizontal = 20.dp)) { SectionFailure(state.section.kind, onRetryDetail) }
                     }
-                    val loading = detail == null && state.section == SectionState.Loading
-                    // One "header" item call site for seed and Detail, so the shared poster is never remounted when data lands.
-                    val header = detail?.let { MobileDetailHeaderArt(it.ref, it.posterPath, it.title) } ?: seed?.takeIf { loading }
                     if (header != null) item("header") { DetailHeader(header, detail, imageBase, onNavigate) }
                     if (loading) item("loading") {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -276,9 +287,8 @@ private data class MobileDetailHeaderArt(val ref: MediaRef, val posterPath: Stri
 private fun DetailHeader(art: MobileDetailHeaderArt, detail: Detail?, imageBase: String, onNavigate: (MobileDestination) -> Unit) {
     val palette = mobilePalette(art.ref.key)
     Column(verticalArrangement = Arrangement.spacedBy((-60).dp)) {
-        Box(Modifier.fillMaxWidth().height(240.dp)) {
-            PaletteArt(imageUrl(imageBase, "w1280", detail?.backdropPath), palette, ArtStyle.Backdrop, Modifier.matchParentSize(), bottomScrim = true)
-        }
+        Spacer(Modifier.fillMaxWidth().height(240.dp)) // backdrop slot; the image is drawn behind the list
+
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
             PaletteArt(imageUrl(imageBase, "w342", art.posterPath), palette, ArtStyle.Poster,
                 mobileSharedPoster(art.ref).size(116.dp, 174.dp).clip(RoundedCornerShape(18.dp)).testTag("detail-poster"))

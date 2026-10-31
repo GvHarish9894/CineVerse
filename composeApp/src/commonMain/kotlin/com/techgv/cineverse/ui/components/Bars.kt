@@ -81,12 +81,14 @@ fun rememberTopBarSolid(state: ScrollState, threshold: Dp = 60.dp): Boolean {
 /**
  * Mobile top bar (`.bar`): status inset + 52dp. Transparent over a top scrim, then frosted with a hairline once
  * [solid]; the centred [title] fades/rises in when solid. [navigation] / [actions] hold [RoundIconButton]s.
+ * [scrim] = false drops the transparent-state gradient so the bar is fully see-through over hero artwork.
  */
 @Composable
 fun GlassTopBar(
     solid: Boolean,
     modifier: Modifier = Modifier,
     title: String? = null,
+    scrim: Boolean = true,
     navigation: @Composable RowScope.() -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -95,7 +97,7 @@ fun GlassTopBar(
     val reduceMotion = LocalReduceMotion.current
     Box(modifier.fillMaxWidth()) {
         // Transparent state: .bar::before gradient, 30dp taller than the bar.
-        Box(
+        if (scrim) Box(
             Modifier.matchParentSize().graphicsLayer { alpha = 1f - solidness }
                 .background(Brush.verticalGradient(listOf(Tokens.Colors.Background.copy(alpha = 0.72f), Tokens.Colors.Background.copy(alpha = 0f)))),
         )
