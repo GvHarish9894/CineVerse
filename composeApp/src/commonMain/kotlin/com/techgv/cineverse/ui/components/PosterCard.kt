@@ -109,6 +109,8 @@ fun PosterCard(
     quickAction: QuickAction? = null,
     /** Show the "NR" ring when there are no votes (web Browse/Search grids); otherwise no ring without votes. */
     nrRing: Boolean = false,
+    /** Leads the 2:3 art's modifier chain (e.g. a shared-element modifier on just the poster). */
+    posterModifier: Modifier = Modifier,
 ) {
     val web = LocalShellStyle.current == ShellStyle.Web
     val radius = posterRadius()
@@ -134,7 +136,7 @@ fun PosterCard(
                     imageUrl = imageUrl,
                     palette = palette,
                     style = ArtStyle.Poster,
-                    modifier = Modifier
+                    modifier = posterModifier
                         .fillMaxWidth()
                         .aspectRatio(2f / 3f)
                         .dropShadow(shape, cardGlow(palette.c1, t))
