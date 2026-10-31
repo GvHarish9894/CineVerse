@@ -49,6 +49,15 @@ class MobileProfileScreenTest {
         onNodeWithText("Sign in").assertDoesNotExist()
     }
 
+    @Test fun longAccountNameIsAtMostTwoEllipsizedLines() = runComposeUiTest {
+        val session = AuthSession(AccountObjectId("profile-account"), LONG_ACCOUNT_NAME, 23)
+        setContent { ProfileFixture(guest = false, configure = { it.auth.emissions.tryEmit(session) }) }
+        val layout = onNodeWithText(LONG_ACCOUNT_NAME).assertExists().textLayout()
+        assertTrue(layout.lineCount <= 2, "lineCount=${layout.lineCount}")
+        assertTrue(layout.hasVisualOverflow, "The long name is ellipsized, not wrapped further")
+        onNodeWithText("TMDB account connected").assertExists()
+    }
+
     @Test fun actualLanguageAndRegionSheetsExposeSelectedReadableExactOptions() = runComposeUiTest {
         lateinit var f: MobileProfileComponentFixture
         setContent { ProfileFixture(onReady = { _, fixture -> f = fixture }) }

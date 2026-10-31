@@ -1,7 +1,9 @@
 package com.techgv.cineverse.ui.mobile
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.v2.runComposeUiTest
 import com.techgv.cineverse.domain.*
 import com.techgv.cineverse.presentation.*
@@ -43,6 +45,16 @@ class MobileLibraryScreenTest {
             "No movies in favourites.", "No tv shows in favourites.").forEach {
             onNodeWithText(it).assertDoesNotExist()
         }
+    }
+
+    @Test fun longAccountNameStaysOnOneEllipsizedHeaderLine() = runComposeUiTest {
+        setThemedContent {
+            LibraryContentFixture(LibraryUiState(accountName = LONG_ACCOUNT_NAME, signedIn = true,
+                movies = LibraryGroup(SectionState.Empty), tv = LibraryGroup(SectionState.Empty), sourceIdentityKnown = true))
+        }
+        val layout = onNodeWithText("TMDB account · $LONG_ACCOUNT_NAME").assertExists().textLayout()
+        assertEquals(1, layout.lineCount)
+        assertTrue(layout.hasVisualOverflow, "The long name is ellipsized, not wrapped")
     }
 
     @Test fun movieTvCardsUseActualIdentifiersRatedBadgeAndHonestLoadedCounts() = runComposeUiTest {
@@ -119,6 +131,15 @@ class MobileLibraryScreenTest {
         onNodeWithTag("library-Movie-retry").onChildren().filter(hasText("Retry")).onFirst().performClick()
         assertEquals(1, retries)
     }
+}
+
+internal const val LONG_ACCOUNT_NAME =
+    "a.very.long.tmdb.account.display.name.that.keeps.going.and.going@an-equally-long-example-mail-provider.example.com"
+
+internal fun SemanticsNodeInteraction.textLayout(): TextLayoutResult {
+    val layouts = mutableListOf<TextLayoutResult>()
+    fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action!!(layouts)
+    return layouts.single()
 }
 
 @Composable

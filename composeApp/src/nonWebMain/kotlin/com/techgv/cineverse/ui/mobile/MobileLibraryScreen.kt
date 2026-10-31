@@ -8,6 +8,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
@@ -86,7 +87,8 @@ internal fun MobileLibraryContent(
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         SectionTitle("Library")
                         if (library != null) {
-                            Text(if (library.signedIn) "TMDB account · ${library.accountName.orEmpty()}" else "Saved on this device · Guest")
+                            Text(if (library.signedIn) "TMDB account · ${library.accountName.orEmpty()}" else "Saved on this device · Guest",
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                             SegmentedControl(LibraryTab.entries.map { it.label }, LibraryTab.entries.indexOf(library.tab), { onTab(LibraryTab.entries[it]) })
                             val movies = library.movies.loadedCount()
                             val tv = library.tv.loadedCount()

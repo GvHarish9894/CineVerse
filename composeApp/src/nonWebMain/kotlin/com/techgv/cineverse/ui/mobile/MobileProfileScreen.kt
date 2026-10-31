@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.data.auth.AuthSession
@@ -110,7 +111,7 @@ private fun ProfileContent(
                             }
                             else -> {
                                 val session = state.identity.session
-                                Text(session.displayName, style = displayStyle(24.sp))
+                                Text(session.displayName, style = displayStyle(24.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text("TMDB account connected")
                                 PillButton("Sign out", { signOut(session) }, variant = ButtonVariant.Ghost, small = true)
                             }
