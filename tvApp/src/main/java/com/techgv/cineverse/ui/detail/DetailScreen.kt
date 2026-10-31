@@ -106,6 +106,7 @@ fun DetailScreen(route: Route.Detail, container: AppContainer, onNavigate: (Rout
         focusMemory = vm.focusMemory,
         imageBase = vm.imageBase,
         actions = DetailActions(onRetry = vm::retry, library = library, onNavigate = onNavigate),
+        seed = route,
     )
 }
 
@@ -125,13 +126,25 @@ fun DetailContent(
     focusMemory: FocusMemory,
     imageBase: String,
     actions: DetailActions,
+    seed: Route.Detail? = null,
 ) {
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        when (val section = state.detail) {
-            is SectionState.Content -> DetailBody(section.value, libraryState, focusMemory, imageBase, actions)
-            else -> Section(section, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
+        val detail = (state.detail as? SectionState.Content)?.value
+        // One call site for seed and loaded detail: the hero artwork (shared-element target) is not remounted.
+        when (val art = heroArt(detail, seed)) {
+            null -> Section(state.detail, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
+            else -> DetailBody(detail, art, state.detail, libraryState, focusMemory, imageBase, actions)
         }
     }
+}
+
+/** The hero's artwork and name: the loaded [Detail]'s, else the route's display seed. */
+internal class HeroArt(val ref: MediaRef, val title: String, val posterPath: String?, val backdropPath: String?)
+
+internal fun heroArt(detail: Detail?, seed: Route.Detail?): HeroArt? = when {
+    detail != null -> HeroArt(detail.ref, detail.title, detail.posterPath, detail.backdropPath)
+    seed?.title != null -> HeroArt(MediaRef(seed.mediaType, seed.id), seed.title, seed.posterPath, seed.backdropPath)
+    else -> null
 }
 
 internal class ButtonSpec(
@@ -177,14 +190,24 @@ internal fun detailButtons(detail: Detail, library: LibraryState, actions: Detai
 }
 
 @Composable
-private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemory, imageBase: String, actions: DetailActions) {
+private fun DetailBody(
+    detail: Detail?,
+    art: HeroArt,
+    pending: SectionState<Detail>,
+    library: LibraryState,
+    memory: FocusMemory,
+    imageBase: String,
+    actions: DetailActions,
+) {
     val restorer = remember(memory) { FocusRestorer(memory) }
     val outer = rememberSavedLazyListState(memory, "outer")
-    val buttons = detailButtons(detail, library, actions)
-    val crew = listOfNotNull(detail.leadCrew)
+    // Seeded hero only: a list of one item would clamp the saved scroll position, so it gets a throwaway state.
+    val seedOuter = remember { LazyListState() }
+    val buttons = if (detail != null) detailButtons(detail, library, actions) else emptyList()
+    val crew = listOfNotNull(detail?.leadCrew)
 
     // Outer list item i is focus row i (restore scrolls the outer list to it).
-    val rows = listOfNotNull(
+    val rows = if (detail == null) emptyList() else listOfNotNull(
         RowSpec("buttons", buttons.map { it.key }),
         RowSpec("seasons", detail.seasons.map { "season:${it.seasonNumber}" }),
         RowSpec("cast", detail.cast.map { "cast:${it.personId}" } + crew.map { "crew:${it.personId}" }),
@@ -206,11 +229,16 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
         openReview = null
     }
 
-    Backdrop(tmdbImageUrl(imageBase, "w1280", detail.backdropPath), sharedBackdropKey(detail.ref))
+    Backdrop(tmdbImageUrl(imageBase, "w1280", art.backdropPath), sharedBackdropKey(art.ref))
     RevealVertically(ROW_TOP_INSET) {
-        LazyColumn(state = outer, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
-            item(key = "buttons") { Hero(detail, buttons, restorer, focusRow("buttons"), outer, imageBase) }
-            for (row in rows.drop(1)) {
+        LazyColumn(state = if (detail != null) outer else seedOuter, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
+            item(key = "buttons") {
+                Hero(art, imageBase) {
+                    if (detail != null) HeroInfo(detail, buttons, restorer, focusRow("buttons"), outer)
+                    else HeroPending(art, pending, actions.onRetry)
+                }
+            }
+            if (detail != null) for (row in rows.drop(1)) {
                 item(key = row.key) {
                     when (row.key) {
                         "seasons" -> DetailRow("Seasons", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
@@ -271,20 +299,20 @@ private fun DetailBody(detail: Detail, library: LibraryState, memory: FocusMemor
         }
     }
     // The saved id can outlive the review list (reload / process death): only an existing review opens the panel.
-    val activeReview = detail.reviews.firstOrNull { it.id == openReview }
+    val activeReview = detail?.reviews?.firstOrNull { it.id == openReview }
     activeReview?.let { review -> ReviewPanel(review, avatarUrl(review), ::closeReview) }
     BackHandler(enabled = activeReview != null, onBack = ::closeReview)
     LaunchedEffect(refocusReview) {
         val id = refocusReview ?: return@LaunchedEffect
         // Focus leaving the removed panel may land elsewhere first: pin the invoking card, then restore it.
-        memory.save(SavedFocus(PANEL, "reviews", id, detail.reviews.indexOfFirst { it.id == id }.coerceAtLeast(0)))
+        memory.save(SavedFocus(PANEL, "reviews", id, detail?.reviews.orEmpty().indexOfFirst { it.id == id }.coerceAtLeast(0)))
         restorer.restore(focusRows, outer)
         refocusReview = null
     }
 
     // §1.3: data of the current generation is composed → restore the saved focus (else the first button);
-    // entered with the review panel open (process death), the panel takes focus instead.
-    LaunchedEffect(restorer) { if (activeReview == null) restorer.restore(focusRows, outer) }
+    // entered with the review panel open (process death), the panel takes focus instead. A seed is not data.
+    LaunchedEffect(restorer, detail != null) { if (detail != null && activeReview == null) restorer.restore(focusRows, outer) }
 }
 
 private class RowSpec(val key: String, val itemKeys: List<String>)
@@ -301,84 +329,99 @@ private fun Backdrop(url: String?, sharedKey: String) {
     }
 }
 
+/** Poster + [info] column; the poster is the same node for the seed and the loaded detail. */
 @Composable
-private fun Hero(
+private fun Hero(art: HeroArt, imageBase: String, info: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = SCREEN_INSET, end = SCREEN_INSET, top = 40.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+        DetailCardArt(
+            tmdbImageUrl(imageBase, "w780", art.posterPath), art.title,
+            rememberSharedMedia(sharedPosterKey(art.ref)).size(240.dp, 360.dp).clip(RoundedCornerShape(16.dp)),
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { info() }
+    }
+}
+
+@Composable
+private fun HeroHeading(ref: MediaRef, title: String, network: String?) {
+    Text(
+        listOfNotNull(if (ref.mediaType == MediaType.Movie) "Movie" else "TV series", network).joinToString(" · "),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        title,
+        fontSize = if (title.length > 17) 46.sp else 60.sp,
+        lineHeight = if (title.length > 17) 50.sp else 64.sp,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** Seeded hero while the detail loads (or failed): the seed's name over the section's loading / error state. */
+@Composable
+private fun HeroPending(art: HeroArt, pending: SectionState<Detail>, onRetry: () -> Unit) {
+    HeroHeading(art.ref, art.title, network = null)
+    Section(pending, onRetry) {}
+}
+
+@Composable
+private fun HeroInfo(
     detail: Detail,
     buttons: List<ButtonSpec>,
     restorer: FocusRestorer,
     buttonRow: FocusRow,
     outer: LazyListState,
-    imageBase: String,
 ) {
     val scope = rememberCoroutineScope()
-    Row(Modifier.fillMaxWidth().padding(start = SCREEN_INSET, end = SCREEN_INSET, top = 40.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-        DetailCardArt(
-            tmdbImageUrl(imageBase, "w780", detail.posterPath), detail.title,
-            rememberSharedMedia(sharedPosterKey(detail.ref)).size(240.dp, 360.dp).clip(RoundedCornerShape(16.dp)),
+    HeroHeading(detail.ref, detail.title, detail.network)
+    if (detail.tagline.isNotBlank()) {
+        Text(
+            detail.tagline + if (detail.taglineInEnglish) "  (English)" else "",
+            style = MaterialTheme.typography.titleMedium,
+            fontStyle = FontStyle.Italic,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    }
+    val chips = listOfNotNull(detail.year, detail.runtimeMinutes?.let(::formatRuntime), detail.certification) + detail.genres
+    if (chips.isNotEmpty()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { chips.forEach { DetailChip(it) } }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
+        ScoreRing(detail.voteAverage, detail.voteCount)
+        Column {
+            if (detail.overviewInEnglish) {
+                Text("(English)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(
-                listOfNotNull(if (detail.ref.mediaType == MediaType.Movie) "Movie" else "TV series", detail.network).joinToString(" · "),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                detail.title,
-                fontSize = if (detail.title.length > 17) 46.sp else 60.sp,
-                lineHeight = if (detail.title.length > 17) 50.sp else 64.sp,
-                fontWeight = FontWeight.Bold,
+                detail.overview,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
+                maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (detail.tagline.isNotBlank()) {
-                Text(
-                    detail.tagline + if (detail.taglineInEnglish) "  (English)" else "",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontStyle = FontStyle.Italic,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            val chips = listOfNotNull(detail.year, detail.runtimeMinutes?.let(::formatRuntime), detail.certification) + detail.genres
-            if (chips.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { chips.forEach { DetailChip(it) } }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
-                ScoreRing(detail.voteAverage, detail.voteCount)
-                Column {
-                    if (detail.overviewInEnglish) {
-                        Text("(English)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text(
-                        detail.overview,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-            Row(
-                modifier = with(restorer) { Modifier.restoreRowFocus(buttonRow, scope) }
-                    .revealHeroOnFocus(outer, scope, LocalFeedback.current.reduceMotion),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                buttons.forEachIndexed { index, b ->
-                    ActionButton(
-                        b.label, b.glyph, b.onClick,
-                        modifier = with(restorer) { Modifier.rememberFocus(PANEL, buttonRow.rowKey, b.key, index) },
-                        style = when {
-                            b.primary -> ActionButtonStyle.Solid
-                            b.on -> ActionButtonStyle.On
-                            else -> ActionButtonStyle.Default
-                        },
-                        enabled = b.enabled,
-                    )
-                }
-            }
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    Row(
+        modifier = with(restorer) { Modifier.restoreRowFocus(buttonRow, scope) }
+            .revealHeroOnFocus(outer, scope, LocalFeedback.current.reduceMotion),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        buttons.forEachIndexed { index, b ->
+            ActionButton(
+                b.label, b.glyph, b.onClick,
+                modifier = with(restorer) { Modifier.rememberFocus(PANEL, buttonRow.rowKey, b.key, index) },
+                style = when {
+                    b.primary -> ActionButtonStyle.Solid
+                    b.on -> ActionButtonStyle.On
+                    else -> ActionButtonStyle.Default
+                },
+                enabled = b.enabled,
+            )
         }
     }
 }
