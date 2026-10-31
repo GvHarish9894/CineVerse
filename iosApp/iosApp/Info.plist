@@ -42,5 +42,9 @@
 	</dict>
 	<key>TMDBReadAccessToken</key>
 	<string></string>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleLightContent</string>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 </dict>
 </plist>

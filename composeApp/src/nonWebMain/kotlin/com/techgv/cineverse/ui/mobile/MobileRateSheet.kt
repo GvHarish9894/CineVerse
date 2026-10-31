@@ -89,7 +89,9 @@ internal fun MobileRateSheet(
             }
             if (!error.isNullOrBlank()) Text(error, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             if (pending) Text("Saving rating…", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-            PillButton(if (pending) "Saving…" else "Submit rating", { onSubmit(value.toDouble()) }, Modifier.fillMaxWidth(), enabled = !pending)
+            // Extra room below the accent button so its glow fades out before the secondary buttons.
+            PillButton(if (pending) "Saving…" else "Submit rating", { onSubmit(value.toDouble()) },
+                Modifier.fillMaxWidth().padding(bottom = 16.dp), enabled = !pending)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (prompt.initial != null) PillButton("Remove rating", onRemove, Modifier.weight(1f), variant = ButtonVariant.Ghost, enabled = !pending)
                 PillButton("Cancel", onDismiss, Modifier.weight(1f), variant = ButtonVariant.Ghost)
