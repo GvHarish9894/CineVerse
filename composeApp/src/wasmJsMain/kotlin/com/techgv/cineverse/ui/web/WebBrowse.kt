@@ -122,11 +122,13 @@ internal fun WebBrowseContent(entry: WebEntry, state: ProductBrowseUiState, navi
                         }
                     }
                 }
+                if (grid.value.loadingMore && grid.value.moreError == null) items(4, key = { "more-skeleton-$it" }) {
+                    BoxWithConstraints { PosterCardSkeleton(width = maxWidth) }
+                }
                 item(key = "more", span = { GridItemSpan(maxLineSpan) }) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         grid.value.moreError?.let { BrowseError(it, retry, retained = true) }
-                        if (grid.value.loadingMore) Text("Loading more…", style = bodyStyle(14.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.65f))
-                        else if (grid.value.hasMore && grid.value.moreError == null) PillButton("Load more", loadMore, variant = ButtonVariant.Ghost)
+                        if (!grid.value.loadingMore && grid.value.hasMore && grid.value.moreError == null) PillButton("Load more", loadMore, variant = ButtonVariant.Ghost)
                     }
                 }
             }

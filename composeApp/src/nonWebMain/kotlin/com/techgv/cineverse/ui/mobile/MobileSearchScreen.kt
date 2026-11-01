@@ -151,11 +151,13 @@ internal fun MobileSearchContent(
                         items(results.value.items, key = { it.key }) { hero ->
                             MobileSearchResultRow(hero, baseUrl) { dismissKeyboard(); navigator.open(hero.searchDestination()) }
                         }
+                        if (results.value.loadingMore && results.value.moreError == null) items(2, key = { "paging-skeleton-$it" }) {
+                            SkeletonLines(3, Modifier.fillMaxWidth())
+                        }
                         if (results.value.hasMore) item("paging") {
                             val error = results.value.moreError
                             if (error != null) SectionFailure(error, onRetry)
-                            else if (results.value.loadingMore) Text("Loading more…")
-                            else PillButton("Load more", onMore)
+                            else if (!results.value.loadingMore) PillButton("Load more", onMore)
                         }
                     }
                 }

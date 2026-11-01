@@ -205,11 +205,11 @@ private fun SearchResults(entry: WebEntry, state: ProductSearchUiState, choose: 
             is SectionState.Error -> item(key = "error", span = full) { SearchError(result.kind, retry) }
             is SectionState.Content -> {
                 items(result.value.items, key = { it.key }) { hero -> SearchResultRow(hero) { navigate(hero.route()) } }
+                if (result.value.loadingMore && result.value.moreError == null) items(2, key = { "more-skeleton-$it" }) { SearchRowSkeleton() }
                 item(key = "more", span = full) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         result.value.moreError?.let { SearchError(it, retry, true) }
-                        if (result.value.loadingMore) Text("Loading more…", style = bodyStyle(14.sp), color = Muted)
-                        else if (result.value.hasMore && result.value.moreError == null) PillButton("Load more", loadMore, variant = ButtonVariant.Ghost)
+                        if (!result.value.loadingMore && result.value.hasMore && result.value.moreError == null) PillButton("Load more", loadMore, variant = ButtonVariant.Ghost)
                     }
                 }
             }

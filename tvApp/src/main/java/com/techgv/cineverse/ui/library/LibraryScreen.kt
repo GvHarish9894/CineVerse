@@ -45,6 +45,7 @@ import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.PosterCard
+import com.techgv.cineverse.ui.components.PosterRowSkeleton
 import com.techgv.cineverse.presentation.SectionErrorKind
 import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.formatRating
@@ -187,7 +188,7 @@ fun LibraryContent(
                                 badge = entry.rating?.takeIf { state.tab == LibraryTab.Rated }?.let { "★ ${formatRating(it)}" },
                             )
                         }
-                        is LibraryGridItem.LoadingMore -> Message("Loading more…")
+                        is LibraryGridItem.LoadingMore -> PosterRowSkeleton(COLUMNS)
                         is LibraryGridItem.MoreError ->
                             ErrorBlock(item.kind.message, item.kind.retryable, { onRetry(item.media) }, rememberBody("more:${item.media}"))
                     }

@@ -229,12 +229,14 @@ private fun LazyGridScope.librarySection(
             }
         }
     }
+    if (group.loadingMore && group.section is SectionState.Content) items(3, key = { "${media.name}-more-skeleton-$it" }) {
+        PosterCardSkeleton(Modifier.fillMaxWidth(), width = Dp.Unspecified)
+    }
     fullWidth {
         Column(Modifier.testTag("library-${media.name}-paging"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             group.refreshError?.let { WebLibraryError(it, retry, true) }
             group.moreError?.let { WebLibraryError(it, retry, true) }
-            if (group.loadingMore) Text("Loading more $label…", style = bodyStyle(14.sp), color = Tokens.Colors.TextSecondary)
-            else if (group.hasMore && page != null && page < 500 && group.moreError == null && group.refreshError == null) PillButton("Load more $label", loadMore, variant = ButtonVariant.Ghost)
+            if (!group.loadingMore && group.hasMore && page != null && page < 500 && group.moreError == null && group.refreshError == null) PillButton("Load more $label", loadMore, variant = ButtonVariant.Ghost)
             if (page == 500 && group.hasMore) Text("Reached the 500-page limit.", style = bodyStyle(14.sp), color = Tokens.Colors.TextSecondary)
         }
     }

@@ -29,6 +29,7 @@ import com.techgv.cineverse.presentation.PagedItems
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.PinToStart
 import com.techgv.cineverse.ui.components.PosterCard
+import com.techgv.cineverse.ui.components.PosterRowSkeleton
 import com.techgv.cineverse.ui.components.UiColors
 import com.techgv.cineverse.ui.nav.Route
 import com.techgv.cineverse.ui.components.message
@@ -92,15 +93,14 @@ fun HeroGrid(
                 }
             }
             val error = paged.moreError
-            if (paged.loadingMore || error != null) {
+            if (paged.loadingMore && error == null) {
+                item(key = "footer-loading", span = { GridItemSpan(maxLineSpan) }) { PosterRowSkeleton(columns) }
+            }
+            if (error != null) {
                 item(key = "footer", span = { GridItemSpan(maxLineSpan) }) {
-                    if (error == null) {
-                        Text("Loading more…", color = UiColors.TextFaint, modifier = Modifier.padding(vertical = 16.dp))
-                    } else {
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text(error.message, color = UiColors.TextDim, modifier = Modifier.padding(vertical = 16.dp))
-                            if (error.retryable) Button(onClick = onLoadMore) { Text("Try again") }
-                        }
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text(error.message, color = UiColors.TextDim, modifier = Modifier.padding(vertical = 16.dp))
+                        if (error.retryable) Button(onClick = onLoadMore) { Text("Try again") }
                     }
                 }
             }

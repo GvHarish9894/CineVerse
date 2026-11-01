@@ -162,11 +162,14 @@ internal fun MobileExploreContent(
                                 }
                             }
                         }
+                        if (grid.value.loadingMore && grid.value.moreError == null) items(3, key = { "paging-skeleton-$it" }) {
+                            if (state.selection == BrowseSelection.People) PersonCircleSkeleton(Modifier.fillMaxWidth(), diameter = 96.dp)
+                            else PosterCardSkeleton(Modifier.fillMaxWidth())
+                        }
                         if (grid.value.hasMore) item("paging", span = { GridItemSpan(maxLineSpan) }) {
                             val error = grid.value.moreError
                             if (error != null) SectionFailure(error, onRetry)
-                            else if (grid.value.loadingMore) Text("Loading more…")
-                            else PillButton("Load more", onMore)
+                            else if (!grid.value.loadingMore) PillButton("Load more", onMore)
                         }
                     }
                 }

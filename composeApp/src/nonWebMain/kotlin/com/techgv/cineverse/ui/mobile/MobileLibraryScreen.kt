@@ -135,7 +135,7 @@ internal fun MobileLibraryContent(
                                 LibraryGroupRetry(media, if (group.refreshError != null) "Couldn't refresh ${label.lowercase()}; loaded items may be stale."
                                     else "Couldn't load more ${label.lowercase()}.", onRetry)
                             }
-                            else if (group.loadingMore) item("${media.name}-more-loading", span = { GridItemSpan(maxLineSpan) }) { Text("Loading more ${label.lowercase()}…") }
+                            else if (group.loadingMore) items(3, key = { "${media.name}-more-loading-$it" }) { PosterCardSkeleton(Modifier.fillMaxWidth()) }
                             else if (group.hasMore) item("${media.name}-more", span = { GridItemSpan(maxLineSpan) }) {
                                 PillButton("Load more $label", { onMore(media) })
                             }
