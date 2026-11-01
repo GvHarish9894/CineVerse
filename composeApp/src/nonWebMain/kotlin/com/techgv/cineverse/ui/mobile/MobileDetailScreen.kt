@@ -134,6 +134,9 @@ internal fun MobileDetailScreen(
  * Returning to Detail re-verifies the title; while that read is in flight the retained copy is "stale" for a moment
  * (actions stay disabled), so the warning appears only for failed preferences or a re-verification that failed.
  */
+/** Labels/icons only: the confirmed account state, or the last confirmed one while a return re-verifies. */
+internal val MobileDetailState.shownAccount: LibraryState get() = if (account.known) account else lastKnownAccount ?: account
+
 internal fun showsReadRecovery(state: MobileDetailState): Boolean =
     state.settingsFailed || (state.stale && state.section is SectionState.Error)
 
@@ -189,14 +192,15 @@ private fun MobileDetailContent(
                 actions = {
                     if (detail != null) {
                         if (onShare != null) RoundIconButton(CvIcons.Share, "Share title", { onShare(detail.ref) })
-                        RoundIconButton(if (state.account.favourite) CvIcons.HeartFilled else CvIcons.Heart, "Favourite title",
+                        val shown = state.shownAccount
+                        RoundIconButton(if (shown.favourite) CvIcons.HeartFilled else CvIcons.Heart, "Favourite title",
                             { onAct(LibraryKind.FAVOURITE) }, modifier = Modifier.semantics {
                                 stateDescription = when {
-                                    !state.account.known -> "Favourite unknown"
-                                    state.account.favourite -> "Favourite"
+                                    !shown.known -> "Favourite unknown"
+                                    shown.favourite -> "Favourite"
                                     else -> "Not favourite"
                                 }
-                            }, content = if (state.account.favourite) Tokens.Colors.Accent else Color.White,
+                            }, content = if (shown.favourite) Tokens.Colors.Accent else Color.White,
                             enabled = state.authority != null && state.account.canToggle(LibraryKind.FAVOURITE))
                     }
                 })
@@ -410,7 +414,7 @@ private fun DetailHeader(art: MobileDetailHeaderArt?, detail: Detail?, imageBase
 @Composable
 private fun DetailActions(detail: Detail, state: MobileDetailState, onAct: (LibraryKind) -> Unit, onNavigate: (MobileDestination) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        val account = state.account
+        val account = state.shownAccount
         val rating = account.rating
         ActionTile(when {
             LibraryKind.WATCHLIST in account.pending -> "Saving…"
@@ -420,7 +424,7 @@ private fun DetailActions(detail: Detail, state: MobileDetailState, onAct: (Libr
         }, if (account.watchlist) CvIcons.Check else CvIcons.Plus, { onAct(LibraryKind.WATCHLIST) },
             Modifier.weight(1f).testTag("detail-watchlist"),
             container = if (account.watchlist) Tokens.Colors.Accent.copy(alpha = 0.22f) else Tokens.Colors.Tile,
-            enabled = state.authority != null && account.canToggle(LibraryKind.WATCHLIST))
+            enabled = state.authority != null && state.account.canToggle(LibraryKind.WATCHLIST))
         ActionTile(when {
             LibraryKind.RATING in account.pending -> "Saving…"
             !account.known -> "Rating unknown"
@@ -428,7 +432,7 @@ private fun DetailActions(detail: Detail, state: MobileDetailState, onAct: (Libr
             else -> "Rate"
         }, CvIcons.Star, { onAct(LibraryKind.RATING) }, Modifier.weight(1f).testTag("detail-rate"),
             content = if (rating != null) Tokens.Colors.Gold else Tokens.Colors.TextPrimary,
-            enabled = state.authority != null && account.canToggle(LibraryKind.RATING))
+            enabled = state.authority != null && state.account.canToggle(LibraryKind.RATING))
         detail.mobileDetailVideos().firstOrNull()?.let { video ->
             ActionTile("Trailer", CvIcons.Play, { onNavigate(MobileDestination.Trailer(video.key, detail.title, video.name)) },
                 Modifier.weight(1f).testTag("detail-trailer"))

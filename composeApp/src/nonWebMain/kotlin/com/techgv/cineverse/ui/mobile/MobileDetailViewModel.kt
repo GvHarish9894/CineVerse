@@ -23,6 +23,11 @@ internal data class MobileDetailState(
     val libraryFailed: Boolean = false,
     val identityFailed: Boolean = false,
     val account: LibraryState = LibraryState.Unknown,
+    /**
+     * Display only: the last account state confirmed for this title and the same identity, shown while a return
+     * re-verifies so the buttons keep their labels. Never authority: actions stay disabled until [authority] is back.
+     */
+    val lastKnownAccount: LibraryState? = null,
     val authority: MobileDetailAuthority? = null,
     val segment: MobileDetailSegment = MobileDetailSegment.Overview,
     val expanded: Boolean = false,
@@ -98,6 +103,7 @@ internal class MobileDetailViewModel(
     private var accountJob: Job? = null
     private var snapshot = LibraryStateSnapshot(LibraryState.Unknown)
     private var accountFailed = false
+    private var lastKnown: Pair<MobileIdentity, LibraryState>? = null
     private val mutableState = MutableStateFlow(MobileDetailState(invalid = entry == null,
         segment = entry?.segment ?: MobileDetailSegment.Overview, expanded = entry?.expanded ?: false))
     val state = mutableState.asStateFlow()
@@ -147,6 +153,13 @@ internal class MobileDetailViewModel(
         val retained = producer.retained?.takeIf { it.context.ref == entry.ref && it.detail.ref == entry.ref }?.detail
         val wrongRef = (producer.detail as? SectionState.Content)?.value?.ref?.let { it != entry.ref } == true
         val identity = graph.identity.value.takeIf { privateReady() }
+        val account = if (verified != null) snapshot.mobileDetailAccount(identity) else LibraryState.Unknown
+        if (account.known && identity != null) lastKnown = identity to account.copy(pending = emptySet())
+        val failed = graph.settingsFailed.value || graph.storageFailed.value || graph.identityFailed.value || accountFailed ||
+            producer.detail is SectionState.Error || wrongRef
+        val lastKnownAccount = lastKnown?.takeIf { (owner, _) ->
+            !account.known && !failed && retained != null && owner == graph.identity.value
+        }?.second
         mutableState.value = mutableState.value.copy(
             section = when {
                 wrongRef -> SectionState.Error(SectionErrorKind.Generic)
@@ -159,7 +172,8 @@ internal class MobileDetailViewModel(
             settingsFailed = graph.settingsFailed.value || producer.settingsRead == DetailSettingsRead.Failed,
             libraryFailed = graph.storageFailed.value || accountFailed,
             identityFailed = graph.identityFailed.value,
-            account = if (verified != null) snapshot.mobileDetailAccount(identity) else LibraryState.Unknown,
+            account = account,
+            lastKnownAccount = lastKnownAccount,
             authority = if (verified != null && identity != null) MobileDetailAuthority(revision, verified.context, identity) else null,
         )
     }

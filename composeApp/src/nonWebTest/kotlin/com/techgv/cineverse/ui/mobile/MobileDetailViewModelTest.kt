@@ -110,6 +110,44 @@ class MobileDetailViewModelTest {
         model.close(); f.graph.close()
     }
 
+    @Test fun returningKeepsTheLastConfirmedLabelsAsDisplayOnlyUntilReverified() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest()
+        val model = MobileDetailViewModel(f.graph, "movie", 42, SavedStateHandle(), f.rawSettings,
+            f.library.stateWithOrigin(MediaRef(MediaType.Movie, 42)), backgroundScope)
+        model.setActive(true); runCurrent()
+        model.act(LibraryKind.WATCHLIST, assertNotNull(model.state.value.authority)); runCurrent()
+        assertTrue(model.state.value.account.watchlist)
+        // Leave (e.g. to a Person) and come back: before re-verification lands, labels keep the confirmed state,
+        // but the real account state is Unknown and there is no authority, so every action stays disabled.
+        model.setActive(false); model.setActive(true)
+        with(model.state.value) {
+            assertEquals(LibraryState.Unknown, account)
+            assertNull(authority)
+            assertTrue(assertNotNull(lastKnownAccount).watchlist)
+            assertTrue(shownAccount.watchlist)
+        }
+        runCurrent()
+        with(model.state.value) {
+            assertTrue(account.watchlist); assertNotNull(authority)
+            assertNull(lastKnownAccount)
+        }
+        model.close(); f.graph.close()
+    }
+
+    @Test fun lastConfirmedLabelsAreNeverShownForADifferentAccount() = runTest {
+        val f = MobileDetailComponentFixture(backgroundScope); f.guest()
+        val model = MobileDetailViewModel(f.graph, "movie", 42, SavedStateHandle(), f.rawSettings,
+            f.library.stateWithOrigin(MediaRef(MediaType.Movie, 42)), backgroundScope)
+        model.setActive(true); runCurrent()
+        model.act(LibraryKind.WATCHLIST, assertNotNull(model.state.value.authority)); runCurrent()
+        model.setActive(false); runCurrent()
+        f.auth.emissions.emit(AuthSession(AccountObjectId("other"), "Other", 7L)); runCurrent()
+        model.setActive(true)
+        assertNull(model.state.value.lastKnownAccount)
+        assertFalse(model.state.value.shownAccount.known)
+        model.close(); f.graph.close()
+    }
+
     @Test fun sameEmissionSourceProofIsRequiredEvenForIdenticalDtoAndGuest() = runTest {
         val f = MobileDetailComponentFixture(backgroundScope); f.guest()
         val model = f.owner(backgroundScope); model.setActive(true); runCurrent()
