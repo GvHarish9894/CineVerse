@@ -64,6 +64,7 @@ internal class MobileSeasonViewModel(
     private val savedState: SavedStateHandle,
     private val rawSettings: Flow<Settings>,
     parentScope: CoroutineScope? = null,
+    seed: Detail? = null,
 ) : ViewModel(), MobileCatalogEntryModel {
     private val initial = validateMobileSeason(seriesId, seasonNumber, savedState)
     val scrollTarget: MobileSeasonScroll?
@@ -79,7 +80,10 @@ internal class MobileSeasonViewModel(
     private var capturedSettings: Settings? = null
     private var context: MobileSeasonContext? = null
     private var observedGraph = graph.contextChanges.value to graph.settingsFailed.value
-    private val mutableState = MutableStateFlow(MobileSeasonState(invalid = initial == null))
+    // A seed is only retained (stale, actions disabled) display until this entry's own show read completes.
+    private val mutableState = MutableStateFlow(MobileSeasonState(invalid = initial == null,
+        retainedShow = seed?.takeIf { initial != null && it.ref == MediaRef(MediaType.Tv, seriesId) &&
+            it.seasons.any { season -> season.seasonNumber == seasonNumber } }))
     val state = mutableState.asStateFlow()
 
     init {
@@ -235,7 +239,10 @@ internal class MobileSeasonViewModel(
     fun selectSeason(rendered: MobileSeasonContext, number: Int, navigator: MobileNavigator) {
         if (!current(rendered)) return
         val show = (state.value.current?.show as? SectionState.Content)?.value ?: return
-        if (show.seasons.any { it.seasonNumber == number }) navigator.open(MobileDestination.Season(show.ref.id, number))
+        if (show.seasons.any { it.seasonNumber == number }) {
+            graph.seedSeason(show)
+            navigator.open(MobileDestination.Season(show.ref.id, number))
+        }
     }
 
     fun show(rendered: MobileSeasonContext, navigator: MobileNavigator) {

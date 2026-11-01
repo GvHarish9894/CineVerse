@@ -11,6 +11,7 @@ import com.techgv.cineverse.data.search.RecentQueryStore
 import com.techgv.cineverse.data.storage.StorageException
 import com.techgv.cineverse.data.settings.SettingsRepository
 import com.techgv.cineverse.data.tmdb.CatalogRepository
+import com.techgv.cineverse.domain.Detail
 import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.presentation.LibraryActionsStateHolder
@@ -99,8 +100,15 @@ class MobileApplication(
     internal fun person(id: Int, savedState: SavedStateHandle, parentScope: CoroutineScope? = null) =
         MobilePersonViewModel(this, id, savedState, settingsFlow, parentScope)
 
+    // shortcut: in-memory handoff, lost on process death (the header then shimmers like a cold open).
+    private var seasonSeed: Detail? = null
+
+    /** The show the next Season entry may display while it re-reads its own, so a season switch keeps the header. */
+    internal fun seedSeason(show: Detail) { seasonSeed = show }
+
     internal fun season(seriesId: Int, number: Int, savedState: SavedStateHandle, parentScope: CoroutineScope? = null) =
-        MobileSeasonViewModel(this, seriesId, number, savedState, settingsFlow, parentScope)
+        MobileSeasonViewModel(this, seriesId, number, savedState, settingsFlow, parentScope,
+            seasonSeed?.takeIf { it.ref == MediaRef(MediaType.Tv, seriesId) }.also { seasonSeed = null })
 
     internal fun library(savedState: SavedStateHandle) = MobileLibraryViewModel(this, library, savedState)
 

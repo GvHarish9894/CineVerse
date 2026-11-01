@@ -1,5 +1,6 @@
 package com.techgv.cineverse.ui.mobile
 
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import com.techgv.cineverse.domain.Hero
 import com.techgv.cineverse.domain.MediaRef
@@ -40,7 +41,10 @@ internal fun NavHostController.open(destination: MobileDestination) {
     when (destination) {
         is MobileDestination.Detail -> navigate(MobileDetailRoute(destination.ref.mediaType.path, destination.ref.id, destination.posterPath, destination.title))
         is MobileDestination.Person -> navigate(MobilePersonRoute(destination.id))
-        is MobileDestination.Season -> navigate(MobileSeasonRoute(destination.seriesId, destination.number))
+        is MobileDestination.Season -> navigate(MobileSeasonRoute(destination.seriesId, destination.number)) {
+            // Switching seasons replaces the Season entry, so Back returns to the screen that opened it.
+            if (currentDestination?.hasRoute<MobileSeasonRoute>() == true) popUpTo<MobileSeasonRoute> { inclusive = true }
+        }
         is MobileDestination.Trailer -> navigate(MobileTrailerRoute(destination.key, destination.title, destination.kicker))
         is MobileDestination.Browse -> navigate(MobileBrowseRoute(destination.row.name, destination.trend.name))
     }

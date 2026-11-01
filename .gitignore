@@ -22,3 +22,6 @@ secrets.properties
 .env
 .env.*
 !.env.example
+
+# Kotlin compiler/IDE caches
+.kotlin/

@@ -12,10 +12,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,6 +29,7 @@ import com.techgv.cineverse.domain.Episode
 import com.techgv.cineverse.presentation.*
 import com.techgv.cineverse.ui.components.*
 import com.techgv.cineverse.ui.design.Tokens
+import com.techgv.cineverse.ui.theme.bodyStyle
 import com.techgv.cineverse.ui.theme.displayStyle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.roundToInt
@@ -77,6 +82,11 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
     val show = (state.current?.show as? SectionState.Content)?.value ?: state.retainedShow
     val episodes = (state.current?.episodes as? SectionState.Content)?.value
         ?: state.retainedSeason.takeIf { state.current?.episodes != SectionState.Empty }
+    // Shimmer stands in while preferences are read and while each section loads; failures render their own recovery.
+    val showLoading = show == null && !state.settingsFailed &&
+        (state.current == null || state.current.show == SectionState.Loading)
+    val episodesLoading = episodes == null && !state.settingsFailed && (state.current == null ||
+        (state.current.episodes == SectionState.Loading && state.current.show !is SectionState.Error))
     val showReady = token != null && state.current?.show is SectionState.Content
     val episodesReady = token != null && state.current?.episodes is SectionState.Content
     val seasonTitle = if (model.seasonNumber == 0) "Specials" else "Season ${model.seasonNumber}"
@@ -85,41 +95,44 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))) {
         AmbientGlow(palette)
         Column {
-            GlassTopBar(solid, title = seasonTitle.takeIf { solid },
-                navigation = { RoundIconButton(CvIcons.ChevronLeft, "Back", { model.back(state.revision, onBack) }) })
+            GlassTopBar(solid, navigation = {
+                RoundIconButton(CvIcons.ChevronLeft, "Back", { model.back(state.revision, onBack) })
+                if (show != null) Text(show.title, Modifier.testTag("season-show").cvClickable({ token?.let { model.show(it, navigator) } },
+                    onClickLabel = "Open ${show.title}", focusShape = RoundedCornerShape(6.dp), pressedScale = 1f, enabled = showReady),
+                    style = bodyStyle(16.sp, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                else if (showLoading) Box(Modifier.size(140.dp, 16.dp).testTag("season-show-loading").clearAndSetSemantics {
+                    contentDescription = "Loading show…"; liveRegion = LiveRegionMode.Polite
+                }.shimmer())
+            })
             LazyColumn(Modifier.fillMaxSize().testTag("mobile-season"), state = scroll,
                 contentPadding = PaddingValues(bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (state.invalid) item("invalid") {
                     Text("Invalid season. Go back and choose a season.", Modifier.padding(20.dp))
                 } else {
-                    if (state.settingsFailed || state.stale || token == null) item("reader") {
+                    if (showsSeasonReadRecovery(state)) item("reader") {
                         Column(Modifier.padding(horizontal = 20.dp).testTag("season-read-recovery"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (state.stale) Text("Previously loaded metadata — unverified. Actions disabled.")
-                            if (state.settingsFailed || state.stale) ErrorState("Preferences unavailable or metadata unverified. Retry reads.", { model.retryReads(state.revision) })
-                            else {
-                                Text("Waiting for saved preferences…")
-                                PillButton("Retry reads", { model.retryReads(state.revision) }, variant = ButtonVariant.Ghost, small = true)
-                            }
-                        }
-                    }
-                    if (show != null) item("header") {
-                        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            PillButton(show.title, { token?.let { model.show(it, navigator) } }, Modifier.testTag("season-show"),
-                                variant = ButtonVariant.Ghost, enabled = showReady)
-                            show.network?.takeIf { it.isNotBlank() }?.let { Text(it, color = Tokens.Colors.TextSecondary) }
+                            ErrorState("Preferences unavailable or metadata unverified. Retry reads.", { model.retryReads(state.revision) })
                         }
                     }
                     item("title") {
                         Text(seasonTitle,
                             Modifier.padding(horizontal = 20.dp).testTag("season-title").semantics { heading() }, style = displayStyle(34.sp))
                     }
+                    if (showLoading) item("options-loading") {
+                        Row(Modifier.padding(horizontal = 20.dp).clearAndSetSemantics { },
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            repeat(SKELETON_CHIPS) { Box(Modifier.size(88.dp, 34.dp).shimmer(RoundedCornerShape(50))) }
+                        }
+                    }
                     if (show != null) item("options") {
                         LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(show.seasons.distinctBy { it.seasonNumber }, key = { it.seasonNumber }) { season ->
-                                if (showReady) Chip(season.label, state.current?.selected == season.seasonNumber,
+                                // A seeded (unverified) show keeps the same chips, showing the route's season; taps no-op until ready.
+                                val selected = if (showReady) state.current?.selected else model.seasonNumber
+                                Chip(season.label, selected == season.seasonNumber,
                                     { token?.let { model.selectSeason(it, season.seasonNumber, navigator) } },
                                     Modifier.testTag("season-option-${season.seasonNumber}"))
-                                else MetaChip(season.label, Modifier.testTag("season-option-${season.seasonNumber}"))
                             }
                         }
                     }
@@ -129,17 +142,20 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
                                 SectionFailure(section.kind) { token?.let(model::retryShow) }
                             }
                         }
-                        SectionState.Loading -> if (show == null) item("show-loading") { Text("Loading show…", Modifier.padding(20.dp)) }
                         else -> Unit
+                    }
+                    if (episodesLoading) item("episodes-loading") {
+                        Column(Modifier.padding(horizontal = 20.dp).testTag("season-episodes-loading").clearAndSetSemantics {
+                            contentDescription = "Loading episodes…"; liveRegion = LiveRegionMode.Polite
+                        }, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            repeat(SKELETON_EPISODES) { MobileSeasonEpisodeSkeleton() }
+                        }
                     }
                     when (val section = state.current?.episodes) {
                         is SectionState.Error -> item("episodes-error") {
                             Column(Modifier.padding(horizontal = 20.dp).testTag("season-episodes-error")) {
                                 SectionFailure(section.kind) { token?.let(model::retryEpisodes) }
                             }
-                        }
-                        SectionState.Loading -> if (state.current?.show !is SectionState.Error) item("episodes-loading") {
-                            Text("Loading episodes…", Modifier.padding(20.dp))
                         }
                         SectionState.Empty -> item("unavailable") { Text("This season is not available.", Modifier.padding(20.dp)) }
                         else -> Unit
@@ -158,6 +174,27 @@ internal fun MobileSeasonScreen(model: MobileSeasonViewModel, navigator: MobileN
         }
     }
 }
+
+private const val SKELETON_CHIPS = 4
+private const val SKELETON_EPISODES = 3
+
+/** Same footprint as [MobileSeasonEpisode]: still, label/title/metadata lines, overview and details button. */
+@Composable
+private fun MobileSeasonEpisodeSkeleton() {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Tokens.Colors.Tile).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(132.dp, 74.dp).shimmer(RoundedCornerShape(12.dp)))
+            SkeletonLines(3, Modifier.weight(1f).padding(top = 4.dp))
+        }
+        SkeletonLines(2)
+        Box(Modifier.size(120.dp, 32.dp).shimmer(RoundedCornerShape(50)))
+    }
+}
+
+/** Reading preferences or re-verifying on return takes a moment; warn only when the read or re-verification failed. */
+internal fun showsSeasonReadRecovery(state: MobileSeasonState): Boolean = state.settingsFailed ||
+    (state.stale && (state.current?.show is SectionState.Error || state.current?.episodes is SectionState.Error))
 
 @Composable
 private fun MobileSeasonEpisode(episode: Episode, imageBase: String, expanded: Boolean, enabled: Boolean, modifier: Modifier, onToggle: () -> Unit) {

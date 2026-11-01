@@ -24,7 +24,7 @@ class MobileSeasonScreenTest {
         val destinations = mutableListOf<MobileDestination>()
         setContent { SeasonFixture(onNavigate = destinations::add) }
         onNodeWithText("Actual show en-US").assertExists()
-        onNodeWithText("Actual network").assertExists()
+        onNodeWithText("Actual network").assertDoesNotExist()
         onNodeWithTag("season-title").assertTextEquals("Season 3")
         onNodeWithTag("season-option-0").performClick()
         runOnIdle { assertEquals(MobileDestination.Season(42, 0), destinations.last()) }
@@ -90,7 +90,7 @@ class MobileSeasonScreenTest {
         lateinit var f: MobileSeasonComponentFixture
         setContent { SeasonFixture(configure = { it.api.showFailure = true }, onReady = { _, fixture -> f = fixture }) }
         onNodeWithTag("season-show-error").assertExists()
-        onNodeWithText("Loading episodes…").assertDoesNotExist()
+        onNodeWithTag("season-episodes-loading").assertDoesNotExist()
         runOnIdle { f.api.showFailure = false }
         onNode(hasText("Retry") and hasAnyAncestor(hasTestTag("season-show-error"))).performClick()
         onNodeWithText("Actual show en-US").assertExists()
@@ -115,7 +115,7 @@ class MobileSeasonScreenTest {
     @Test fun showOnlyCompletionCannotClampSavedEpisodeScrollAndDisposalPreservesIt() = runComposeUiTest {
         val saved = target(); val gate = CompletableDeferred<Unit>(); var shown by mutableStateOf(true)
         setContent { if (shown) SeasonFixture(saved = saved, configure = { it.api.episodeGate = gate }, onBack = { shown = false }) }
-        onNodeWithText("Loading episodes…").assertExists()
+        onNodeWithTag("season-episodes-loading").assertExists()
         runOnIdle { assertTarget(saved) }
         onNodeWithContentDescription("Back").performClick()
         onNodeWithTag("mobile-season").assertDoesNotExist()
@@ -127,7 +127,7 @@ class MobileSeasonScreenTest {
         val saved = target(); val gate = CompletableDeferred<Unit>()
         setContent { Box(Modifier.requiredSize(360.dp, 640.dp)) { SeasonFixture(saved = saved, configure = { it.api.episodeGate = gate }) } }
         runOnIdle { assertTarget(saved); gate.complete(Unit) }
-        waitUntil { onAllNodesWithTag("season-episode-3").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil { onAllNodesWithTag("season-episode-4").fetchSemanticsNodes().isNotEmpty() }
         val list = onNodeWithTag("mobile-season")
         val restored = list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         list.performScrollToIndex(5)
@@ -232,8 +232,8 @@ class MobileSeasonScreenTest {
     @Test fun inlineExpansionDoesNotRestartCompletedTopologyRestoration() = runComposeUiTest {
         val saved = SavedStateHandle()
         setContent { Box(Modifier.requiredSize(360.dp, 640.dp)) { SeasonFixture(saved = saved) } }
-        onNodeWithTag("mobile-season").performScrollToIndex(8)
-        waitUntil { saved.get<Int>("mobileSeason.index") == 8 }
+        onNodeWithTag("mobile-season").performScrollToIndex(7)
+        waitUntil { saved.get<Int>("mobileSeason.index") == 7 }
         val deep = onNodeWithTag("mobile-season").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         onNodeWithContentDescription("Expand episode 6 details").performClick()
         onNodeWithTag("season-episode-6").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Expanded"))
