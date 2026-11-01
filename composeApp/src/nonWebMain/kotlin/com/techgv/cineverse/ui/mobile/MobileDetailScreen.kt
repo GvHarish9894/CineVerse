@@ -130,6 +130,13 @@ internal fun MobileDetailScreen(
     }
 }
 
+/**
+ * Returning to Detail re-verifies the title; while that read is in flight the retained copy is "stale" for a moment
+ * (actions stay disabled), so the warning appears only for failed preferences or a re-verification that failed.
+ */
+internal fun showsReadRecovery(state: MobileDetailState): Boolean =
+    state.settingsFailed || (state.stale && state.section is SectionState.Error)
+
 /** Position a newly selected segment opens at: the sticky bar's index unless the user was already deeper in it. */
 internal fun segmentOpenScroll(saved: MobileDetailScroll, barIndex: Int?): MobileDetailScroll? =
     if (barIndex != null && saved.index < barIndex) MobileDetailScroll(barIndex, 0) else null
@@ -198,7 +205,7 @@ private fun MobileDetailContent(
                 if (state.invalid) item("invalid") {
                     Text("Invalid title. Go back and choose a movie or TV show.", Modifier.padding(20.dp))
                 } else {
-                    if (state.settingsFailed || state.stale) item("read-recovery") {
+                    if (showsReadRecovery(state)) item("read-recovery") {
                         Column(Modifier.padding(horizontal = 20.dp).testTag("detail-read-recovery"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (state.stale) Text("Previously loaded title — unverified. Actions disabled.")
                             ErrorState(if (state.settingsFailed) "Saved preferences unavailable. Retry reads." else "Verify this title before changing your library.", onRetryReads)
