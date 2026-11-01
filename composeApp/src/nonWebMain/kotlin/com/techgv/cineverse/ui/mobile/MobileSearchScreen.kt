@@ -1,6 +1,7 @@
 package com.techgv.cineverse.ui.mobile
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -87,9 +88,12 @@ internal fun MobileSearchContent(
             }.collect { nearEnd -> if (nearEnd) onMore() }
         }
     }
+    // safeDrawing already includes the keyboard; the 100dp clears the floating tab bar, which the keyboard covers.
+    val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     Box(Modifier.fillMaxSize()) {
         AmbientGlow(mobilePalette("search"))
-        Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(horizontal = 20.dp).padding(top = 24.dp, bottom = 100.dp)) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp)
+            .padding(top = 24.dp, bottom = if (keyboardOpen) 0.dp else 100.dp)) {
             SectionTitle("Search")
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(editor, { editor = it; onQuery(it.text) }, Modifier.fillMaxWidth().testTag("search-input"),
