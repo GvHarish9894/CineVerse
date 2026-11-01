@@ -159,7 +159,6 @@ internal fun MobileSearchContent(
                         }
                     }
                 }
-                item("attribution") { Footer() }
             }
         }
     }

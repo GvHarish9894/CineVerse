@@ -170,7 +170,6 @@ internal fun MobileExploreContent(
                         }
                     }
                 }
-                item("attribution", span = { GridItemSpan(maxLineSpan) }) { Footer() }
             }
         }
     }

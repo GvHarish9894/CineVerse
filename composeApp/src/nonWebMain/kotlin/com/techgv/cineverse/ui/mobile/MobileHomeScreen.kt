@@ -122,7 +122,6 @@ internal fun MobileHomeScreen(
                         }
                     }
                 }
-                item("attribution") { Footer() }
             }
         }
         GlassTopBar(
