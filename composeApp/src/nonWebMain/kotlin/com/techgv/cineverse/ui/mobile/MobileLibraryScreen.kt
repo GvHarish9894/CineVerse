@@ -76,7 +76,8 @@ internal fun MobileLibraryContent(
     val library = state.library.takeUnless { state.invalid || state.failed }
     // Both groups empty: the EmptyState hero alone says so; per-group titles/rows and the counter would repeat it.
     val bothEmpty = library != null && library.movies.section == SectionState.Empty && library.tv.section == SectionState.Empty
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
+    // Like the other tabs: the glow runs under the status bar; only the header is pushed below it.
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))) {
         AmbientGlow(mobilePalette("library"))
         PullToRefreshBox(library != null && (library.movies.section == SectionState.Loading || library.tv.section == SectionState.Loading),
             onRefresh, Modifier.fillMaxSize()) {
@@ -84,7 +85,7 @@ internal fun MobileLibraryContent(
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 120.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item("header", span = { GridItemSpan(maxLineSpan) }) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.statusBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         SectionTitle("Library")
                         if (library != null) {
                             Text(if (library.signedIn) "TMDB account · ${library.accountName.orEmpty()}" else "Saved on this device · Guest",

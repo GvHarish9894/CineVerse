@@ -88,12 +88,13 @@ private fun ProfileContent(
     strength: () -> Unit,
     openPicker: (MobilePreferencePicker) -> Unit,
 ) {
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
+    // Like the other tabs: the glow runs under the status bar; only the title is pushed below it.
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))) {
         AmbientGlow(mobilePalette("profile"))
         LazyColumn(Modifier.fillMaxSize().testTag("mobile-profile"), state = scroll,
             contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            item("title") { Text("Profile", style = displayStyle(34.sp)) }
+            item("title") { Text("Profile", Modifier.statusBarsPadding(), style = displayStyle(34.sp)) }
             item("identity") {
                 SettingsGroup {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
