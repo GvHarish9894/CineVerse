@@ -31,8 +31,13 @@ class MobileSearchScreenTest {
         onNodeWithTag("search-input").assertTextContains("fixture")
         runOnIdle { assertEquals(2, f.store.edits) }
         onNodeWithContentDescription("Clear search").performClick()
-        onNodeWithText("Clear recent searches").performClick()
+        onNodeWithText("Clear all").performClick()
+        onNodeWithText("Cancel").performClick() // Dismissing the confirmation writes nothing.
+        runOnIdle { assertEquals(2, f.store.edits) }
+        onNodeWithText("Clear all").performClick()
+        onNodeWithText("Clear").performClick()
         onNodeWithText("No recent searches.").assertExists()
+        onNodeWithText("Clear all").assertDoesNotExist()
         runOnIdle { assertEquals(3, f.store.edits) }
     }
 
@@ -122,7 +127,7 @@ class MobileSearchScreenTest {
         }
     }
 
-    @Test fun activeCountsSayLoadedInactiveUnknownAndPageErrorNeverViewportRetries() = runComposeUiTest {
+    @Test fun facetsShowNoCountsAndPageErrorNeverViewportRetries() = runComposeUiTest {
         val title = Title(MediaRef(MediaType.Tv, 1399), "Fixture title", "", null, null, null, 0.0, 0, emptyList(), MediaType.Tv)
         var more = 0
         var retries = 0
@@ -132,7 +137,8 @@ class MobileSearchScreenTest {
                 SectionState.Content(PagedItems(listOf(Hero.OfTitle(title)), 1, true, moreError = SectionErrorKind.Offline)), settingsKnown = true),
                 navigator = MobileNavigator { destination = it }, onMore = { more++ }, onRetry = { retries++ })
         }
-        onNodeWithText("TV · 1 loaded").assertIsSelected()
+        onNode(hasText("TV") and isSelectable()).assertIsSelected() // The row's "TV" subtitle also matches plain text.
+        onNodeWithText("loaded", substring = true).assertDoesNotExist()
         onNodeWithText("All").assertExists()
         onNodeWithText("Movies").assertExists()
         onNodeWithText("People").assertExists()
@@ -153,7 +159,7 @@ class MobileSearchScreenTest {
                 settingsKnown = true, recentQueries = null, recentReadError = SectionErrorKind.Generic,
                 recentMutation = RecentMutationStatus.Failed), onRecentRetry = { reads++ }, onSubmit = { submits++ })
         }
-        onNodeWithText("Couldn't update recent searches. Not retried.").assertExists()
+        onNodeWithText("Couldn't update recent searches.").assertExists()
         onNodeWithTag("search-recent-recovery").onChildren().filter(hasText("Retry")).onFirst().performClick()
         assertEquals(1, reads)
         assertEquals(0, submits)
@@ -168,10 +174,11 @@ class MobileSearchScreenTest {
         onNodeWithTag("search-settings-recovery").onChildren().filter(hasText("Retry")).onFirst().performClick()
         assertEquals(1, retries)
         runOnIdle { state.value = state.value.copy(settingsKnown = true, settingsError = null, results = SectionState.Loading) }
-        onAllNodesWithContentDescription("Loading").assertCountEquals(3)
+        // Full-page skeleton: how many rows compose depends on the test window, so assert presence, not a count.
+        assertTrue(onAllNodesWithContentDescription("Loading").fetchSemanticsNodes().isNotEmpty())
         runOnIdle { state.value = state.value.copy(query = "fixture", results = SectionState.Empty, recentMutation = RecentMutationStatus.Succeeded) }
         onNodeWithText("No results. Try another title or name.").assertExists()
-        onNodeWithText("Recent-search write completed.").assertExists()
+        onNodeWithText("Recent-search write completed.").assertDoesNotExist() // Successful writes are silent.
         onNodeWithContentDescription("Clear search").performClick()
     }
 }

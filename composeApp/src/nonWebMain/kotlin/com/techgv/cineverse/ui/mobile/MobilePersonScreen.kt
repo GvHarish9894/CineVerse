@@ -12,9 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,7 +30,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** Composition renders only; the route host owns activation and the entry store owns final close. */
 @Composable
-internal fun MobilePersonScreen(model: MobilePersonViewModel, navigator: MobileNavigator, onBack: () -> Unit) {
+internal fun MobilePersonScreen(model: MobilePersonViewModel, navigator: MobileNavigator, onBack: () -> Unit,
+                                seedName: String? = null, seedProfilePath: String? = null) {
     val snapshot by model.state.collectAsState()
     val state = model.visibleState(snapshot)
     DisposableEffect(model) { onDispose { model.setActive(false) } }
@@ -64,7 +68,9 @@ internal fun MobilePersonScreen(model: MobilePersonViewModel, navigator: MobileN
                     model.saveScroll(token, current.first, current.second)
             }
         }
-        PersonContent(state, model.imageBase, scroll, { model.back(token, onBack) },
+        // The cast card's seed only stands in while the first fetch loads, like Detail's.
+        val seed = seedName?.let { PersonHeaderArt(model.id, it, seedProfilePath) }
+        PersonContent(state, seed, model.imageBase, scroll, { model.back(token, onBack) },
             { model.retry(token) }, { model.toggleBiography(token) }, { model.open(token, it, navigator) })
     }
 }
@@ -72,6 +78,7 @@ internal fun MobilePersonScreen(model: MobilePersonViewModel, navigator: MobileN
 @Composable
 private fun PersonContent(
     state: MobilePersonState,
+    seed: PersonHeaderArt?,
     imageBase: String,
     scroll: LazyListState,
     onBack: () -> Unit,
@@ -82,6 +89,9 @@ private fun PersonContent(
     val person = (state.section as? SectionState.Content)?.value
     val palette = mobilePalette("person:${person?.id ?: "unknown"}")
     val solid = rememberTopBarSolid(scroll, 200.dp)
+    // One "header" item call site for seed and Person, so the shared avatar is never remounted when data lands.
+    val header = person?.let { PersonHeaderArt(it.id, it.name, it.profilePath) } ?: seed
+    val origin = header?.let { rememberMobilePersonOrigin(it.id) }
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)).imePadding()) {
         AmbientGlow(palette)
         Column {
@@ -100,14 +110,14 @@ private fun PersonContent(
                     person == null && state.section == SectionState.Empty -> item("empty") {
                         Text("Person unavailable. Go back to choose a person.", Modifier.padding(20.dp))
                     }
-                    person == null -> item("loading") {
-                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            PosterCardSkeleton()
-                            Text("Loading person…")
-                        }
-                    }
                     else -> {
-                        item("header") { PersonHeader(person, imageBase) }
+                        item("header") {
+                            if (header != null && origin != null) PersonHeader(header, origin, person, imageBase) else PersonHeaderSkeleton()
+                        }
+                        if (person == null) {
+                            item("loading") { PersonBodySkeleton() }
+                            return@LazyColumn
+                        }
                         item("biography") {
                             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (person.biography.isBlank()) Text("No biography available.") else {
@@ -154,23 +164,68 @@ private fun PersonContent(
     }
 }
 
+/** What the header's shared photo and name show: the cast card's seed until [PersonDetail] loads, then its own. */
+private data class PersonHeaderArt(val id: Int, val name: String, val profilePath: String?)
+
+/** [person] null = seeded while loading: real photo and name, skeleton chips. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PersonHeader(person: PersonDetail, imageBase: String) {
-    val palette = mobilePalette("person:${person.id}")
+private fun PersonHeader(art: PersonHeaderArt, origin: String, person: PersonDetail?, imageBase: String) {
+    val palette = mobilePalette("person:${art.id}")
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Box(Modifier.size(180.dp).background(Brush.radialGradient(listOf(palette.c1.copy(alpha = 0.35f), Color.Transparent))),
             contentAlignment = Alignment.Center) {
-            PaletteArt(imageUrl(imageBase, "w185", person.profilePath), palette, ArtStyle.Person,
-                Modifier.size(150.dp).clip(CircleShape))
+            PaletteArt(imageUrl(imageBase, "w185", art.profilePath), palette, ArtStyle.Person,
+                mobileSharedAvatar(origin).size(150.dp).clip(CircleShape).testTag("person-avatar"))
         }
-        Text(person.name, style = displayStyle(30.sp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(art.name, style = displayStyle(30.sp))
+        if (person == null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(3) { Box(Modifier.size(84.dp, 28.dp).shimmer(RoundedCornerShape(999.dp))) }
+        } else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             person.department?.takeIf { it.isNotBlank() }?.let { MetaChip(it) }
             person.birthday?.takeIf { it.isNotBlank() }?.let { MetaChip("Born $it") }
             person.deathday?.takeIf { it.isNotBlank() }?.let { MetaChip("Died $it") }
             person.placeOfBirth?.takeIf { it.isNotBlank() }?.let { MetaChip(it) }
+        }
+    }
+}
+
+/** Unseeded (deep link) loading header: same footprint as [PersonHeader]. */
+@Composable
+private fun PersonHeaderSkeleton() {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.size(180.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(150.dp).shimmer(CircleShape)) }
+        Box(Modifier.size(200.dp, 30.dp).shimmer())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(3) { Box(Modifier.size(84.dp, 28.dp).shimmer(RoundedCornerShape(999.dp))) }
+        }
+    }
+}
+
+/** Biography, Known for and Credits placeholders, so loading fills the page instead of a lone card. */
+@Composable
+private fun PersonBodySkeleton() {
+    Column(Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = "Loading person…" },
+        verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        SkeletonLines(4, Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.padding(horizontal = 20.dp).size(120.dp, 18.dp).shimmer())
+            Row(Modifier.fillMaxWidth().clipToBounds().wrapContentWidth(Alignment.Start, unbounded = true).padding(start = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { repeat(4) { PosterCardSkeleton() } }
+        }
+        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(100.dp, 18.dp).shimmer())
+            repeat(5) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(40.dp, 12.dp).shimmer())
+                    Box(Modifier.size(44.dp, 66.dp).shimmer(RoundedCornerShape(8.dp)))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(Modifier.fillMaxWidth(0.7f).height(12.dp).shimmer())
+                        Box(Modifier.fillMaxWidth(0.4f).height(10.dp).shimmer())
+                    }
+                }
+            }
         }
     }
 }

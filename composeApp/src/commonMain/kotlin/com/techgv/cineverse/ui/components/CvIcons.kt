@@ -40,6 +40,8 @@ object CvIcons {
     val Glow by lazy { icon("M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z M12 2v2 M12 20v2 M2 12h2 M20 12h2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4") }
     val Motion by lazy { icon("M3 12h4l3-8l4 16l3-8h4") }
     val Globe by lazy { icon("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M3 12h18 M12 3c3 3.5 3 14.5 0 18 M12 3c-3 3.5-3 14.5 0 18") }
+    /** Clock: recent searches. */
+    val History by lazy { icon("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 7.5V12l3 2") }
     val Autoplay by lazy { icon("M3 6h18v12H3z M10 9.5v5l4.5-2.5z") }
 
     private fun icon(pathData: String, solid: Boolean = false): ImageVector =

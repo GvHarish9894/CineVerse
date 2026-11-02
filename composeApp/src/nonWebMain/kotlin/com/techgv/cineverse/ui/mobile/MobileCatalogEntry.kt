@@ -119,7 +119,7 @@ internal fun MobilePersonRouteEntry(
         onDispose { binding.detach(entry, model) }
     }
     SideEffect { onModel(model) }
-    MobilePersonScreen(model, navigator, onBack)
+    MobilePersonScreen(model, navigator, onBack, route.name, route.profilePath)
 }
 
 @Composable

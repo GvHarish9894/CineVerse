@@ -16,6 +16,9 @@ import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.toRoute
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.navigation.compose.*
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
@@ -168,7 +171,12 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
     val stateHolder = rememberSaveableStateHolder()
     Box(Modifier.fillMaxSize()) {
         MobileSharedTransitionRoot { stateHolder.SaveableStateProvider(selected.name) {
-            NavHost(controller, startDestination = MobileTabRoot) {
+            // The default 700ms crossfade lingers; a quick fade lets the shared poster/title carry the motion.
+            NavHost(controller, startDestination = MobileTabRoot,
+                enterTransition = { fadeIn(tween(350, delayMillis = 50, easing = EmphasizedEasing)) },
+                exitTransition = { fadeOut(tween(200)) },
+                popEnterTransition = { fadeIn(tween(300, easing = EmphasizedEasing)) },
+                popExitTransition = { fadeOut(tween(200)) }) {
                 composable<MobileTabRoot> { root -> MobileSharedRoute(this) {
                     if (selected == MobileTab.Home) MobileHomeScreen(graph, model, scrollHome, navigator,
                         onSearch = { select(MobileTab.Search) }, onProfile = { select(MobileTab.Profile) })
@@ -187,9 +195,9 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
                         if (!external.share(ref.tmdbUrl())) toasts.show(ToastMessage("Couldn't open sharing."))
                     }
                 } }
-                composable<MobilePersonRoute> { route ->
+                composable<MobilePersonRoute> { route -> MobileSharedRoute(this) {
                     MobilePersonRouteEntry(graph, route, catalogBinding, navigator, ::back)
-                }
+                } }
                 composable<MobileSeasonRoute> { route ->
                     MobileSeasonRouteEntry(graph, route, catalogBinding, navigator, ::back)
                 }

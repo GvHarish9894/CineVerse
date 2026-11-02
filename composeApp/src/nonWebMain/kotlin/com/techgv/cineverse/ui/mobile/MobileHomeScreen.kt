@@ -113,11 +113,13 @@ internal fun MobileHomeScreen(
                     if (row == HomeRow.PopularMovies) item("popular-ten") {
                         // shortcut: ranks are positions in the loaded popular list, replace when a dedicated curated source exists.
                         val popular = (state.rows[row] as? SectionState.Content)?.value?.items.orEmpty().filterIsInstance<Hero.OfTitle>().take(10)
+                        val markOrigin = rememberMobileSharedOpen()
                         if (popular.isNotEmpty()) ScrollRow("10 Popular Movies") {
                             items(popular, key = { it.key }) { hero ->
                                 Top10Card(popular.indexOf(hero) + 1, hero.title.title, mobilePalette(hero.key),
-                                    { navigator.open(hero.title.detailDestination()) },
-                                    imageUrl = imageUrl(graph.catalog.imageBaseUrl(), "w342", hero.title.posterPath))
+                                    { markOrigin("home:popular-ten", hero.title.ref); navigator.open(hero.title.detailDestination()) },
+                                    imageUrl = imageUrl(graph.catalog.imageBaseUrl(), "w342", hero.title.posterPath),
+                                    artModifier = mobileSharedPoster(hero.title.ref, "home:popular-ten"))
                             }
                         }
                     }
@@ -193,6 +195,8 @@ private fun HomeHero(graph: MobileApplication, home: HomeStateHolder, state: Hom
 internal fun HomeSection(row: HomeRow, state: SectionState<PagedItems>, baseUrl: String, navigator: MobileNavigator,
                          onRetry: () -> Unit, onMore: () -> Unit, trend: TrendingWindow = TrendingWindow.Week) {
     val list = rememberLazyListState()
+    val markOrigin = rememberMobileSharedOpen()
+    val section = "home:${row.key}"
     when (state) {
         SectionState.Loading -> ScrollRow(row.title, state = list) { items(4) { PosterCardSkeleton() } }
         SectionState.Empty -> Column(Modifier.padding(horizontal = 20.dp)) { SectionTitle(row.title); Text("Nothing here yet.") }
@@ -209,14 +213,16 @@ internal fun HomeSection(row: HomeRow, state: SectionState<PagedItems>, baseUrl:
                         { navigator.open(MobileDestination.Person(hero.person.id)) }, imageUrl = imageUrl(baseUrl, "w185", hero.person.profilePath))
                     is Hero.OfTitle -> {
                         val title = hero.title
-                        val click = { navigator.open(title.detailDestination()) }
-                        if (row.card == HomeCard.Landscape) LandscapeCard(title.title, titleMeta(title), palette, click,
-                            imageUrl = imageUrl(baseUrl, "w780", title.backdropPath))
+                        val click = { markOrigin(section, title.ref); navigator.open(title.detailDestination()) }
+                        if (row.card == HomeCard.Landscape) LandscapeCard(title.title, titleMeta(title), palette,
+                            { markOrigin(section, title.ref); navigator.open(title.landscapeDetailDestination()) },
+                            imageUrl = imageUrl(baseUrl, "w780", title.backdropPath),
+                            artModifier = mobileSharedBackdrop(title.ref, section))
                         else PosterCard(title.title, titleMeta(title), palette, click,
                             imageUrl = imageUrl(baseUrl, "w342", title.posterPath), voteAverage = title.voteAverage, voteCount = title.voteCount,
                             tag = if (title.mediaType == MediaType.Tv) "TV" else null,
                             badge = title.releaseDate.takeIf { row == HomeRow.Upcoming },
-                            artModifier = mobileSharedPoster(title.ref), titleModifier = mobileSharedTitle(title.ref))
+                            artModifier = mobileSharedPoster(title.ref, section), titleModifier = mobileSharedTitle(title.ref, section))
                     }
                 }
             }

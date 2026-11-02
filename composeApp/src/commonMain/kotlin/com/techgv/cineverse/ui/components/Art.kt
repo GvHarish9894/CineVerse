@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
 import com.techgv.cineverse.ui.design.Scrims.posterBottomScrim
 import kotlin.math.PI
 import kotlin.math.abs
@@ -35,6 +37,7 @@ enum class ArtStyle { Poster, Backdrop, Person }
 /**
  * Image with the prototypes' gradient art behind it. [fallback] (e.g. the title in display type) shows until an
  * image has loaded, so missing/broken images still read as a designed card. [bottomScrim] darkens the bottom (titles).
+ * [placeholderUrl]: an already-loaded smaller rendition (e.g. the tapped card's) shown from memory while [imageUrl] loads.
  */
 @Composable
 fun PaletteArt(
@@ -43,13 +46,17 @@ fun PaletteArt(
     style: ArtStyle,
     modifier: Modifier = Modifier,
     bottomScrim: Boolean = false,
+    placeholderUrl: String? = null,
     fallback: @Composable BoxScope.() -> Unit = {},
 ) {
     var loaded by remember(imageUrl) { mutableStateOf(false) }
+    val context = LocalPlatformContext.current
     Box(modifier.paletteArt(palette, style)) {
         if (imageUrl != null) {
             AsyncImage(
-                model = imageUrl,
+                // No transformations, so Coil's memory key is the bare URL.
+                model = if (placeholderUrl == null) imageUrl
+                    else remember(imageUrl, placeholderUrl) { ImageRequest.Builder(context).data(imageUrl).placeholderMemoryCacheKey(placeholderUrl).build() },
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

@@ -12,9 +12,10 @@ import kotlinx.serialization.Serializable
 
 /** Handoff for subsequent native screen groups; identifiers (plus Detail's optional display seed), never repository objects or credentials. */
 sealed interface MobileDestination {
-    /** [posterPath]/[title] are an optional display seed from the originating card, never Detail's source of truth. */
-    data class Detail(val ref: MediaRef, val posterPath: String? = null, val title: String? = null) : MobileDestination
-    data class Person(val id: Int) : MobileDestination
+    /** [posterPath]/[title]/[backdropPath] are an optional display seed from the originating card, never Detail's source of truth. */
+    data class Detail(val ref: MediaRef, val posterPath: String? = null, val title: String? = null, val backdropPath: String? = null) : MobileDestination
+    /** [name]/[profilePath] are an optional display seed from the tapped cast card, never Person's source of truth. */
+    data class Person(val id: Int, val name: String? = null, val profilePath: String? = null) : MobileDestination
     data class Season(val seriesId: Int, val number: Int) : MobileDestination
     data class Trailer(val key: String, val title: String, val kicker: String) : MobileDestination
     data class Browse(val row: HomeRow, val trend: TrendingWindow = TrendingWindow.Week) : MobileDestination
@@ -25,8 +26,9 @@ fun interface MobileNavigator { fun open(destination: MobileDestination) }
 enum class MobileTab { Home, Explore, Search, Library, Profile }
 
 @Serializable internal data object MobileTabRoot
-@Serializable internal data class MobileDetailRoute(val media: String, val id: Int, val posterPath: String? = null, val title: String? = null)
-@Serializable internal data class MobilePersonRoute(val id: Int)
+@Serializable internal data class MobileDetailRoute(val media: String, val id: Int, val posterPath: String? = null, val title: String? = null,
+                                                   val backdropPath: String? = null)
+@Serializable internal data class MobilePersonRoute(val id: Int, val name: String? = null, val profilePath: String? = null)
 @Serializable internal data class MobileSeasonRoute(val seriesId: Int, val number: Int)
 @Serializable internal data class MobileTrailerRoute(val key: String, val title: String, val kicker: String)
 @Serializable internal data class MobileBrowseRoute(val row: String, val trend: String = TrendingWindow.Week.name)
@@ -39,8 +41,8 @@ internal fun MobileBrowseRoute.selection(): BrowseSelection? = try {
 
 internal fun NavHostController.open(destination: MobileDestination) {
     when (destination) {
-        is MobileDestination.Detail -> navigate(MobileDetailRoute(destination.ref.mediaType.path, destination.ref.id, destination.posterPath, destination.title))
-        is MobileDestination.Person -> navigate(MobilePersonRoute(destination.id))
+        is MobileDestination.Detail -> navigate(MobileDetailRoute(destination.ref.mediaType.path, destination.ref.id, destination.posterPath, destination.title, destination.backdropPath))
+        is MobileDestination.Person -> navigate(MobilePersonRoute(destination.id, destination.name, destination.profilePath))
         is MobileDestination.Season -> navigate(MobileSeasonRoute(destination.seriesId, destination.number)) {
             // Switching seasons replaces the Season entry, so Back returns to the screen that opened it.
             if (currentDestination?.hasRoute<MobileSeasonRoute>() == true) popUpTo<MobileSeasonRoute> { inclusive = true }
@@ -57,3 +59,6 @@ internal fun Hero.searchDestination(): MobileDestination = when (this) {
 
 /** Seeds Detail's header with the card's art so its shared poster exists on Detail's first frame. */
 internal fun Title.detailDestination() = MobileDestination.Detail(ref, posterPath, title)
+
+/** Landscape cards also seed the backdrop: that is what their art flies into. */
+internal fun Title.landscapeDetailDestination() = MobileDestination.Detail(ref, posterPath, title, backdropPath)

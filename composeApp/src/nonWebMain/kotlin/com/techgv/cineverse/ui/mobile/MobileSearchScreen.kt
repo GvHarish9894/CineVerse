@@ -7,23 +7,37 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.data.tmdb.SearchFacet
 import com.techgv.cineverse.domain.*
 import com.techgv.cineverse.presentation.*
 import com.techgv.cineverse.ui.components.*
+import com.techgv.cineverse.ui.design.Tokens
+import com.techgv.cineverse.ui.theme.bodyStyle
 
 @Composable
 internal fun MobileSearchScreen(
@@ -90,6 +104,9 @@ internal fun MobileSearchContent(
     }
     // safeDrawing already includes the keyboard; the 100dp clears the floating tab bar, which the keyboard covers.
     val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    var confirmClear by rememberSaveable { mutableStateOf(false) }
+    val markOrigin = rememberMobileSharedOpen()
+    if (confirmClear) ClearRecentSheet(onConfirm = { confirmClear = false; onClearRecent() }, onDismiss = { confirmClear = false })
     Box(Modifier.fillMaxSize()) {
         AmbientGlow(mobilePalette("search"))
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp)
@@ -104,55 +121,48 @@ internal fun MobileSearchContent(
                 keyboardActions = KeyboardActions(onSearch = { onSubmit(); dismissKeyboard() }))
             if (state.inputError != null) Text("Use 200 characters or fewer (excluding surrounding spaces).", Modifier.testTag("search-input-error"))
             if (!state.showingSuggestions) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                SearchFacet.entries.forEach { facet ->
-                    val count = state.loadedCount(facet)
-                    Chip(facet.label() + (count?.let { " · $it loaded" } ?: ""), state.facet == facet, { onFacet(facet) })
-                }
+                // No per-page counts: a label that changes on every page load reads as noise.
+                SearchFacet.entries.forEach { facet -> Chip(facet.label(), state.facet == facet, { onFacet(facet) }) }
             }
             LazyColumn(Modifier.fillMaxSize().testTag("mobile-search"), scroll,
                 verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(top = 16.dp, bottom = 20.dp)) {
-                if (!state.settingsKnown || settingsFailed || state.settingsError != null) item("settings") {
-                    if (settingsFailed || state.settingsError != null) ErrorState(
+                val settingsBroken = settingsFailed || state.settingsError != null
+                if (settingsBroken) item("settings") {
+                    ErrorState(
                         if (state.settingsKnown) "Saved preferences unavailable; keeping the last loaded values." else "Saved preferences unavailable; content preferences are unknown.",
                         onSettingsRetry, Modifier.testTag("search-settings-recovery"))
-                    else Text("Loading saved preferences…")
                 }
                 if (state.recentReadError != null) item("recent-error") {
                     ErrorState("Couldn't read recent searches. Previously loaded entries may be out of date.", onRecentRetry,
                         Modifier.testTag("search-recent-recovery"))
                 }
-                when (state.recentMutation) {
-                    RecentMutationStatus.Pending -> item("mutation") { Text("Updating recent searches…") }
-                    RecentMutationStatus.Failed -> item("mutation") { Text("Couldn't update recent searches. Not retried.") }
-                    RecentMutationStatus.Succeeded -> item("mutation") { Text("Recent-search write completed.") }
-                    RecentMutationStatus.Idle -> Unit
+                // Pending/succeeded writes are silent; only a failure needs the user's attention.
+                if (state.recentMutation == RecentMutationStatus.Failed) item("mutation") {
+                    Text("Couldn't update recent searches.", style = bodyStyle(13.sp), color = MaterialTheme.colorScheme.error)
                 }
                 if (state.showingSuggestions) {
                     item("recent") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SectionTitle("Recent searches")
-                            when (val recent = state.recentQueries) {
-                                null -> if (state.recentReadError == null) Text("Loading recent searches…")
-                                else -> if (recent.isEmpty()) Text("No recent searches.") else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    recent.forEach { query -> Chip(query, false, { onChooseQuery(query); dismissKeyboard() }) }
-                                }
-                            }
-                            PillButton("Clear recent searches", onClearRecent, variant = ButtonVariant.Ghost)
-                        }
+                        RecentSearches(state.recentQueries, state.recentReadError == null,
+                            onChoose = { onChooseQuery(it); dismissKeyboard() }, onClear = { confirmClear = true })
                     }
                     item("suggestions") { SectionTitle("Trending titles · This week") }
                 }
                 when (val results = state.results) {
-                    null -> Unit // Invalid input and unknown settings are not empty-success states.
-                    SectionState.Loading -> items(3) { SkeletonLines(3, Modifier.fillMaxWidth()) }
+                    // Invalid input and unknown settings are not empty-success states; first settings read still shimmers.
+                    null -> if (!state.settingsKnown && !settingsBroken && state.inputError == null) searchSkeleton()
+                    SectionState.Loading -> searchSkeleton()
                     SectionState.Empty -> item("empty") { Text(if (state.showingSuggestions) "No Trending titles available." else "No results. Try another title or name.") }
                     is SectionState.Error -> item("error") { SectionFailure(results.kind, onRetry) }
                     is SectionState.Content -> {
                         items(results.value.items, key = { it.key }) { hero ->
-                            MobileSearchResultRow(hero, baseUrl) { dismissKeyboard(); navigator.open(hero.searchDestination()) }
+                            MobileSearchResultRow(hero, baseUrl) {
+                                dismissKeyboard()
+                                (hero as? Hero.OfTitle)?.let { markOrigin("search", it.title.ref) }
+                                navigator.open(hero.searchDestination())
+                            }
                         }
                         if (results.value.loadingMore && results.value.moreError == null) items(2, key = { "paging-skeleton-$it" }) {
-                            SkeletonLines(3, Modifier.fillMaxWidth())
+                            SearchRowSkeleton()
                         }
                         if (results.value.hasMore) item("paging") {
                             val error = results.value.moreError
@@ -162,6 +172,69 @@ internal fun MobileSearchContent(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Header with a quiet "Clear all" text action, then one tappable history row per query. [recent] null is unknown, not empty. */
+@Composable
+private fun RecentSearches(recent: List<String>?, readable: Boolean, onChoose: (String) -> Unit, onClear: () -> Unit) {
+    val muted = Tokens.Colors.TextPrimary.copy(alpha = 0.6f)
+    Column(Modifier.testTag("search-recent")) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle("Recent searches", Modifier.weight(1f))
+            if (!recent.isNullOrEmpty()) Text("Clear all", style = bodyStyle(14.sp, FontWeight.SemiBold), color = Tokens.Colors.Accent,
+                modifier = Modifier.minimumInteractiveComponentSize()
+                    .cvClickable(onClear, focusShape = RoundedCornerShape(8.dp)).padding(horizontal = 4.dp))
+        }
+        when {
+            recent == null -> if (readable) SkeletonLines(2, Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp))
+            recent.isEmpty() -> Text("No recent searches.", style = bodyStyle(14.sp), color = muted, modifier = Modifier.padding(vertical = 4.dp))
+            else -> recent.forEach { query ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).cvClickable({ onChoose(query) }, onClickLabel = "Search $query",
+                    focusShape = RoundedCornerShape(8.dp), pressedScale = 1f),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Icon(CvIcons.History, null, tint = muted, modifier = Modifier.size(20.dp))
+                    Text(query, Modifier.weight(1f), style = bodyStyle(15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Icon(CvIcons.ChevronRight, null, tint = muted, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
+/** Bottom-sheet confirmation: icon, short title and body, then full-width stacked actions (destructive first). */
+@Composable
+private fun ClearRecentSheet(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    CvBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().testTag("search-clear-confirm"), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(56.dp).clip(CircleShape).background(Tokens.Colors.Danger.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Icon(CvIcons.History, null, tint = Tokens.Colors.Danger, modifier = Modifier.size(26.dp))
+            }
+            Text("Clear recent searches?", Modifier.padding(top = 16.dp).semantics { heading() },
+                style = bodyStyle(19.sp, FontWeight.Bold), textAlign = TextAlign.Center)
+            Text("Your search history on this device will be removed. This can't be undone.", Modifier.padding(top = 8.dp),
+                style = bodyStyle(14.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.65f), textAlign = TextAlign.Center)
+            Spacer(Modifier.height(24.dp))
+            PillButton("Clear", onConfirm, Modifier.fillMaxWidth(), variant = ButtonVariant.Destructive)
+            Spacer(Modifier.height(8.dp))
+            PillButton("Cancel", onDismiss, Modifier.fillMaxWidth(), variant = ButtonVariant.Ghost)
+        }
+    }
+}
+
+/** Enough rows to fill a phone viewport, so loading reads as the whole page arriving, not three stray bars. */
+private fun LazyListScope.searchSkeleton() = items(8, key = { "skeleton-$it" }) { SearchRowSkeleton() }
+
+/** Same footprint as [MobileSearchResultRow]: 58×87 poster, title and meta lines. */
+@Composable
+private fun SearchRowSkeleton() {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).clearAndSetSemantics { contentDescription = "Loading" },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(58.dp, 87.dp).shimmer(RoundedCornerShape(8.dp)))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.fillMaxWidth(0.75f).height(14.dp).shimmer())
+            Box(Modifier.fillMaxWidth(0.45f).height(11.dp).shimmer())
         }
     }
 }
@@ -176,10 +249,13 @@ private fun MobileSearchResultRow(hero: Hero, baseUrl: String, onClick: () -> Un
     Row(Modifier.fillMaxWidth().cvClickable(onClick, onClickLabel = title).padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         val person = hero is Hero.OfPerson
+        val ref = (hero as? Hero.OfTitle)?.title?.ref
         val path = when (hero) { is Hero.OfTitle -> hero.title.posterPath; is Hero.OfPerson -> hero.person.profilePath }
-        PaletteArt(imageUrl(baseUrl, "w185", path), mobilePalette(hero.key), if (person) ArtStyle.Person else ArtStyle.Poster,
-            Modifier.size(58.dp, if (person) 58.dp else 87.dp).clip(if (person) CircleShape else RoundedCornerShape(8.dp)))
-        Column(Modifier.weight(1f)) { Text(title); Text(subtitle) }
+        // Titles load the Detail header's w342 so the shared poster lands on a cached image, not a blank swap.
+        PaletteArt(imageUrl(baseUrl, if (person) "w185" else "w342", path), mobilePalette(hero.key), if (person) ArtStyle.Person else ArtStyle.Poster,
+            (if (ref != null) mobileSharedPoster(ref, "search") else Modifier)
+                .size(58.dp, if (person) 58.dp else 87.dp).clip(if (person) CircleShape else RoundedCornerShape(8.dp)))
+        Column(Modifier.weight(1f)) { Text(title, if (ref != null) mobileSharedTitle(ref, "search") else Modifier); Text(subtitle) }
     }
 }
 

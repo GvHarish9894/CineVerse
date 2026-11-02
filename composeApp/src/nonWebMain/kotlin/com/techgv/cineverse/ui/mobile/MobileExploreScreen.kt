@@ -74,6 +74,9 @@ internal fun MobileExploreContent(
     onBack: (() -> Unit)? = null,
 ) {
     val content = (state.grid as? SectionState.Content)?.value
+    val markOrigin = rememberMobileSharedOpen()
+    // A pushed Browse can sit over the Explore tab with the same titles; keep their origins apart.
+    val section = if (onBack != null) "browse" else "explore"
     // Only a successful, idle page can trigger viewport paging. Displayed errors require an explicit press.
     LaunchedEffect(scroll, content) {
         if (content?.hasMore == true && !content.loadingMore && content.moreError == null) {
@@ -154,11 +157,11 @@ internal fun MobileExploreContent(
                                         { navigator.open(MobileDestination.Person(hero.person.id)) },
                                         imageUrl = imageUrl(baseUrl, "w185", hero.person.profilePath), diameter = minOf(96.dp, maxWidth))
                                     is Hero.OfTitle -> PosterCard(hero.title.title, titleMeta(hero.title), mobilePalette(hero.key),
-                                        { navigator.open(hero.title.detailDestination()) }, width = maxWidth,
+                                        { markOrigin(section, hero.title.ref); navigator.open(hero.title.detailDestination()) }, width = maxWidth,
                                         imageUrl = imageUrl(baseUrl, "w342", hero.title.posterPath),
                                         voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount,
                                         tag = if (hero.title.mediaType == MediaType.Tv) "TV" else null,
-                                        artModifier = mobileSharedPoster(hero.title.ref), titleModifier = mobileSharedTitle(hero.title.ref))
+                                        artModifier = mobileSharedPoster(hero.title.ref, section), titleModifier = mobileSharedTitle(hero.title.ref, section))
                                 }
                             }
                         }

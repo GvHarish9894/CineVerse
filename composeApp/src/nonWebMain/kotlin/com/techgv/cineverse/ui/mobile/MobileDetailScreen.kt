@@ -57,18 +57,26 @@ internal fun MobileDetailScreen(
     onShare: ((MediaRef) -> Unit)? = null,
     seedPosterPath: String? = null,
     seedTitle: String? = null,
+    seedBackdropPath: String? = null,
 ) {
     val state = model.state.collectAsState().value
     // One list for every segment: a segment switch swaps only that segment's items, never the header or bar.
     key(model) {
         val segment = state.segment
         val currentSegment by rememberUpdatedState(segment)
-        val scroll = remember { LazyListState() }
-        // The segment whose saved position has been applied (or deliberately kept); its scroll is persisted.
-        var restored by remember { mutableStateOf<MobileDetailSegment?>(null) }
         val content = (state.section as? SectionState.Content)?.value
         val topologyReady = content?.ref == model.ref && content != null && !state.stale &&
             !state.settingsFailed && !state.libraryFailed && !state.identityFailed
+        // Returning (e.g. Back from Person) recreates this list while the retained copy re-verifies, which waits for
+        // the route to resume and a network read; starting at 0 showed the page top for that whole wait, then jumped.
+        // A retained copy without a recovery banner has the healthy layout, so the list starts at the saved position.
+        // The authoritative restore and persistence below still wait for verification.
+        val scroll = remember {
+            val retainedLayout = state.retained?.ref == model.ref && model.ref != null && !showsReadRecovery(state)
+            if (topologyReady || retainedLayout) model.scroll(segment).let { LazyListState(it.index, it.offset) } else LazyListState()
+        }
+        // The segment whose saved position has been applied (or deliberately kept); its scroll is persisted.
+        var restored by remember { mutableStateOf<MobileDetailSegment?>(null) }
         val persist by rememberUpdatedState(restored == segment && topologyReady)
         LaunchedEffect(scroll, segment, topologyReady) {
             if (!topologyReady || restored == segment) return@LaunchedEffect
@@ -106,7 +114,7 @@ internal fun MobileDetailScreen(
         if (actionObserver != null) SideEffect { actionObserver(model, state.authority, onAct) }
         // The card's seed only stands in while the first fetch loads; any loaded/retained Detail replaces it.
         val seed = model.ref?.takeIf { seedPosterPath != null || seedTitle != null }
-            ?.let { MobileDetailHeaderArt(it, seedPosterPath, seedTitle.orEmpty()) }
+            ?.let { MobileDetailHeaderArt(it, seedPosterPath, seedTitle.orEmpty(), seedBackdropPath) }
         // With the sticky bar pinned, a tapped segment keeps it pinned: it opens at its saved position when that is
         // deeper than the bar, else exactly at the bar. With the bar not pinned (near the page top) it glides to the bar.
         val onSegment: (MobileDetailSegment) -> Unit = { target ->
@@ -167,7 +175,10 @@ private fun MobileDetailContent(
         else MobileDetailSegment.entries.filter { it != MobileDetailSegment.Seasons }
     val loading = detail == null && state.section == SectionState.Loading
     // One "header" item call site for seed and Detail, so the shared poster is never remounted when data lands.
-    val header = if (state.invalid) null else detail?.let { MobileDetailHeaderArt(it.ref, it.posterPath, it.title) } ?: seed?.takeIf { loading }
+    val header = if (state.invalid) null else detail?.let { MobileDetailHeaderArt(it.ref, it.posterPath, it.title, it.backdropPath) } ?: seed?.takeIf { loading }
+    // Which card this Detail pairs with for shared elements; captured once so Back returns to the same card.
+    val origin = header?.let { rememberMobileDetailOrigin(it.ref) }
+    val markPerson = rememberMobileSharedOpenPerson()
     val barHeight = with(LocalDensity.current) { WindowInsets.statusBars.getTop(this).toDp() } + 52.dp
     // "segment-fill" height in px; null = a full viewport, used for the first pass after a segment switch so the
     // list is never clamped (moved) before the new segment's items have been measured.
@@ -181,11 +192,12 @@ private fun MobileDetailContent(
         // The backdrop sits behind both the bar and the list, so the bar is fully transparent over it until the
         // header scrolls away (then it frosts as before). It follows the header item's scroll offset; the item
         // itself only reserves the 240dp slot. Lazy lists clip their items, so it cannot be drawn from inside.
-        if (header != null) PaletteArt(imageUrl(imageBase, "w1280", detail?.backdropPath), mobilePalette(header.ref.key),
-            ArtStyle.Backdrop, Modifier.fillMaxWidth().height(barHeight + 240.dp).testTag("detail-backdrop").graphicsLayer {
+        // A landscape card's art flies into this backdrop; its cached w780 stands in while w1280 loads.
+        if (header != null && origin != null) PaletteArt(imageUrl(imageBase, "w1280", header.backdropPath), mobilePalette(header.ref.key),
+            ArtStyle.Backdrop, mobileSharedBackdrop(origin).fillMaxWidth().height(barHeight + 240.dp).testTag("detail-backdrop").graphicsLayer {
                 val item = scroll.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "header" }
                 if (item == null) alpha = 0f else translationY = item.offset.toFloat()
-            }, bottomScrim = true)
+            }, bottomScrim = true, placeholderUrl = imageUrl(imageBase, "w780", seed?.backdropPath))
         Column {
             GlassTopBar(solid, title = detail?.title?.takeIf { solid }, scrim = false,
                 navigation = { RoundIconButton(CvIcons.ChevronLeft, "Back", onBack) },
@@ -223,7 +235,7 @@ private fun MobileDetailContent(
                     if (state.section is SectionState.Error) item("catalog-error") {
                         Column(Modifier.padding(horizontal = 20.dp)) { SectionFailure(state.section.kind, onRetryDetail) }
                     }
-                    if (header != null || loading) item("header") { DetailHeader(header, detail, imageBase, onNavigate) }
+                    if (header != null || loading) item("header") { DetailHeader(header, origin, detail, imageBase, onNavigate) }
                     if (loading) item("loading") {
                         // Shimmer shaped like the summary, actions and segment bar; one announced label instead of visible text.
                         Column(Modifier.padding(horizontal = 20.dp).clearAndSetSemantics {
@@ -273,8 +285,9 @@ private fun MobileDetailContent(
                                     ScrollRow("Top billed cast") {
                                         items(detail.cast.filter { it.personId > 0 }, key = { it.personId }) { person ->
                                             PersonCircle(person.name, person.role.takeIf { it.isNotBlank() }, mobilePalette("person:${person.personId}"),
-                                                { onNavigate(MobileDestination.Person(person.personId)) },
-                                                imageUrl = imageUrl(imageBase, "w185", person.profilePath))
+                                                { markPerson("detail-top-cast", person.personId); onNavigate(person.destination()) },
+                                                imageUrl = imageUrl(imageBase, "w185", person.profilePath),
+                                                artModifier = mobileSharedAvatar(person.personId, "detail-top-cast"))
                                         }
                                     }
                                 }
@@ -293,10 +306,10 @@ private fun MobileDetailContent(
                                 if (cast.isEmpty()) item("no-cast") { DetailEmpty("No cast available.") }
                                 items(cast, key = { "cast:${it.personId}" }) { person ->
                                     Row(Modifier.padding(horizontal = 20.dp).fillMaxWidth().testTag("detail-person-${person.personId}")
-                                        .cvClickable({ onNavigate(MobileDestination.Person(person.personId)) }),
+                                        .cvClickable({ markPerson("detail-cast", person.personId); onNavigate(person.destination()) }),
                                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                         PaletteArt(imageUrl(imageBase, "w185", person.profilePath), mobilePalette("person:${person.personId}"), ArtStyle.Person,
-                                            Modifier.size(52.dp).clip(RoundedCornerShape(26.dp)))
+                                            mobileSharedAvatar(person.personId, "detail-cast").size(52.dp).clip(RoundedCornerShape(26.dp)))
                                         Column(Modifier.weight(1f)) { Text(person.name); if (person.role.isNotBlank()) Text(person.role) }
                                         Text("›")
                                     }
@@ -370,22 +383,25 @@ internal fun segmentFill(info: LazyListLayoutInfo, current: Int?): Int? {
     return maxOf(0, pinnable, if (current == null) keepsPosition else minOf(current, keepsPosition))
 }
 
+/** Seeds Person's header with the cast card's photo and name so its shared avatar exists on Person's first frame. */
+private fun CastCredit.destination() = MobileDestination.Person(personId, name, profilePath)
+
 /** What the header's shared poster and title show: the opening card's seed until [Detail] loads, then Detail's own. */
-private data class MobileDetailHeaderArt(val ref: MediaRef, val posterPath: String?, val title: String)
+private data class MobileDetailHeaderArt(val ref: MediaRef, val posterPath: String?, val title: String, val backdropPath: String? = null)
 
 /** [art] null = no card seed (deep link) and still loading: skeleton poster and title; [detail] null = skeleton metadata. */
 @Composable
-private fun DetailHeader(art: MobileDetailHeaderArt?, detail: Detail?, imageBase: String, onNavigate: (MobileDestination) -> Unit) {
+private fun DetailHeader(art: MobileDetailHeaderArt?, origin: String?, detail: Detail?, imageBase: String, onNavigate: (MobileDestination) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy((-60).dp)) {
         Spacer(Modifier.fillMaxWidth().height(240.dp)) // backdrop slot; the image is drawn behind the list
 
         Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
-            if (art == null) Box(Modifier.size(116.dp, 174.dp).shimmer(RoundedCornerShape(18.dp)).testTag("detail-poster-skeleton"))
+            if (art == null || origin == null) Box(Modifier.size(116.dp, 174.dp).shimmer(RoundedCornerShape(18.dp)).testTag("detail-poster-skeleton"))
             else PaletteArt(imageUrl(imageBase, "w342", art.posterPath), mobilePalette(art.ref.key), ArtStyle.Poster,
-                mobileSharedPoster(art.ref).size(116.dp, 174.dp).clip(RoundedCornerShape(18.dp)).testTag("detail-poster"))
+                mobileSharedPoster(origin).size(116.dp, 174.dp).clip(RoundedCornerShape(18.dp)).testTag("detail-poster"))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (art == null) Box(Modifier.fillMaxWidth(0.8f).height(28.dp).shimmer())
-                else Text(art.title, mobileSharedTitle(art.ref), style = displayStyle(27.sp))
+                if (art == null || origin == null) Box(Modifier.fillMaxWidth(0.8f).height(28.dp).shimmer())
+                else Text(art.title, mobileSharedTitle(origin), style = displayStyle(27.sp))
                 if (detail == null) {
                     Box(Modifier.fillMaxWidth(0.6f).height(14.dp).shimmer())
                     Box(Modifier.fillMaxWidth(0.85f).height(14.dp).shimmer())

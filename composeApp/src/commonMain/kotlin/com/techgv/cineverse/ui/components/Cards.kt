@@ -113,12 +113,13 @@ fun LandscapeCard(
     modifier: Modifier = Modifier,
     imageUrl: String? = null,
     width: Dp = Tokens.Size.MobileLandscape.width,
+    artModifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(Tokens.Radius.Card)
     Column(modifier.width(width).cvClickable(onClick, onClickLabel = title, focusShape = shape)) {
         FilledArt(
             imageUrl, palette, ArtStyle.Backdrop, shape,
-            Modifier.fillMaxWidth().aspectRatio(250f / 141f).dropShadow(shape, cardGlow(palette.c1, 0f)),
+            artModifier.fillMaxWidth().aspectRatio(250f / 141f).dropShadow(shape, cardGlow(palette.c1, 0f)),
         ) {
             Text(
                 title, style = displayStyle(17.sp, trackingEm = 0f), color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -140,9 +141,10 @@ fun PersonCircle(
     modifier: Modifier = Modifier,
     imageUrl: String? = null,
     diameter: Dp = Tokens.Size.MobilePerson,
+    artModifier: Modifier = Modifier,
 ) {
     Column(modifier.width(diameter).cvClickable(onClick, onClickLabel = name, focusShape = CircleShape), horizontalAlignment = Alignment.CenterHorizontally) {
-        PaletteArt(imageUrl, palette, ArtStyle.Person, Modifier.size(diameter).dropShadow(CircleShape, cardGlow(palette.c1, 0f)).clip(CircleShape)) {
+        PaletteArt(imageUrl, palette, ArtStyle.Person, artModifier.size(diameter).dropShadow(CircleShape, cardGlow(palette.c1, 0f)).clip(CircleShape)) {
             Initials(name, 30.sp)
         }
         Spacer(Modifier.height(8.dp))
@@ -181,7 +183,8 @@ fun PersonCard(
 
 /** Mobile `.top10`: a 120sp outlined rank overlapped by a 112×168 poster. */
 @Composable
-fun Top10Card(rank: Int, title: String, palette: ArtPalette, onClick: () -> Unit, modifier: Modifier = Modifier, imageUrl: String? = null) {
+fun Top10Card(rank: Int, title: String, palette: ArtPalette, onClick: () -> Unit, modifier: Modifier = Modifier, imageUrl: String? = null,
+              artModifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(Tokens.Radius.Card)
     Row(
         modifier.width(170.dp).height(186.dp)
@@ -199,7 +202,7 @@ fun Top10Card(rank: Int, title: String, palette: ArtPalette, onClick: () -> Unit
         )
         PaletteArt(
             imageUrl, palette, ArtStyle.Poster,
-            Modifier.offset(x = (-26).dp).size(112.dp, 168.dp).dropShadow(shape, cardGlow(palette.c1, 0f)).clip(shape),
+            Modifier.offset(x = (-26).dp).then(artModifier).size(112.dp, 168.dp).dropShadow(shape, cardGlow(palette.c1, 0f)).clip(shape),
             bottomScrim = true,
         ) { PosterTitleOverlay(title, 15.sp, 10.dp, 10.dp) }
     }

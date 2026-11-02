@@ -23,6 +23,7 @@ internal fun MobileDetailUiFixture(
     libraryState: (MobileDetailComponentFixture) -> Flow<LibraryStateSnapshot> = { it.accountState },
     seedPosterPath: String? = null,
     seedTitle: String? = null,
+    seedBackdropPath: String? = null,
     reduceMotion: Boolean = true,
 ) {
     val scope = rememberCoroutineScope()
@@ -31,6 +32,6 @@ internal fun MobileDetailUiFixture(
     DisposableEffect(model) { model.setActive(true); onDispose { model.close(); f.graph.close() } }
     SideEffect { onReady(model, f) }
     CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = reduceMotion)) {
-        ProvideWindowClass { MobileDetailScreen(model, MobileNavigator(onNavigate), onBack, onShare, seedPosterPath, seedTitle) }
+        ProvideWindowClass { MobileDetailScreen(model, MobileNavigator(onNavigate), onBack, onShare, seedPosterPath, seedTitle, seedBackdropPath) }
     }
 }

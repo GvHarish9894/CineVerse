@@ -56,6 +56,8 @@ enum class ButtonVariant(val container: Color, val content: Color) {
     Glass(Color.White.copy(alpha = 0.14f), Color.White),
     /** Secondary: white 10% (web `.btn.ghost`, player controls). */
     Ghost(Color.White.copy(alpha = 0.10f), Color.White),
+    /** Irreversible actions (clear history): tinted danger fill, legible on dark surfaces. */
+    Destructive(Tokens.Colors.Danger.copy(alpha = 0.16f), Tokens.Colors.Danger),
     /** "Sign in with TMDB" on the profile card. */
     White(Color.White, Tokens.Colors.OnFocus),
 }

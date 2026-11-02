@@ -96,7 +96,7 @@ class MobileDetailScreenTest {
         onNodeWithText("Cast", substring = false).performClick()
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-person-431"))
         onNodeWithTag("detail-person-431").performClick()
-        runOnIdle { assertEquals(MobileDestination.Person(431), destinations.last()) }
+        runOnIdle { assertEquals(431, (destinations.last() as MobileDestination.Person).id) }
         onNodeWithText("Videos", substring = false).performClick()
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-video-aB3_dE5-gH7"))
         onNodeWithTag("detail-video-aB3_dE5-gH7").performClick()
@@ -176,7 +176,7 @@ class MobileDetailScreenTest {
         onNodeWithText("Cast", substring = false).performClick()
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-person-531"))
         onNodeWithTag("detail-person-531").performClick()
-        runOnIdle { assertEquals(MobileDestination.Person(531), destinations.single()) }
+        runOnIdle { assertEquals(531, (destinations.single() as MobileDestination.Person).id) }
         onNodeWithText("Reviews", substring = false).performClick()
         onNodeWithTag("mobile-detail").performScrollToNode(hasText("No reviews available."))
         onNodeWithText("No reviews available.").assertIsDisplayed()

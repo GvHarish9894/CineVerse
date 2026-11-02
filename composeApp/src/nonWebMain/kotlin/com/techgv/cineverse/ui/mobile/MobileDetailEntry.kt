@@ -236,7 +236,7 @@ internal fun MobileDetailRouteEntry(
         model.state.map { it.invalid || it.settingsFailed || it.libraryFailed || it.identityFailed }
             .distinctUntilChanged().collect { binding.detailReadsChanged(entry, model) }
     }
-    MobileDetailScreen(model, navigator, onBack, onShare, route.posterPath, route.title)
+    MobileDetailScreen(model, navigator, onBack, onShare, route.posterPath, route.title, route.backdropPath)
 }
 
 @Composable

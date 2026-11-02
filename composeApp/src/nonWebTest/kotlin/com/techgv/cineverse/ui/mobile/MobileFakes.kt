@@ -111,8 +111,13 @@ internal class MobileCatalogApi : MobileUnusedTmdbApi() {
             else -> "movie"
         })
     override suspend fun configuration() = ConfigurationDto()
+    /** A long Cast segment (20 people), so Detail is scrollable well past the first screen. */
+    var richDetail = false
+    /** When set, Detail reads wait for it, e.g. the re-verification on return to a retained Detail. */
+    var detailGate: CompletableDeferred<Unit>? = null
     override suspend fun movieDetail(id: Int, language: String, append: String, sessionId: String?) =
-        MovieDetailDto(id, title = "Detail title $id", overview = "Navigation fixture overview", releaseDate = "2026-01-02")
+        detailGate.let { it?.await() }.let { MovieDetailDto(id, title = "Detail title $id", overview = "Navigation fixture overview", releaseDate = "2026-01-02",
+            credits = if (richDetail) CreditsDto((1..20).map { CastDto(1000 + it, "Cast member $it", "Role $it") }, emptyList()) else null) }
     override suspend fun tvDetail(id: Int, language: String, append: String, sessionId: String?) =
         TvDetailDto(id, name = "TV detail title $id", overview = "Navigation fixture overview", firstAirDate = "2026-01-02")
     override suspend fun genres(media: MediaType, language: String): GenreListDto {

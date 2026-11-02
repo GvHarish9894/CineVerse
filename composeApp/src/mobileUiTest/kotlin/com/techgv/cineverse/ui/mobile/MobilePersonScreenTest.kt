@@ -102,7 +102,7 @@ class MobilePersonScreenTest {
         lateinit var model: MobilePersonViewModel
         lateinit var fixture: MobilePersonComponentFixture
         setContent { MobilePersonUiFixture(saved = saved, configure = { it.api.gate = gate }, onReady = { m, f -> model = m; fixture = f }) }
-        onNodeWithText("Loading person…").assertIsDisplayed()
+        onNodeWithContentDescription("Loading person…").assertIsDisplayed()
         runOnIdle {
             assertEquals(20, saved.get<Int>("person.index")); assertEquals(17, saved.get<Int>("person.offset"))
             gate.complete(Unit)

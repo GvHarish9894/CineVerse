@@ -149,6 +149,7 @@ internal fun MobileTestRoot(
     haptics: Haptics = Haptics.None,
     configureFixture: (MobileFixture) -> Unit = {},
     onReady: (MobileHomeViewModel, MobileFixture) -> Unit = { _, _ -> },
+    reduceMotion: Boolean = true,
 ) {
     val scope = rememberCoroutineScope()
     val fixture = remember { MobileFixture(scope).also(configureFixture) }
@@ -157,7 +158,7 @@ internal fun MobileTestRoot(
     LaunchedEffect(Unit) { fixture.auth.emissions.emit(null) }
     DisposableEffect(Unit) { onDispose { fixture.graph.close() } }
     CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalViewModelStoreOwner provides owner) {
-        CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = true)) {
+        CineVerseTheme(ShellStyle.Mobile, AppearanceSettings(haptics = false, reduceMotion = reduceMotion)) {
             CompositionLocalProvider(LocalHaptics provides haptics) {
                 ProvideWindowClass { MobileShell { MobileRoot(fixture.graph, model, RecordingMobileExternalActions()) } }
             }
