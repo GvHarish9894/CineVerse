@@ -45,7 +45,9 @@ fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester, onR
                 ApprovalStep(1, "Choose Continue to TMDB to open themoviedb.org in a new tab.")
                 ApprovalStep(2, "Approve CineVerse on themoviedb.org, then come back to this tab.")
             }
-            Text(when (state.phase) {
+            // A fresh guest with nothing in flight only needs the two steps; status/cancel copy appears once sign-in starts.
+            val idle = state.phase == WebApprovalPhase.Ready && (state.session as? WebSessionState.Ready)?.let { it.session == null } == true
+            if (!idle) Text(when (state.phase) {
                 WebApprovalPhase.Starting -> "Requesting sign-in. The new tab continues to themoviedb.org once the request is ready."
                 WebApprovalPhase.Waiting -> "Approve CineVerse on themoviedb.org, then come back to this tab. If no tab appeared, allow popups and choose Open TMDB again."
                 WebApprovalPhase.Checking -> "Checking the browser session. This does not retry sign-in or cancellation."
@@ -61,7 +63,7 @@ fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester, onR
                 }
                 else -> "Continue to TMDB when your browser session is verified as signed out."
             }, Modifier.padding(top = 6.dp), style = bodyStyle(15.sp), color = Tokens.Colors.TextPrimary)
-            Text(when (val session = state.session) {
+            if (!idle) Text(when (val session = state.session) {
                 WebSessionState.Checking -> "Browser identity is being verified."
                 is WebSessionState.Failed -> "Browser identity is unknown. Check session before continuing to TMDB."
                 is WebSessionState.Ready -> if (session.session == null) "No verified browser sign-in is currently shown. Returning from TMDB alone is not proof of sign-in."
@@ -73,7 +75,7 @@ fun WebApprovalDialog(owner: WebApprovalOwner, restoreFocus: FocusRequester, onR
                 PillButton("Check session", owner::approvalReturned, variant = ButtonVariant.Ghost, enabled = state.canCheck)
                 PillButton("Not now", owner::dismiss, variant = ButtonVariant.Ghost, enabled = state.phase != WebApprovalPhase.Cancelling)
             }
-            Text("Not now cancels all pending sign-in requests for this browser, including other tabs. It does not sign out an existing session.",
+            if (!idle) Text("Not now cancels all pending sign-in requests for this browser, including other tabs. It does not sign out an existing session.",
                 style = bodyStyle(13.sp), color = Tokens.Colors.TextTertiary)
         }
     }

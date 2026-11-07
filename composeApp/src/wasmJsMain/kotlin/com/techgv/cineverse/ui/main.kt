@@ -13,9 +13,13 @@ import com.techgv.cineverse.util.GenerationCounter
 import com.techgv.cineverse.ui.web.WebApp
 import com.techgv.cineverse.ui.theme.ProvideWebBundledFonts
 import kotlinx.browser.document
+import org.jetbrains.compose.resources.ExperimentalResourceApi
+import org.jetbrains.compose.resources.configureWebResources
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalResourceApi::class)
 fun main() {
+    // Default "./" resolves against location.pathname, so fonts 404 on deep links (/movie/550). Deployed at origin root.
+    configureWebResources { resourcePathMapping { path -> "/$path" } }
     val application = BrowserApplication()
     onPageExit(application::stop)
     // Resolve the graph once at the composition root; screen logic receives typed constructors.

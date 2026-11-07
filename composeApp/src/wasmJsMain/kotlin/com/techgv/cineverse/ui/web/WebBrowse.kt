@@ -43,19 +43,21 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 
 @Composable
-internal fun WebBrowse(entry: WebEntry, catalog: CatalogRepository, generation: GenerationCounter, settings: Flow<Settings>, runtime: WebRuntime, navigate: (WebRoute, Boolean) -> Unit) {
+internal fun WebBrowse(entry: WebEntry, catalog: CatalogRepository, generation: GenerationCounter, settings: Flow<Settings>, runtime: WebRuntime, navigate: (WebRoute, Boolean) -> Unit,
+                       openSeeded: (WebRoute, Map<String, String>) -> Unit = { route, _ -> navigate(route, false) }) {
     val scope = rememberCoroutineScope()
     val holder = remember(entry) { ProductBrowseStateHolder(catalog, generation, settings, entry, entry.route.browseSelection(), scope, runtime::reportStorageFailure) }
     val state by holder.uiState.collectAsState()
     val storage by runtime.storageFailure.collectAsState()
     WebBrowseContent(entry, state, { navigate(it, false) }, holder::loadMore, holder::retry, holder::retryGenres,
-        { runtime.retryStorage(); holder.retryStorage() }, storage)
+        { runtime.retryStorage(); holder.retryStorage() }, storage, openSeeded)
 }
 
 @Composable
 internal fun WebBrowseContent(entry: WebEntry, state: ProductBrowseUiState, navigate: (WebRoute) -> Unit,
                               loadMore: () -> Unit, retry: () -> Unit, retryGenres: () -> Unit,
-                              retryStorage: () -> Unit, storage: BrowserStorageFailure?) {
+                              retryStorage: () -> Unit, storage: BrowserStorageFailure?,
+                              openSeeded: (WebRoute, Map<String, String>) -> Unit = { route, _ -> navigate(route) }) {
     val route = entry.route as? WebRoute.Browse
     val content = (state.grid as? SectionState.Content)?.value
     val targetIndex = remember(entry) { entry.getInt("browse.index") ?: 0 }
@@ -99,9 +101,6 @@ internal fun WebBrowseContent(entry: WebEntry, state: ProductBrowseUiState, navi
         },
         aside = filters,
     ) {
-        if (content != null) item(key = "count", span = { GridItemSpan(maxLineSpan) }) {
-            Text(browseCount(content, people, state), style = bodyStyle(14.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.65f), modifier = Modifier.testTag("browse-count"))
-        }
         when (val grid = state.grid) {
             SectionState.Loading -> items(8, key = { "skeleton-$it" }) { BoxWithConstraints { PosterCardSkeleton(width = maxWidth) } }
             SectionState.Empty -> item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
@@ -115,10 +114,14 @@ internal fun WebBrowseContent(entry: WebEntry, state: ProductBrowseUiState, navi
                     BoxWithConstraints {
                         when (hero) {
                             is Hero.OfPerson -> PersonCard(hero.person.name, hero.person.knownFor.joinToString { it.title }.ifEmpty { hero.person.knownForDepartment.orEmpty() }, palette,
-                                { navigate(hero.route()) }, Modifier.testTag("browse-${hero.key}"), webImage(hero.person.profilePath, "w185"), width = maxWidth)
-                            is Hero.OfTitle -> PosterCard(hero.title.title, formatDate(hero.title.releaseDate) ?: yearOf(hero.title.releaseDate), palette, { navigate(hero.route()) },
+                                // Seeded + shared portrait: the Person page opens with this photo morphing into its portrait.
+                                { openSeeded(hero.route(), hero.person.webPersonSeed()) }, Modifier.testTag("browse-${hero.key}"), webImage(hero.person.profilePath, "w185"),
+                                width = maxWidth, artModifier = Modifier.webSharedPerson(hero.person.id))
+                            is Hero.OfTitle -> PosterCard(hero.title.title, formatDate(hero.title.releaseDate) ?: yearOf(hero.title.releaseDate), palette,
+                                seededOpen(hero.route(), hero.title.webDetailSeed()) { navigate(hero.route()) },
                                 Modifier.testTag("browse-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"),
-                                voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, width = maxWidth, nrRing = true)
+                                voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, width = maxWidth, nrRing = true,
+                                artModifier = Modifier.webSharedPoster(hero.title.ref))
                         }
                     }
                 }
@@ -134,14 +137,6 @@ internal fun WebBrowseContent(entry: WebEntry, state: ProductBrowseUiState, navi
             }
         }
     }
-}
-
-/** "20 titles" (all pages read) or "20+ titles" (more pages exist) — loaded items, never a claimed total; plus the genre filter. */
-private fun browseCount(content: PagedItems, people: Boolean, state: ProductBrowseUiState): String {
-    val n = content.items.size
-    val noun = if (people) (if (n == 1 && !content.hasMore) "person" else "people") else (if (n == 1 && !content.hasMore) "title" else "titles")
-    val genres = (state.selection as? BrowseSelection.Discover)?.genreIds.orEmpty().map { state.genres[it] ?: "Genre $it" }
-    return "$n${if (content.hasMore) "+" else ""} $noun" + if (genres.isEmpty()) "" else " · filtered by ${genres.joinToString()}"
 }
 
 @Composable
@@ -168,7 +163,6 @@ private fun BrowseFilters(route: WebRoute.Browse, state: ProductBrowseUiState, n
         }
     }
     Panel(Modifier.fillMaxWidth(), title = "Genres") {
-        if (state.genresLoading) Text("Loading genres…", style = bodyStyle(14.sp), color = Tokens.Colors.TextPrimary.copy(alpha = 0.65f))
         state.genresError?.let { Box(Modifier.testTag("browse-genres-recovery")) { BrowseError(it, retryGenres) } }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val selected = discover?.genreIds.orEmpty()

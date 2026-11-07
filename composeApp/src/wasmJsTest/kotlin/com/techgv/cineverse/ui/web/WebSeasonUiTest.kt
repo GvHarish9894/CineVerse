@@ -30,7 +30,7 @@ class WebSeasonUiTest {
             owner = remember { fake.owner(scope) }
             val state by owner.state.collectAsState()
             DisposableEffect(owner) { onDispose { owner.close() } }
-            Box(Modifier.width(1200.dp)) { WebSeasonContent(owner, state, today) }
+            Box(Modifier.width(1200.dp)) { WebSeasonContent(owner, state, today) { fake.destinations += WebRoute.Person(it) } }
         }
         waitUntil { owner.state.value.bodyReady }
         onNodeWithText("Real show").assertExists().performClick()
@@ -45,7 +45,15 @@ class WebSeasonUiTest {
         onNodeWithText("Actual overview").assertExists()
         onNodeWithTag("season-7-episode-4").performClick()
         onNodeWithText("Episode details · 4").assertExists()
-        onNodeWithText("Actual guest · Actual role").assertExists()
+        onNodeWithTag("season-guest-33").assertExists()
+        onNodeWithText("Actual guest").assertExists()
+        onNodeWithText("Actual role").assertExists()
+        onNodeWithText("Close details").assertDoesNotExist()
+        onNodeWithTag("season-guest-33").performClick()
+        assertEquals(WebRoute.Person(33), fake.destinations.last())
+        onNodeWithContentDescription("Hide episode details").performClick()
+        onNodeWithText("Episode details · 4").assertDoesNotExist()
+        onNodeWithContentDescription("Hide episode details").assertDoesNotExist()
         onNodeWithText("Play").assertDoesNotExist()
         onNodeWithText("Stream episode").assertDoesNotExist()
     }

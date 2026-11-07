@@ -162,6 +162,7 @@ fun PersonCard(
     modifier: Modifier = Modifier,
     imageUrl: String? = null,
     width: Dp = Tokens.Size.WebPersonCard.width,
+    artModifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(16.dp)
     val source = remember { MutableInteractionSource() }
@@ -171,7 +172,7 @@ fun PersonCard(
     Column(modifier.width(width).cvClickable(onClick, onClickLabel = name, focusShape = shape, interactionSource = source)) {
         PaletteArt(
             imageUrl, palette, ArtStyle.Person,
-            Modifier.fillMaxWidth().aspectRatio(4f / 5f)
+            artModifier.fillMaxWidth().aspectRatio(4f / 5f)
                 .graphicsLayer { translationY = -5.dp.toPx() * lift; scaleX = 1f + 0.03f * lift; scaleY = 1f + 0.03f * lift }
                 .dropShadow(shape, cardGlow(palette.c1, t))
                 .clip(shape),

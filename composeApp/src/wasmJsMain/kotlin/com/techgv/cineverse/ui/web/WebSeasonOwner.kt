@@ -21,8 +21,32 @@ internal class WebSeasonContext(val settings: Settings, val appSnapshot: Long, i
     internal var holder: SeasonStateHolder? = null
 }
 
-internal data class WebSeasonShow(val context: WebSeasonContext, val value: Detail)
-internal data class WebSeasonEpisodes(val context: WebSeasonContext, val value: Season)
+/** [context] is null for a value seeded from [WebSeasonMemory]; [seededWith] is the settings it was loaded with. */
+internal data class WebSeasonShow(val context: WebSeasonContext?, val value: Detail, val seededWith: Settings? = null)
+internal data class WebSeasonEpisodes(val context: WebSeasonContext?, val value: Season, val seededWith: Settings? = null)
+
+/**
+ * Tab-lifetime memory of season pages already shown. Every season chip opens a new route (and owner), so without it
+ * the header and chips vanish and an already-loaded season blanks while its owner starts. Seeds render as retained
+ * (stale, inert) content until the owner's own load replaces them, exactly like a language change.
+ */
+internal class WebSeasonMemory {
+    internal val shows = LinkedHashMap<Int, Pair<Settings, Detail>>()
+    internal val seasons = LinkedHashMap<Pair<Int, Int>, Pair<Settings, Season>>()
+
+    internal fun put(id: Int, settings: Settings, show: Detail) = shows.bounded(id, settings to show)
+    internal fun put(id: Int, number: Int, settings: Settings, season: Season) = seasons.bounded(id to number, settings to season)
+
+    private fun <K, V> LinkedHashMap<K, V>.bounded(key: K, value: V) {
+        remove(key)
+        put(key, value)
+        if (size > MAX_ENTRIES) remove(keys.first())
+    }
+
+    private companion object { const val MAX_ENTRIES = 64 }
+}
+
+private fun Settings.sameContent(other: Settings) = language == other.language && region == other.region
 internal data class WebSeasonState(
     val invalidSavedState: Boolean = false,
     val reader: WebSeasonReader = WebSeasonReader.Unknown,
@@ -68,6 +92,7 @@ internal class WebSeasonOwner(
     private val onBack: () -> Unit,
     private val onShow: (Int) -> Unit,
     private val onSeason: (Int, Int) -> Unit,
+    private val memory: WebSeasonMemory = WebSeasonMemory(),
 ) {
     // Validate before creating any scope, subscription or holder. Invalid raw history is never repaired.
     private val saved = validateWebSeason(entry)
@@ -81,7 +106,13 @@ internal class WebSeasonOwner(
     private var readerJob: Job? = null
     private var rawSettings: Settings? = null
     private var context: WebSeasonContext? = null
-    private val mutableState = MutableStateFlow(WebSeasonState(invalidSavedState = saved == null))
+    private val mutableState = MutableStateFlow(
+        if (saved == null || route == null) WebSeasonState(invalidSavedState = true)
+        else WebSeasonState(
+            retainedShow = memory.shows[route.id]?.let { (with, show) -> WebSeasonShow(null, show, with) },
+            retainedSeason = memory.seasons[route.id to route.number]?.let { (with, season) -> WebSeasonEpisodes(null, season, with) },
+        ),
+    )
     val state: StateFlow<WebSeasonState> = mutableState.asStateFlow()
 
     init {
@@ -146,7 +177,10 @@ internal class WebSeasonOwner(
                     revokeHolder()
                     if (!readerCurrent(epoch)) return@collect
                     rawSettings = captured
-                    mutableState.value = state.value.copy(reader = WebSeasonReader.Ready(captured, epoch), context = null, current = null)
+                    // Seeds loaded for another language/region are dropped; this owner's own retained values stay.
+                    mutableState.value = state.value.copy(reader = WebSeasonReader.Ready(captured, epoch), context = null, current = null,
+                        retainedShow = state.value.retainedShow?.takeUnless { it.seededWith?.sameContent(captured) == false },
+                        retainedSeason = state.value.retainedSeason?.takeUnless { it.seededWith?.sameContent(captured) == false })
                     if (readerCurrent(epoch) && rawSettings == captured) replaceHolder(captured, epoch)
                 }
             } catch (failure: StorageException) {
@@ -219,6 +253,8 @@ internal class WebSeasonOwner(
             episodes is SectionState.Content && episodes.value.episodes.any { it.episodeNumber == number }
         }
         val safe = result.copy(show = show, episodes = episodes, openEpisode = panel)
+        if (show is SectionState.Content) memory.put(route!!.id, token.settings, show.value)
+        if (episodes is SectionState.Content) memory.put(route!!.id, route.number, token.settings, episodes.value)
         mutableState.value = state.value.copy(current = safe,
             retainedShow = if (show is SectionState.Content) WebSeasonShow(token, show.value) else state.value.retainedShow,
             retainedSeason = if (episodes is SectionState.Content) WebSeasonEpisodes(token, episodes.value) else state.value.retainedSeason)

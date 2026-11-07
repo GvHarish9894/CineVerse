@@ -167,7 +167,7 @@ class WebHomeTest {
         setThemedContent(ShellStyle.Web) { WebPlaceholder(route) { next, _ -> route = next } }
         onNodeWithText("Open this trailer from its title page. No video is playing.").assertExists()
         runOnIdle { route = WebRoute.NotFound }
-        onNodeWithText("This URL is unknown or invalid. No account operation was performed.").assertExists()
+        onNodeWithText("We couldn't find that page. Check the link, or head back home.").assertExists()
     }
 
     @Test fun settingsAndGenreDiagnosticsOfferExplicitRecoveryWithoutReplacingContent() = runComposeUiTest {

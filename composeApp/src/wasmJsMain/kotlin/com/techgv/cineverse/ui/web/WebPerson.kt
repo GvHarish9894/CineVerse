@@ -92,7 +92,7 @@ fun WebPerson(
     val state by owner.state.collectAsState()
     val failure by storage.collectAsState()
     WebPersonContent(owner.validated, state, failure, owner::retryReads, owner::retryPerson,
-        owner::toggleBiography, owner::openTitle, owner::back, owner::saveScroll)
+        owner::toggleBiography, owner::openTitle, owner::back, owner::saveScroll, remember(entry) { entry.webPersonSeed() })
 }
 
 @Composable
@@ -106,12 +106,15 @@ internal fun WebPersonContent(
     navigate: (WebPersonReadState, MediaRef) -> Unit,
     back: (WebPersonReadState) -> Unit,
     saveScroll: (WebPersonReadState, Int, Int) -> Unit,
+    seed: WebPersonSeed? = null,
 ) {
     val scroll = remember(entry) { LazyListState() }
     var restored by remember(entry) { mutableStateOf(false) }
     val currentState by rememberUpdatedState(state)
     val currentSave by rememberUpdatedState(saveScroll)
     val person = state.displayed?.takeIf { it.id == entry.id }
+    // The People card's seed fills the portrait and name only while the first read loads; errors render as without one.
+    val shownSeed = if (person == null && state.section == SectionState.Loading) seed else null
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val desktop = this.maxWidth > 860.dp
         // Desktop renders known-for and credits inside the right column (one profile item); narrow keeps one item per credit.
@@ -138,39 +141,49 @@ internal fun WebPersonContent(
                     if (state.reader == WebPersonReader.Failed) ErrorState(
                         "Saved preferences could not be read. Person content is unverified; saved data was not changed.",
                         retryReads, Modifier.testTag("person-settings-recovery"))
-                    if (person != null && !state.verified) Text("Previously loaded person · stale / unverified until replacement content completes.")
                     when (val section = state.section) {
                         SectionState.Loading -> (if (state.reader == WebPersonReader.Unknown) "Verifying saved preferences…" else "Loading person…")
-                            .let { if (person == null) WebPersonSkeleton(it) else Text(it) }
+                            .let { if (person == null && shownSeed == null) WebPersonSkeleton(it) }
                         SectionState.Empty -> EmptyState("Person unavailable", "No person was returned.")
                         is SectionState.Error -> WebPersonError(section.kind) { retryPerson(state) }
                         is SectionState.Content -> Unit
                     }
                 } }
             }
+            // One profile item for seed and person, so the shared portrait stays mounted when the person arrives.
+            if (person != null || shownSeed != null) item("profile") {
+                val name = person?.name ?: shownSeed!!.name
+                val photo = if (person != null) person.profilePath else shownSeed?.profilePath
+                WebPage {
+                    if (desktop) Row(Modifier.fillMaxWidth().testTag("person-desktop"), horizontalArrangement = Arrangement.spacedBy(36.dp)) {
+                        WebPersonInfo(entry.id, name, photo, person, Modifier.width(300.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(30.dp)) {
+                            if (person == null) WebPersonSeedBody(name)
+                            else {
+                                WebPersonBiography(person, state, toggleBiography, Modifier.fillMaxWidth())
+                                WebPersonKnownFor(person, state, navigate)
+                                Column {
+                                    WebPersonCreditsHeading(person)
+                                    // shortcut: credits compose eagerly in the right column; window them if very long filmographies get slow.
+                                    person.credits.forEachIndexed { index, credit ->
+                                        key(credit.ref.key) {
+                                            WebPersonCreditRow(credit, index == 0, index == person.credits.lastIndex, state.verified) { navigate(state, credit.ref) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else Column(Modifier.fillMaxWidth().testTag("person-narrow"), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                        WebPersonInfo(entry.id, name, photo, person, Modifier.widthIn(max = 300.dp))
+                        if (person == null) WebPersonSeedBody(name)
+                        else WebPersonBiography(person, state, toggleBiography, Modifier.fillMaxWidth())
+                    }
+                }
+            }
             if (person != null) {
                 val knownFor = @Composable { WebPersonKnownFor(person, state, navigate) }
                 val creditRow = @Composable { index: Int, credit: PersonCredit ->
                     WebPersonCreditRow(credit, index == 0, index == person.credits.lastIndex, state.verified) { navigate(state, credit.ref) }
-                }
-                item("profile") {
-                    WebPage {
-                        if (desktop) Row(Modifier.fillMaxWidth().testTag("person-desktop"), horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-                            WebPersonInfo(person, Modifier.width(300.dp))
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(30.dp)) {
-                                WebPersonBiography(person, state, toggleBiography, Modifier.fillMaxWidth())
-                                knownFor()
-                                Column {
-                                    WebPersonCreditsHeading(person)
-                                    // shortcut: credits compose eagerly in the right column; window them if very long filmographies get slow.
-                                    person.credits.forEachIndexed { index, credit -> key(credit.ref.key) { creditRow(index, credit) } }
-                                }
-                            }
-                        } else Column(Modifier.fillMaxWidth().testTag("person-narrow"), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                            WebPersonInfo(person, Modifier.widthIn(max = 300.dp))
-                            WebPersonBiography(person, state, toggleBiography, Modifier.fillMaxWidth())
-                        }
-                    }
                 }
                 if (!desktop) {
                     item("known-for") { WebPage { knownFor() } }
@@ -199,14 +212,28 @@ private fun WebPersonSkeleton(label: String) {
     }
 }
 
+/** Name heading and loading lines while only the People card's seed is known. */
 @Composable
-private fun WebPersonInfo(person: PersonDetail, modifier: Modifier) {
+private fun WebPersonSeedBody(name: String) {
+    Column(Modifier.fillMaxWidth().semantics { contentDescription = "Loading person…"; liveRegion = LiveRegionMode.Polite }) {
+        Text(name.ifBlank { "Unknown person" }, style = displayStyle(48.sp, trackingEm = -0.03f).copy(lineHeight = 1.05.em),
+            modifier = Modifier.semantics { heading() })
+        SkeletonLines(4, Modifier.padding(top = 24.dp).widthIn(max = 820.dp))
+    }
+}
+
+/** Portrait (shared with the People card) and, once the person has loaded, the personal-info facts. */
+@Composable
+private fun WebPersonInfo(id: Int, name: String, profilePath: String?, person: PersonDetail?, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
         val shape = RoundedCornerShape(22.dp)
-        PaletteArt(webImage(person.profilePath, "w342"), personPalette, ArtStyle.Person,
-            Modifier.fillMaxWidth().aspectRatio(2f / 3f)
+        PaletteArt(webImage(profilePath, "w342"), personPalette, ArtStyle.Person,
+            Modifier.webSharedPerson(id).fillMaxWidth().aspectRatio(2f / 3f)
                 .dropShadow(shape, Shadow(60.dp, personPalette.c1.copy(alpha = 0.5f), (-26).dp, DpOffset(0.dp, 40.dp))).clip(shape)
-                .semantics { contentDescription = "Portrait of ${person.name.ifBlank { "unknown person" }}" })
+                .semantics { contentDescription = "Portrait of ${name.ifBlank { "unknown person" }}" },
+            // The People card's smaller rendition is already in memory: shown at once while w342 loads.
+            placeholderUrl = webImage(profilePath, "w185"))
+        if (person == null) return@Column
         // Only facts the person record actually carries; a missing deathday is not a row.
         val facts = listOfNotNull(
             person.department?.takeIf { it.isNotBlank() }?.let { "Known for" to it },
@@ -252,13 +279,14 @@ private fun WebPersonKnownFor(person: PersonDetail, state: WebPersonReadState, n
     }
     Column {
         WebSectionHeader("Known for")
-        LazyRow(contentPadding = PaddingValues(top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        LazyRow(Modifier.ringBleed(), contentPadding = PaddingValues(start = RingBleed, end = RingBleed, top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             items(person.knownFor.distinctBy { it.ref }, key = { it.ref.key }) { title ->
                 Column {
                     if (state.verified) PosterCard(title.title.ifBlank { "Unknown title" }, formatDate(title.releaseDate), personPalette,
-                        { navigate(state, title.ref) }, Modifier.testTag("person-known-${title.ref.key}"),
+                        seededOpen(WebRoute.Detail(title.ref.mediaType.path, title.ref.id), title.webDetailSeed()) { navigate(state, title.ref) },
+                        Modifier.testTag("person-known-${title.ref.key}"),
                         imageUrl = webImage(title.posterPath, "w342"), voteAverage = title.voteAverage,
-                        voteCount = title.voteCount.takeIf { it > 0 } ?: 0)
+                        voteCount = title.voteCount.takeIf { it > 0 } ?: 0, artModifier = Modifier.webSharedPoster(title.ref))
                     else Column(Modifier.width(180.dp).testTag("person-stale-known-${title.ref.key}")) {
                         PaletteArt(webImage(title.posterPath, "w342"), personPalette, ArtStyle.Poster,
                             Modifier.fillMaxWidth().aspectRatio(2f / 3f))

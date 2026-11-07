@@ -169,9 +169,11 @@ internal fun WebDetailContent(
             if (recommendations.isNotEmpty()) item("recommendations") {
                 ScrollRow("Recommendations") {
                     items(recommendations, key = { "${it.mediaType.path}:${it.ref.id}" }) { title ->
-                        PosterCard(title.title, formatDate(title.releaseDate), detailPalette, { navigate(WebRoute.Detail(title.mediaType.path, title.ref.id)) },
+                        val route = WebRoute.Detail(title.mediaType.path, title.ref.id)
+                        PosterCard(title.title, formatDate(title.releaseDate), detailPalette, seededOpen(route, title.webDetailSeed()) { navigate(route) },
                             Modifier.testTag("detail-recommendation-${title.mediaType.path}-${title.ref.id}"),
-                            imageUrl = webImage(title.posterPath, "w342"), voteAverage = title.voteAverage, voteCount = title.voteCount)
+                            imageUrl = webImage(title.posterPath, "w342"), voteAverage = title.voteAverage, voteCount = title.voteCount,
+                            artModifier = Modifier.webSharedPoster(title.ref))
                     }
                 }
             }
@@ -344,11 +346,15 @@ private fun WebDetailMain(detail: Detail, navigate: (WebRoute) -> Unit, playTrai
         val cast = detail.webDetailCast()
         if (cast.isNotEmpty()) Column {
             WebSectionHeader("Top billed cast")
-            LazyRow(contentPadding = PaddingValues(top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            LazyRow(Modifier.ringBleed(), contentPadding = PaddingValues(start = RingBleed, end = RingBleed, top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                // One shared portrait per person: someone billed twice (two roles) morphs from the first card only.
+                val firstCard = cast.distinctBy { it.personId }.toSet()
                 items(cast, key = { "${it.personId}:${it.role}" }) { person ->
+                    val route = WebRoute.Person(person.personId)
                     PersonCard(person.name, person.role.takeIf { it.isNotBlank() }, detailPalette,
-                        { navigate(WebRoute.Person(person.personId)) }, Modifier.testTag("detail-person-${person.personId}"),
-                        webImage(person.profilePath, "w185"), width = 150.dp)
+                        seededOpen(route, webPersonSeed(person.name, person.profilePath)) { navigate(route) }, Modifier.testTag("detail-person-${person.personId}"),
+                        webImage(person.profilePath, "w185"), width = 150.dp,
+                        artModifier = if (person in firstCard) Modifier.webSharedPerson(person.personId) else Modifier)
                 }
             }
         }
@@ -366,7 +372,7 @@ private fun WebDetailMain(detail: Detail, navigate: (WebRoute) -> Unit, playTrai
         val videos = detail.webDetailVideos()
         if (videos.isNotEmpty()) Column {
             WebSectionHeader("Videos")
-            LazyRow(contentPadding = PaddingValues(top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            LazyRow(Modifier.ringBleed(), contentPadding = PaddingValues(start = RingBleed, end = RingBleed, top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 items(videos, key = { it.key }) { video ->
                     val trigger = rememberWebModalTrigger(WebModalKind.Trailer)
                     VideoCard(video.name.ifBlank { video.type }, video.type.takeIf { it.isNotBlank() }, detailPalette,

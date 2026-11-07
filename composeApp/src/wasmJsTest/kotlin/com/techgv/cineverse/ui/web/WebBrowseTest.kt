@@ -32,7 +32,7 @@ class WebBrowseTest {
         onNodeWithText("What people are watching on TMDB this week").assertExists()
         onNodeWithText("Upcoming").assertIsSelected()
         // One page read and more exist: the loaded count is never presented as a total.
-        onNodeWithTag("browse-count").assert(hasText("1+ titles"))
+        onNodeWithTag("browse-count").assertDoesNotExist()
         onNodeWithText("loaded", substring = true).assertDoesNotExist()
         onNodeWithText("Curated TMDB list", substring = true).assertDoesNotExist()
         onNodeWithTag("browse-movie:7").performClick()
@@ -53,7 +53,7 @@ class WebBrowseTest {
         assertEquals(WebRoute.Browse("movie", "discover", genres = listOf(28)), next)
         onNodeWithText("Action").assertIsSelected()
         onNodeWithText("Upcoming").assertIsNotSelected()
-        onNodeWithTag("browse-count").assert(hasText("1+ titles · filtered by Action"))
+        onNodeWithTag("browse-count").assertDoesNotExist()
         onNodeWithText("Clear genres").performClick()
         assertEquals(WebRoute.Browse("movie", "discover"), next)
         onNodeWithText("Upcoming").performClick()
@@ -90,7 +90,7 @@ class WebBrowseTest {
         onNodeWithText("Loaded film").assertExists()
         onNodeWithText("SORT").assertDoesNotExist()
         onNodeWithText("GENRES").assertDoesNotExist()
-        onNodeWithTag("browse-count").assert(hasText("1 person"))
+        onNodeWithTag("browse-count").assertDoesNotExist()
         onNodeWithTag("browse-person:42").performClick()
         assertEquals(WebRoute.Person(42), next)
     }
@@ -101,7 +101,7 @@ class WebBrowseTest {
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             WebBrowseContent(entry("/movies?list=upcoming"), read, {}, {}, {}, {}, {}, null)
         }
-        onNodeWithTag("browse-count").assert(hasText("2 titles"))
+        onNodeWithTag("browse-count").assertDoesNotExist()
         onNodeWithContentDescription("User score 81 percent", useUnmergedTree = true).assertExists()
         onNodeWithContentDescription("Not rated", useUnmergedTree = true).assertExists()
         onNodeWithContentDescription("User score 70 percent", useUnmergedTree = true).assertDoesNotExist()

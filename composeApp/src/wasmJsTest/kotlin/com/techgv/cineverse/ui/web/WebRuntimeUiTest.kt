@@ -202,7 +202,7 @@ class WebRuntimeUiTest {
             onNodeWithTag("browse-movie:7").assertExists()
             assertTrue(f.reads.any { it.path == "/api/tmdb/movie/upcoming" })
             onNodeWithText("Action").performClick()
-            waitUntil { onAllNodes(hasTestTag("browse-count") and hasText("filtered by Action", substring = true)).fetchSemanticsNodes().isNotEmpty() }; onNode(hasText("Upcoming") and isSelectable()).assertIsNotSelected()
+            waitUntil { f.reads.any { it.path == "/api/tmdb/discover/movie" && it.genres == "28" } }; onNode(hasText("Upcoming") and isSelectable()).assertIsNotSelected()
             waitUntil { f.reads.any { it.path == "/api/tmdb/discover/movie" && it.genres == "28" && it.sort == "popularity.desc" } }
             runOnIdle { history.back() }
             onNode(hasText("Upcoming") and isSelectable()).assertIsSelected()
@@ -299,7 +299,6 @@ class WebRuntimeUiTest {
             onNodeWithText("Retry").performClick()
             waitUntil { f.reads.count { it.page == "2" } == 2 }
             onNodeWithTag("browse-movie:8").assertExists()
-            onNodeWithTag("browse-count").assert(hasText("2 titles"))
         } finally { f.close() }
     }
 

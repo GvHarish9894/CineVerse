@@ -15,7 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
@@ -26,7 +29,13 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -44,12 +53,32 @@ val MinTouchTarget = 48.dp
 /** Disabled controls fade to Material's 38% (semantics come from `cvClickable(enabled = false)`). */
 fun Modifier.disabledAlpha(enabled: Boolean): Modifier = if (enabled) this else alpha(0.38f)
 
+/** Whether the last press came from the keyboard; mouse/touch presses hide focus rings (CSS `:focus-visible`). */
+class InputModality {
+    var keyboard by mutableStateOf(true)
+}
+
+/** Null (no tracking host): rings show on every focus, as before. */
+val LocalInputModality = staticCompositionLocalOf<InputModality?> { null }
+
+/** Root hook: key presses turn focus rings on, pointer presses turn them off. */
+fun Modifier.trackInputModality(modality: InputModality): Modifier =
+    onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) modality.keyboard = true; false }
+        .pointerInput(modality) {
+            awaitPointerEventScope {
+                while (true) {
+                    if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) modality.keyboard = false
+                }
+            }
+        }
+
 /** Keyboard focus ring from the web kit: 2px white outline, 3px outside the element, following its [shape]. */
 fun Modifier.focusRing(interactionSource: InteractionSource, shape: Shape): Modifier = composed {
     val focused by interactionSource.collectIsFocusedAsState()
+    val modality = LocalInputModality.current
     drawWithContent {
         drawContent()
-        if (focused) {
+        if (focused && modality?.keyboard != false) {
             val width = 2.dp.toPx()
             val inset = 3.dp.toPx() + width / 2
             val outline = shape.createOutline(Size(size.width + 2 * inset, size.height + 2 * inset), layoutDirection, this)

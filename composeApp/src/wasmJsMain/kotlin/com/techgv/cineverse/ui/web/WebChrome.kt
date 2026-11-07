@@ -90,6 +90,22 @@ fun Modifier.webGutter(): Modifier = layout { measurable, constraints ->
     layout(inner.width + 2 * gutter, inner.height) { inner.place(gutter, 0) }
 }
 
+/** Room for the 3dp + 2dp focus ring outside a card ([focusRing]). */
+val RingBleed = 6.dp
+
+/**
+ * A horizontal LazyRow clips its items at its own edges, cutting the focus ring of the first/last card. This widens
+ * the row by [RingBleed] on each side without moving it; pair with `contentPadding` start/end = [RingBleed].
+ */
+fun Modifier.ringBleed(): Modifier = layout { measurable, constraints ->
+    val extra = RingBleed.roundToPx()
+    val placeable = measurable.measure(
+        if (constraints.hasBoundedWidth) constraints.copy(minWidth = constraints.minWidth + 2 * extra, maxWidth = constraints.maxWidth + 2 * extra)
+        else constraints,
+    )
+    layout((placeable.width - 2 * extra).coerceAtLeast(0), placeable.height) { placeable.place(-extra, 0) }
+}
+
 /** A page section in the [webGutter] column (use one per LazyColumn item). */
 @Composable
 fun WebPage(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {

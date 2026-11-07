@@ -129,7 +129,13 @@ class WebNavigation(private val history: WebHistory) {
         entry.changed = { if (!closed && current.value === entry) history.replace(history.url, entry.encoded()) }
         if (entry.route != WebRoute.NotFound) history.replace(entry.route.url(), entry.encoded())
     }
-    /** [seed] starts the new entry's scalars (optional display data such as [webDetailSeed]); it never changes the URL. */
+    /** Display seeds a clicked card offers for the route it is about to open (see [WebSeedOffer]). */
+    val seeds = WebSeedOffer()
+
+    /**
+     * [seed] starts the new entry's scalars (optional display data such as [webDetailSeed]); it never changes the URL.
+     * Without one, a seed the clicked card just offered for exactly this route is used.
+     */
     fun navigate(route: WebRoute, replace: Boolean = false, seed: Map<String, String> = emptyMap()) {
         if (closed) return
         val url = route.url()
@@ -139,7 +145,7 @@ class WebNavigation(private val history: WebHistory) {
             current.value.replaceSearch(valid) { history.replace(url, it) }
             return
         }
-        val values = seed.toMutableMap()
+        val values = seed.ifEmpty { seeds.take(valid) }.toMutableMap()
         if (valid is WebRoute.Search) valid.saveSearchInput(values)
         val next = WebEntry(valid, values)
         if (replace) history.replace(url, next.encoded()) else history.push(url, next.encoded())
@@ -149,3 +155,17 @@ class WebNavigation(private val history: WebHistory) {
     }
     fun close() { if (!closed) { closed = true; current.value.changed = {}; unlisten() } }
 }
+
+/**
+ * A card's display seed for the route it opens (title + poster, or name + photo), offered at click time just before
+ * the card's own navigate call. Consumed only by a navigate to exactly that route, and only once; anything else drops it.
+ * Lets every card (rows, grids, cast, guest stars, results) seed its page without threading seeds through each screen.
+ */
+class WebSeedOffer {
+    private var offer: Pair<WebRoute, Map<String, String>>? = null
+    fun offer(route: WebRoute, seed: Map<String, String>) { offer = route to seed }
+    internal fun take(route: WebRoute): Map<String, String> = offer.also { offer = null }?.takeIf { it.first == route }?.second.orEmpty()
+}
+
+/** The root navigation's seed offer; null outside the web root (tests, previews): cards then simply navigate unseeded. */
+val LocalWebSeedOffer = androidx.compose.runtime.staticCompositionLocalOf<WebSeedOffer?> { null }

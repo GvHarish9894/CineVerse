@@ -232,7 +232,9 @@ private fun HomeSection(row: HomeRow, section: SectionState<PagedItems>, saver: 
             ScrollRow(title, state = savedScroll(saver, row.key), headerTrailing = trailing) {
                 items(section.value.items, key = { it.key }) { hero ->
                     when (hero) {
-                        is Hero.OfPerson -> PersonCard(hero.person.name, hero.person.knownForDepartment, webPalette(hero.key), { navigate(hero.route()) }, imageUrl = webImage(hero.person.profilePath, "w185"))
+                        is Hero.OfPerson -> PersonCard(hero.person.name, hero.person.knownForDepartment, webPalette(hero.key),
+                            seededOpen(hero.route(), hero.person.webPersonSeed()) { navigate(hero.route()) }, imageUrl = webImage(hero.person.profilePath, "w185"),
+                            artModifier = Modifier.webSharedPerson(hero.person.id))
                         is Hero.OfTitle -> PosterCard(hero.title.title, formatDate(hero.title.releaseDate)?.let { if (row == HomeRow.Upcoming) "Coming $it" else it },
                             webPalette(hero.key), { openDetail(hero.route(), hero.title.webDetailSeed()) }, modifier = Modifier.testTag("home-${row.key}-${hero.key}"), imageUrl = webImage(hero.title.posterPath, "w342"),
                             voteAverage = hero.title.voteAverage, voteCount = hero.title.voteCount, artModifier = Modifier.webSharedPoster(hero.title.ref))

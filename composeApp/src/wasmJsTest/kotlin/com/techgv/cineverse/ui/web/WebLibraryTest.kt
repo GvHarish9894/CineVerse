@@ -26,6 +26,22 @@ class WebLibraryTest {
         tv = LibraryGroup(SectionState.Content(listOf(LibraryEntry(webLibraryTitle(MediaType.Tv, 82), 9.5)))))
     private val pages = mapOf(MediaType.Movie to null, MediaType.Tv to null)
 
+    @Test fun tabSwitchKeepsPreviousContentUntilTheNewTabResolvesWithoutHeadingFlash() = runComposeUiTest {
+        var own by mutableStateOf<LibraryUiState?>(null)
+        val empty = LibraryUiState(tab = LibraryTab.Favourites, movies = LibraryGroup(SectionState.Empty), tv = LibraryGroup(SectionState.Empty))
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
+            WebLibraryContent(webLibraryEntry(LibraryTab.Favourites), own, pages, null, {}, {}, {}, {}, {}, previous = state(LibraryTab.Watchlist))
+        }
+        // The new tab's own state is unknown: the previous tab's content stays, with no count claimed for the new tab.
+        onNodeWithTag("library-movie-71").assertExists()
+        onNodeWithText("Favourites ·", substring = true).assertDoesNotExist()
+        onNodeWithText("Library source is not yet verified", substring = true).assertDoesNotExist()
+        runOnIdle { own = empty }
+        onNodeWithText("No favourites yet").assertExists()
+        onNodeWithText("Movies").assertDoesNotExist()
+        onNodeWithTag("library-movie-71").assertDoesNotExist()
+    }
+
     @Test fun ratingsShowGoldBadgesTwoSectionsOneFooterAndOnlyKnownActiveCount() = runComposeUiTest {
         var next: WebRoute? = null
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
@@ -82,6 +98,12 @@ class WebLibraryTest {
         setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = true)) {
             WebLibraryContent(webLibraryEntry(), null, pages, null, {}, {}, {}, {}, { verifies++ })
         }
+        // A brief unknown state (every tab switch) is only a skeleton; the notice waits until it is really stuck.
+        mainClock.autoAdvance = false
+        mainClock.advanceTimeByFrame()
+        onNodeWithText("Library source is not yet verified. No private entries are shown.").assertDoesNotExist()
+        mainClock.autoAdvance = true
+        mainClock.advanceTimeBy(5_000)
         onNodeWithText("Library source is not yet verified. No private entries are shown.").assertExists()
         onNodeWithTag("library-movie-71").assertDoesNotExist()
         onNodeWithText("Saved in this browser", substring = true).assertDoesNotExist()

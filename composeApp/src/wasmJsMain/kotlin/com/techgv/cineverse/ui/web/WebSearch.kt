@@ -73,18 +73,21 @@ internal class WebSearchOwner(
 
 @Composable
 internal fun WebSearch(owner: WebSearchOwner, storage: BrowserStorageFailure?, retryStorage: () -> Unit,
-                       navigate: (WebRoute, Boolean) -> Unit, focused: (Boolean) -> Unit) {
+                       navigate: (WebRoute, Boolean) -> Unit,
+                       openDetail: (WebRoute, Map<String, String>) -> Unit = { route, _ -> navigate(route, false) },
+                       focused: (Boolean) -> Unit) {
     val state by owner.holder.uiState.collectAsState()
     WebSearchContent(owner.entry, state, owner.query, owner.invalidUrl, owner::change, owner::submit, owner::choose, owner::facet,
         owner.holder::clearRecentQueries, owner.holder::loadMore, owner.holder::retry,
-        retryStorage, storage, { navigate(it, false) }, focused)
+        retryStorage, storage, { navigate(it, false) }, focused, openDetail)
 }
 
 @Composable
 internal fun WebSearchContent(entry: WebEntry, state: ProductSearchUiState, query: String, invalidUrl: Boolean,
                               change: (String) -> Unit, submit: () -> Unit, choose: (String) -> Unit, facet: (SearchFacet) -> Unit,
                               clearRecent: () -> Unit, loadMore: () -> Unit, retry: () -> Unit, retryStorage: () -> Unit,
-                              storage: BrowserStorageFailure?, navigate: (WebRoute) -> Unit, focused: (Boolean) -> Unit = {}) {
+                              storage: BrowserStorageFailure?, navigate: (WebRoute) -> Unit, focused: (Boolean) -> Unit = {},
+                              openDetail: (WebRoute, Map<String, String>) -> Unit = { route, _ -> navigate(route) }) {
     Column(Modifier.fillMaxSize()) {
         // The field stays outside the lazy results so typing never loses focus to item disposal.
         WebPage {
@@ -111,7 +114,7 @@ internal fun WebSearchContent(entry: WebEntry, state: ProductSearchUiState, quer
             }
         }
         if (!invalidUrl && state.inputError == null) Box(Modifier.weight(1f).padding(top = 12.dp)) {
-            SearchResults(entry, state, choose, clearRecent, facet, loadMore, retry, navigate)
+            SearchResults(entry, state, choose, clearRecent, facet, loadMore, retry, navigate, openDetail)
         } else Spacer(Modifier.weight(1f))
     }
 }
@@ -155,7 +158,8 @@ private fun SearchFacets(state: ProductSearchUiState, wide: Boolean, select: (Se
 
 @Composable
 private fun SearchResults(entry: WebEntry, state: ProductSearchUiState, choose: (String) -> Unit, clearRecent: () -> Unit, facet: (SearchFacet) -> Unit,
-                          loadMore: () -> Unit, retry: () -> Unit, navigate: (WebRoute) -> Unit) {
+                          loadMore: () -> Unit, retry: () -> Unit, navigate: (WebRoute) -> Unit,
+                          openDetail: (WebRoute, Map<String, String>) -> Unit) {
     val source = state.normalizedQuery to state.facet
     val targetPage = remember(entry, source) { entry.getInt("search.page") ?: 1 }
     val targetIndex = remember(entry, source) { entry.getInt("search.index") ?: 0 }
@@ -204,7 +208,11 @@ private fun SearchResults(entry: WebEntry, state: ProductSearchUiState, choose: 
             }
             is SectionState.Error -> item(key = "error", span = full) { SearchError(result.kind, retry) }
             is SectionState.Content -> {
-                items(result.value.items, key = { it.key }) { hero -> SearchResultRow(hero) { navigate(hero.route()) } }
+                items(result.value.items, key = { it.key }) { hero ->
+                    // Seeds (title + poster / name + photo) so the page opens with the shared art, never an empty skeleton.
+                    val openPerson = (hero as? Hero.OfPerson)?.let { seededOpen(hero.route(), it.person.webPersonSeed()) { navigate(hero.route()) } }
+                    SearchResultRow(hero) { if (hero is Hero.OfTitle) openDetail(hero.route(), hero.title.webDetailSeed()) else openPerson?.invoke() }
+                }
                 if (result.value.loadingMore && result.value.moreError == null) items(2, key = { "more-skeleton-$it" }) { SearchRowSkeleton() }
                 item(key = "more", span = full) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -244,9 +252,10 @@ private fun SearchResultRow(hero: Hero, open: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         val palette = ArtPalette(Tokens.Colors.Accent, Tokens.Colors.Secondary)
-        if (person != null) PaletteArt(webImage(person.profilePath, "w185"), palette, ArtStyle.Person, Modifier.size(86.dp).clip(CircleShape)) {
+        if (person != null) PaletteArt(webImage(person.profilePath, "w185"), palette, ArtStyle.Person, Modifier.webSharedPerson(person.id).size(86.dp).clip(CircleShape)) {
             Text(initialsOf(person.name), Modifier.align(Alignment.Center), style = displayStyle(26.sp), color = Color.White)
-        } else PaletteArt(webImage(title!!.posterPath, "w185"), palette, ArtStyle.Poster, Modifier.width(86.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)))
+        } else PaletteArt(webImage(title!!.posterPath, "w185"), palette, ArtStyle.Poster,
+            Modifier.webSharedPoster(title.ref).width(86.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)))
         Column(Modifier.weight(1f).padding(top = 4.dp)) {
             Text(name, style = bodyStyle(18.sp, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(meta.joinToString(" · "), Modifier.padding(top = 2.dp), style = bodyStyle(13.5.sp), color = Muted)

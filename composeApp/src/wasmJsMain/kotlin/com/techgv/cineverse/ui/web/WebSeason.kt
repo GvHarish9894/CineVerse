@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -59,6 +61,8 @@ internal fun WebSeason(
     onBack: () -> Unit,
     onShow: (Int) -> Unit,
     onSeason: (Int, Int) -> Unit,
+    memory: WebSeasonMemory,
+    onPerson: (Int) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val currentRetry by rememberUpdatedState(retryUpstream)
@@ -68,15 +72,15 @@ internal fun WebSeason(
     val currentSeason by rememberUpdatedState(onSeason)
     val owner = remember(entry, catalog, settings, storageFailure, generation, contextInvalidations) {
         WebSeasonOwner(entry, catalog, settings, storageFailure, generation, contextInvalidations, scope,
-            { currentRetry() }, { currentReport(it) }, { currentBack() }, { currentShow(it) }, { id, number -> currentSeason(id, number) })
+            { currentRetry() }, { currentReport(it) }, { currentBack() }, { currentShow(it) }, { id, number -> currentSeason(id, number) }, memory)
     }
     DisposableEffect(owner) { onDispose { owner.close() } }
     val state by owner.state.collectAsState()
-    WebSeasonContent(owner, state, Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date)
+    WebSeasonContent(owner, state, Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date, onPerson)
 }
 
 @Composable
-internal fun WebSeasonContent(owner: WebSeasonOwner, state: WebSeasonState, today: LocalDate) {
+internal fun WebSeasonContent(owner: WebSeasonOwner, state: WebSeasonState, today: LocalDate, onPerson: (Int) -> Unit = {}) {
     val scroll = remember(owner) { LazyListState() }
     var restored by remember(owner) { mutableStateOf(false) }
     val token = state.context
@@ -107,18 +111,18 @@ internal fun WebSeasonContent(owner: WebSeasonOwner, state: WebSeasonState, toda
             contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item("header") {
                 WebPage { Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // History back: the previous page is not known to be the show, so the link does not name it.
+                    // History back: season chips replace this entry, so Back leaves the season page, wherever it was opened from.
                     WebBackLink("Back", owner::back, Modifier.padding(top = 12.dp))
                     if (state.invalidSavedState) Text("This season route or saved state is invalid. Saved values have not been changed.")
                     else {
+                        val show = currentShow ?: state.retainedShow?.value
                         when (state.reader) {
-                            WebSeasonReader.Unknown -> SeasonSkeleton("Waiting for verified preferences…")
+                            // A remembered header stays up while preferences are read; the episode skeleton below covers the wait.
+                            WebSeasonReader.Unknown -> if (show == null) SeasonSkeleton("Waiting for verified preferences…")
                             is WebSeasonReader.Failed -> ErrorState("Saved preferences are unavailable (${state.reader.failure}).", owner::retryStorage)
                             is WebSeasonReader.Ready -> Unit
                         }
-                        val show = currentShow ?: state.retainedShow?.value
                         if (show != null) {
-                            if (currentShow == null) StaleSeasonLabel("Show details")
                             Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                                 PaletteArt(webImage(show.posterPath, "w185"), seasonPalette, ArtStyle.Poster,
                                     Modifier.width(if (narrow) 64.dp else 88.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)))
@@ -141,26 +145,26 @@ internal fun WebSeasonContent(owner: WebSeasonOwner, state: WebSeasonState, toda
                                 }
                             }
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // Chips stay put while a season loads; a press only acts once this owner's own show is current.
                                 show.seasons.forEach { season ->
-                                    if (currentShow != null && token != null) Chip(season.label, state.current?.selected == season.seasonNumber,
-                                        { owner.selectSeason(token, season.seasonNumber) }, selectedColor = Tokens.Colors.Accent,
+                                    Chip(season.label, owner.route?.number == season.seasonNumber,
+                                        { token?.let { owner.selectSeason(it, season.seasonNumber) } }, selectedColor = Tokens.Colors.Accent,
                                         selectedContent = Tokens.Colors.OnAccent)
-                                    else Text(season.label, modifier = Modifier.padding(8.dp))
                                 }
                             }
                         }
                         when (val showState = state.current?.show) {
-                            SectionState.Loading -> SeasonSkeleton("Loading show…")
+                            SectionState.Loading -> if (show == null) SeasonSkeleton("Loading show…")
                             is SectionState.Error -> SeasonError("Show", showState.kind) { token?.let(owner::retry) }
                             SectionState.Empty -> Text("Show is unavailable.")
                             else -> Unit
                         }
                         when (val episodes = state.current?.episodes) {
                             is SectionState.Error -> SeasonError("Episodes", episodes.kind) { token?.let(owner::retry) }
-                            SectionState.Loading -> if (currentShow != null) SeasonSkeleton("Loading episodes…")
+                            SectionState.Loading, null -> if (show != null && shownSeason == null && state.reader !is WebSeasonReader.Failed)
+                                SeasonSkeleton("Loading episodes…")
                             else -> Unit
                         }
-                        if (staleEpisodes) StaleSeasonLabel("Episodes")
                     }
                 } }
             }
@@ -171,7 +175,7 @@ internal fun WebSeasonContent(owner: WebSeasonOwner, state: WebSeasonState, toda
                             expanded = !staleEpisodes && state.current?.openEpisode == episode.episodeNumber,
                             enabled = !staleEpisodes && token != null,
                             onOpen = { token?.let { owner.openEpisode(it, episode.episodeNumber) } },
-                            onClose = { token?.let(owner::closeEpisode) })
+                            onClose = { token?.let(owner::closeEpisode) }, onPerson = onPerson)
                     }
                 }
             } else item("body-status") {
@@ -181,7 +185,7 @@ internal fun WebSeasonContent(owner: WebSeasonOwner, state: WebSeasonState, toda
                         currentSeason != null -> Text("No episodes were returned for this season.")
                         state.invalidSavedState -> Unit
                         state.current?.episodes is SectionState.Error -> Text("Episode details are unavailable.")
-                        else -> Text("Episode details will appear after this season loads.")
+                        else -> Unit
                     }
                 }
             }
@@ -196,19 +200,13 @@ private val seasonPalette = ArtPalette(Tokens.Colors.Accent, Tokens.Colors.Secon
 private fun SeasonSkeleton(label: String) {
     Column(Modifier.fillMaxWidth().semantics { contentDescription = label; liveRegion = LiveRegionMode.Polite },
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        repeat(2) {
+        repeat(10) {
             Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                 Box(Modifier.width(240.dp).aspectRatio(16f / 9f).shimmer(RoundedCornerShape(14.dp)))
                 SkeletonLines(3, Modifier.weight(1f).padding(top = 8.dp))
             }
         }
     }
-}
-
-@Composable
-private fun StaleSeasonLabel(section: String) {
-    Text("$section were loaded earlier and may be out of date for your current language or region.",
-        color = Tokens.Colors.TextPrimary.copy(alpha = 0.7f))
 }
 
 @Composable
@@ -225,14 +223,17 @@ private fun SeasonError(section: String, kind: SectionErrorKind, retry: () -> Un
 
 @Composable
 private fun SeasonEpisodeCard(episode: Episode, today: LocalDate, narrow: Boolean, expanded: Boolean,
-                              enabled: Boolean, onOpen: () -> Unit, onClose: () -> Unit) {
+                              enabled: Boolean, onOpen: () -> Unit, onClose: () -> Unit, onPerson: (Int) -> Unit) {
     val focus = remember { FocusRequester() }
     Panel(Modifier.fillMaxWidth().onPreviewKeyEvent {
         if (expanded && it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
             onClose(); focus.requestFocus(); true
         } else false
-    }) {
-        val clickable = Modifier.fillMaxWidth().testTag("season-${episode.seasonNumber}-episode-${episode.episodeNumber}")
+    }) { Box(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth()) {
+        // Expanded: keep the summary clear of the collapse icon in the top-right corner.
+        val clickable = Modifier.fillMaxWidth().padding(end = if (expanded) 48.dp else 0.dp)
+            .testTag("season-${episode.seasonNumber}-episode-${episode.episodeNumber}")
             .focusRequester(focus).cvClickable(onOpen, enabled = enabled, onClickLabel = "Show episode details")
         if (narrow) Column(clickable, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             EpisodeStill(episode, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
@@ -248,11 +249,25 @@ private fun SeasonEpisodeCard(episode: Episode, today: LocalDate, narrow: Boolea
             if (episode.guestStars.isEmpty()) Text("No guest credits supplied.")
             else {
                 Text("Guest stars", style = bodyStyle(13.sp, FontWeight.Bold), color = Tokens.Colors.TextPrimary.copy(alpha = 0.62f))
-                episode.guestStars.forEach { guest -> Text(listOf(guest.name, guest.role).filter { it.isNotBlank() }.joinToString(" · ")) }
+                // Guest stars (with photos) arrive in the season response itself: no extra request per episode.
+                LazyRow(Modifier.ringBleed(), contentPadding = PaddingValues(start = RingBleed, end = RingBleed, top = 4.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(episode.guestStars.distinctBy { it.personId }, key = { it.personId }) { guest ->
+                        PersonCard(guest.name, guest.role.takeIf { it.isNotBlank() }, seasonPalette,
+                            seededOpen(WebRoute.Person(guest.personId), webPersonSeed(guest.name, guest.profilePath)) { onPerson(guest.personId) },
+                            Modifier.testTag("season-guest-${guest.personId}"), webImage(guest.profilePath, "w185"), width = 120.dp,
+                            artModifier = Modifier.webSharedPerson(guest.personId))
+                    }
+                }
             }
-            PillButton("Close details", { onClose(); focus.requestFocus() }, variant = ButtonVariant.Ghost, small = true)
         }
     }
+        // Own Box: on web RoundIconButton sits inside a TooltipBox, which would swallow an align modifier.
+        if (expanded) Box(Modifier.align(Alignment.TopEnd)) {
+            RoundIconButton(CvIcons.ChevronUp, "Hide episode details", { onClose(); focus.requestFocus() },
+                diameter = 36.dp, container = Color.White.copy(alpha = 0.08f))
+        }
+    } }
 }
 
 @Composable

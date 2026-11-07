@@ -91,8 +91,8 @@ internal class WebSeasonFake {
     fun entry(number: Int = 7, values: Map<String, String> = emptyMap()) = WebEntry(WebRoute.Season(7, number), values.toMutableMap())
     fun owner(scope: CoroutineScope, entry: WebEntry = entry(),
               retryUpstream: () -> Unit = { upstreamRetries++; storage.value = null },
-              report: (StorageException) -> Unit = { reports += it }) =
+              report: (StorageException) -> Unit = { reports += it }, memory: WebSeasonMemory = WebSeasonMemory()) =
         WebSeasonOwner(entry, catalog, raw, storage, generation, invalidations, scope, retryUpstream, report,
             { destinations += WebRoute.Home }, { destinations += WebRoute.Detail("tv", it) },
-            { id, number -> destinations += WebRoute.Season(id, number) })
+            { id, number -> destinations += WebRoute.Season(id, number) }, memory)
 }

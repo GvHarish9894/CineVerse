@@ -51,6 +51,18 @@ internal fun Title.webDetailSeed(): Map<String, String> = buildMap {
 
 internal fun WebEntry.webDetailSeed(): WebDetailSeed? = getString("detail.seedTitle")?.let { WebDetailSeed(it, getString("detail.seedPoster")) }
 
+/** The People card's name and portrait, for the Person page's first frames; same display-only rules as [WebDetailSeed]. */
+internal class WebPersonSeed(val name: String, val profilePath: String?)
+
+internal fun Person.webPersonSeed(): Map<String, String> = webPersonSeed(name, profilePath)
+
+internal fun webPersonSeed(name: String, profilePath: String?): Map<String, String> = buildMap {
+    put("person.seedName", name)
+    profilePath?.let { put("person.seedPhoto", it) }
+}
+
+internal fun WebEntry.webPersonSeed(): WebPersonSeed? = getString("person.seedName")?.let { WebPersonSeed(it, getString("person.seedPhoto")) }
+
 /**
  * A producer snapshot is actionable only when its source identity equals the rendered Ready session (full equality;
  * known null origin is guest data, so only a rendered guest). Anything else is Unknown; the snapshot is never relabelled.

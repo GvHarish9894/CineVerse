@@ -141,7 +141,7 @@ fun PosterCard(
                         .fillMaxWidth()
                         .aspectRatio(2f / 3f)
                         .dropShadow(shape, cardGlow(palette.c1, t))
-                        .border(if (t > 0f) 2.dp else 1.dp, Color.White.copy(alpha = if (t > 0f) 0.85f * t else 0.06f), shape)
+                        .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
                         .clip(shape),
                     bottomScrim = true,
                 ) { PosterTitleOverlay(title, if (web) 21.sp else 15.sp, if (web) 14.dp else 10.dp, if (web && ring) 24.dp else 10.dp) }

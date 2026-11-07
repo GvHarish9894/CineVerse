@@ -159,7 +159,7 @@ class WebPersonUiTest {
         }
         onNodeWithText("Fixture person").assertExists()
         runOnIdle { f.fail() }
-        onNodeWithText("Previously loaded person · stale / unverified until replacement content completes.").assertExists()
+        onNodeWithContentDescription("Person content: unverified").assertExists()
         onNodeWithTag("person-biography-toggle").assertIsNotEnabled()
         onNodeWithText("Fixture person").assertExists()
         val gate = CompletableDeferred<Unit>()
@@ -174,9 +174,9 @@ class WebPersonUiTest {
             assertEquals(2, f.subscriptions)
             assertEquals(2, f.api.requests.size)
         }
-        onNodeWithText("Previously loaded person · stale / unverified until replacement content completes.").assertExists()
+        onNodeWithContentDescription("Person content: unverified").assertExists()
         runOnIdle { gate.complete(Unit) }
-        onNodeWithText("Previously loaded person · stale / unverified until replacement content completes.").assertDoesNotExist()
+        onNodeWithContentDescription("Person content: unverified").assertDoesNotExist()
         onNodeWithTag("person-biography-toggle").assertIsEnabled()
     }
 

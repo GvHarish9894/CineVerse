@@ -89,6 +89,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
     val signInFocus = remember { FocusRequester() }
     val homeFocus = remember { FocusRequester() }
     val modalFocus = remember { WebModalFocus(homeFocus) }
+    val seasonMemory = remember(catalog) { WebSeasonMemory() }
+    val libraryCarry = remember(runtime) { WebLibraryCarry() }
     val approvalState by approval.state.collectAsState()
     // Identity follows the authoritative session (openRate requires holder identity == the rendered session).
     val libraryOutcomes = remember(runtime) { MutableSharedFlow<LibraryWriteOutcome>(extraBufferCapacity = 8) }
@@ -134,8 +136,9 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
         else if (headerSubmission !== entry) headerSubmission = null
     }
     val settingsFlow = remember(runtime) { runtime.settingsHolder.state.mapNotNull { it?.settings } }
+    val inputModality = remember { InputModality() }
     CineVerseTheme(ShellStyle.Web, appearance) {
-        ProvideWindowClass(Modifier.fillMaxSize()) {
+        ProvideWindowClass(Modifier.fillMaxSize().trackInputModality(inputModality)) {
             WebShell {
                 val toasts = LocalToasts.current
                 LaunchedEffect(toasts) { libraryOutcomes.collect { outcome -> outcome.webToast()?.let(toasts::show) } }
@@ -152,7 +155,8 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                 }
                 // Page-level ambient glow (Settings › Ambient glow); the Home hero paints its own backdrop over it.
                 WebAmbientGlow()
-                CompositionLocalProvider(LocalFooterLinks provides footerLinks, LocalWebModalFocus provides modalFocus) {
+                CompositionLocalProvider(LocalFooterLinks provides footerLinks, LocalWebModalFocus provides modalFocus, LocalInputModality provides inputModality,
+                    LocalWebSeedOffer provides navigation.seeds) {
                 Column(Modifier.fillMaxSize().onPreviewKeyEvent {
                     if (searchEnabled && !searchFocused && !mainSearchFocused && it.type == KeyEventType.KeyDown && it.key == Key.Slash && !it.isCtrlPressed && !it.isMetaPressed) {
                         searchFocus.requestFocus(); true
@@ -178,14 +182,14 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                             WebHome(entry, catalog, generation, settingsFlow, session, runtime, { route, seed -> navigation.navigate(route, seed = seed) },
                                 playTrailer = { videos, video -> trailer = Triple(entry, videos, video) }, signIn = approval::show)
                         } else if (entry.route is WebRoute.Browse || entry.route == WebRoute.People) {
-                            WebBrowse(entry, catalog, generation, browseSettings, runtime, navigation::navigate)
+                            WebBrowse(entry, catalog, generation, browseSettings, runtime, navigation::navigate) { route, seed -> navigation.navigate(route, seed = seed) }
                         } else if (entry.route is WebRoute.Search) {
                             // The owner belongs to the shown entry; an exiting Search entry renders nothing while it leaves.
                             if (searchOwner != null && searchOwner.entry === entry) WebSearch(searchOwner, storage, {
                                 runtime.retryStorage()
                                 searchOwner.holder.retrySettings()
                                 searchOwner.holder.retryRecentRead()
-                            }, navigation::navigate) { mainSearchFocused = it }
+                            }, navigation::navigate, { route, seed -> navigation.navigate(route, seed = seed) }) { mainSearchFocused = it }
                         } else when (val route = entry.route) {
                             is WebRoute.Detail -> WebDetail(entry, catalog, generation, browseSettings, contextInvalidations, runtime,
                                 library = libraryActions, accountState = libraryStateWithOrigin, navigate = { navigation.navigate(it) }, back = historyBack,
@@ -195,8 +199,9 @@ fun WebApp(runtime: WebRuntime, catalog: CatalogRepository, generation: Generati
                                 { ref -> navigation.navigate(WebRoute.Detail(ref.mediaType.path, ref.id)) }, historyBack)
                             is WebRoute.Season -> WebSeason(entry, catalog, browseSettings, runtime.storageFailure, generation, contextInvalidations,
                                 runtime::retryStorage, runtime::reportStorageFailure, historyBack,
-                                { id -> navigation.navigate(WebRoute.Detail("tv", id)) }, { id, number -> navigation.navigate(WebRoute.Season(id, number)) })
-                            is WebRoute.Library -> WebLibrary(entry, runtime, libraryResultIdentity, libraryResultPage) { navigation.navigate(it) }
+                                { id -> navigation.navigate(WebRoute.Detail("tv", id)) }, { id, number -> navigation.navigate(WebRoute.Season(id, number), replace = true) }, seasonMemory,
+                                { id -> navigation.navigate(WebRoute.Person(id)) })
+                            is WebRoute.Library -> WebLibrary(entry, runtime, libraryResultIdentity, libraryResultPage, libraryCarry) { navigation.navigate(it) }
                             WebRoute.Settings -> if (settingsRepository == null) WebPlaceholder(route, navigation::navigate)
                             // WebSettingsOwner passes the authoritative runtime Ready.session (never settingsHolder/auth state).
                             else WebSettings(entry, settingsRepository, runtime, approval::show, onSignOut = account::startSignOut, onImport = account::startImport)
@@ -413,7 +418,7 @@ internal fun WebPlaceholder(route: WebRoute, navigate: (WebRoute, Boolean) -> Un
         }
         WebPage(Modifier.padding(vertical = 44.dp)) {
             EmptyState(title, when (route) {
-                WebRoute.NotFound -> "This URL is unknown or invalid. No account operation was performed."
+                WebRoute.NotFound -> "We couldn't find that page. Check the link, or head back home."
                 is WebRoute.Trailer -> "Open this trailer from its title page. No video is playing."
                 else -> "This destination is not implemented in this preview. No account changes were made."
             }) { PillButton("Back to Home", { navigate(WebRoute.Home, false) }) }

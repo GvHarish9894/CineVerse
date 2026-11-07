@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
@@ -27,6 +28,7 @@ import com.techgv.cineverse.ui.adaptive.ShellStyle
 import com.techgv.cineverse.ui.components.*
 import com.techgv.cineverse.ui.design.Tokens
 import com.techgv.cineverse.ui.theme.bodyStyle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** Root handoff: WebLibrary(entry, runtime, resultIdentity, resultPage, navigate).
@@ -42,6 +44,7 @@ fun WebLibrary(
     runtime: WebRuntime,
     resultIdentity: (LibraryUiState) -> WebLibraryResultIdentity?,
     resultPage: (LibraryUiState, MediaType) -> Int?,
+    carry: WebLibraryCarry,
     navigate: (WebRoute) -> Unit,
 ) {
     val session by runtime.session.collectAsState()
@@ -71,8 +74,20 @@ fun WebLibrary(
     val state by owner.state.collectAsState()
     val pages by owner.pages.collectAsState()
     // Check again at presentation time; a stale collector emission must not reveal an old identity.
-    WebLibraryContent(entry, state?.takeIf { owner.visibleState() === it }, pages, storage, navigate,
-        owner::loadMore, owner::retry, owner::retryStorage, runtime::revalidateSession)
+    val visible = state?.takeIf { owner.visibleState() === it }
+    val identity = ready.libraryIdentity()
+    if (visible != null) SideEffect { carry.last = identity to visible }
+    WebLibraryContent(entry, visible, pages, storage, navigate,
+        owner::loadMore, owner::retry, owner::retryStorage, runtime::revalidateSession,
+        previous = carry.last?.takeIf { it.first == identity }?.second)
+}
+
+/**
+ * The last Library state shown, kept across tab entries. Each tab is a new entry whose own state needs a frame or two;
+ * until then the previous tab's content stays on screen (same verified identity only) instead of blinking out.
+ */
+class WebLibraryCarry {
+    internal var last: Pair<WebLibraryResultIdentity, LibraryUiState>? = null
 }
 
 /** One page column: title, tabs, then Movies and TV Shows sections (or one tab empty state) and exactly one Footer. */
@@ -87,9 +102,22 @@ internal fun WebLibraryContent(
     retry: (MediaType) -> Unit,
     retryStorage: () -> Unit,
     verifySession: () -> Unit,
+    previous: LibraryUiState? = null,
 ) {
     val restored = remember(entry) { validateWebLibraryEntry(entry) }
+    // This entry's own state once it has any group, else (for its first frames, unknown or all-loading) the previous
+    // tab's. Counts and tab selection use only [state].
+    val shown = state?.takeUnless { s -> MediaType.entries.all { s.group(it).section == SectionState.Loading } } ?: previous ?: state
     val scroll = remember(entry) { LazyGridState() }
+    // Every tab switch is a new entry whose state starts unknown for a moment: show the grid skeleton, and only
+    // offer the verify/retry notice if the source is still unverified after a few seconds.
+    // Loading (unknown source, or both groups still loading): no headings, since an empty tab has none and they would
+    // flash. A local tab resolves in a frame or two, so the skeleton only becomes visible when loading is actually slow.
+    val loading = shown == null || MediaType.entries.all { shown.group(it).section == SectionState.Loading }
+    var slow by remember(entry) { mutableStateOf(false) }
+    LaunchedEffect(entry, loading) { slow = false; if (loading) { delay(SKELETON_DELAY_MS); slow = true } }
+    var stuck by remember(entry) { mutableStateOf(false) }
+    LaunchedEffect(entry, state == null) { if (state == null) { delay(UNVERIFIED_NOTICE_DELAY_MS); stuck = true } }
     var positioned by remember(entry) { mutableStateOf(false) }
     // Only restore after both groups settle at their bounded saved pages. An error stops here until an explicit retry.
     LaunchedEffect(state, pages, positioned) {
@@ -127,8 +155,9 @@ internal fun WebLibraryContent(
         ) {
             fullWidth {
                 WebPageTitle("My Library", subtitle = when {
-                    state == null -> null
-                    state.signedIn -> "Synced with your TMDB account"
+                    // Unknown source: claim neither guest nor account, but keep the line so the tabs never jump up.
+                    shown == null -> "\u00A0"
+                    shown.signedIn -> "Synced with your TMDB account"
                     else -> "Saved in this browser · sign in to sync with TMDB"
                 })
             }
@@ -141,20 +170,23 @@ internal fun WebLibraryContent(
                 }
             }
             if (storage != null) fullWidth { WebStorageNotice(storage, retryStorage, Modifier.testTag("library-storage-recovery")) }
-            if (state == null) {
+            if (state == null && stuck) {
                 fullWidth {
                     LibraryNotice("Library source is not yet verified. No private entries are shown.") {
                         PillButton("Verify session", verifySession, variant = ButtonVariant.Ghost, small = true)
                         if (storage == null) PillButton("Retry saved reads", retryStorage, variant = ButtonVariant.Ghost, small = true)
                     }
                 }
+            } else if (loading || shown == null) {
+                // Invisible until slow: the space stays reserved, so the page height (and scroll) does not jump.
+                items(6) { PosterCardSkeleton(Modifier.fillMaxWidth().alpha(if (slow) 1f else 0f), width = Dp.Unspecified) }
             } else {
                 if (MediaType.entries.any { media ->
-                    val group = state.group(media)
+                    val group = shown.group(media)
                     (group.section as? SectionState.Error)?.kind == SectionErrorKind.SessionExpired || group.moreError == SectionErrorKind.SessionExpired || group.refreshError == SectionErrorKind.SessionExpired
                 }) fullWidth { LibraryNotice("Session expired.") { PillButton("Verify session", verifySession, variant = ButtonVariant.Ghost, small = true) } }
-                if (state.movies.section == SectionState.Empty && state.tv.section == SectionState.Empty) fullWidth {
-                    EmptyState(when (state.tab) {
+                if (shown.movies.section == SectionState.Empty && shown.tv.section == SectionState.Empty) fullWidth {
+                    EmptyState(when (shown.tab) {
                         LibraryTab.Watchlist -> "Your watchlist is empty"
                         LibraryTab.Favourites -> "No favourites yet"
                         LibraryTab.Rated -> "Nothing rated yet"
@@ -162,7 +194,7 @@ internal fun WebLibraryContent(
                         PillButton("Browse popular movies", { navigate(WebRoute.Browse("movie")) })
                     }
                 } else MediaType.entries.forEach { media ->
-                    librarySection(media, state.group(media), state.tab, pages.getValue(media), { loadMore(media) }, { retry(media) }, navigate)
+                    librarySection(media, shown.group(media), shown.tab, pages.getValue(media), { loadMore(media) }, { retry(media) }, navigate)
                 }
             }
             // Footer() computes its own gutter from the full width, so undo the grid's content padding for it.
@@ -170,6 +202,9 @@ internal fun WebLibraryContent(
         }
     }
 }
+
+private const val SKELETON_DELAY_MS = 300L
+private const val UNVERIFIED_NOTICE_DELAY_MS = 4_000L
 
 private fun LazyGridScope.fullWidth(content: @Composable LazyGridItemScope.() -> Unit) =
     item(span = { GridItemSpan(maxLineSpan) }, content = content)
@@ -222,10 +257,11 @@ private fun LazyGridScope.librarySection(
         is SectionState.Error -> fullWidth { WebLibraryError(section.kind, retry, false) }
         is SectionState.Content -> items(section.value, key = { "${it.title.ref.mediaType}:${it.title.ref.id}" }) { item ->
             BoxWithConstraints {
+                val route = item.title.ref.libraryDetailRoute()
                 PosterCard(item.title.title, formatDate(item.title.releaseDate), ArtPalette(Tokens.Colors.Accent, Tokens.Colors.Secondary),
-                    { navigate(item.title.ref.libraryDetailRoute()) }, Modifier.testTag("library-${item.title.ref.mediaType}-${item.title.ref.id}"),
+                    seededOpen(route, item.title.webDetailSeed()) { navigate(route) }, Modifier.testTag("library-${item.title.ref.mediaType}-${item.title.ref.id}"),
                     imageUrl = webImage(item.title.posterPath, "w342"), voteAverage = item.title.voteAverage, voteCount = item.title.voteCount, width = maxWidth,
-                    badge = if (tab == LibraryTab.Rated) item.rating?.let { "★ ${oneDecimal(it)}" } else null)
+                    badge = if (tab == LibraryTab.Rated) item.rating?.let { "★ ${oneDecimal(it)}" } else null, artModifier = Modifier.webSharedPoster(item.title.ref))
             }
         }
     }

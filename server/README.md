@@ -15,6 +15,10 @@ curl localhost:8080/api/tmdb/configuration
 
 Serve a web build from the same origin with `STATIC_DIR=composeApp/build/dist/wasmJs/productionExecutable`.
 
+With `./gradlew :composeApp:wasmJsBrowserDevelopmentRun` (dev server on 8080), run this server with
+`PORT=8081 PUBLIC_ORIGIN=http://localhost:8080 COOKIE_SECURE=false`; `composeApp/webpack.config.d/devServerProxy.js`
+forwards `/api` to it (override the target with `CINEVERSE_API`).
+
 Docker (build context = repository root; only the files in `/.dockerignore` are sent):
 
 ```bash

@@ -186,7 +186,8 @@ class WebRootTest {
     private fun ComposeUiTest.exists(tag: String) = waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
 
     @Test fun deepRoutesComposeTheRealComponentsWithoutPlaceholdersOrWrites() = runComposeUiTest {
-        val f = Fixture()
+        // test perf (Mocha 2s): route changes cut; the page fade/rise and shared morphs are covered by WebSharedElementTest.
+        val f = Fixture(reduceMotion = true)
         val history = FakeHistory("/movie/1")
         try {
             root(f, history)
@@ -397,7 +398,8 @@ class WebRootTest {
     }
 
     @Test fun oneApprovalOwnerAboveRoutesSurvivesRouteChangesAndSettingsSignInShowsIt() = runComposeUiTest {
-        val f = Fixture()
+        // test perf (Mocha 2s): route changes cut; the page fade/rise and shared morphs are covered by WebSharedElementTest.
+        val f = Fixture(reduceMotion = true)
         val history = FakeHistory("/settings")
         try {
             root(f, history)
@@ -418,7 +420,8 @@ class WebRootTest {
     }
 
     @Test fun runtimeInvalidationsFanInToPersonSeasonAndDetailRawReaders() = runComposeUiTest {
-        val f = Fixture()
+        // test perf (Mocha 2s): route changes cut; the page fade/rise and shared morphs are covered by WebSharedElementTest.
+        val f = Fixture(reduceMotion = true)
         val history = FakeHistory("/person/1")
         try {
             root(f, history)
@@ -459,7 +462,8 @@ class WebRootTest {
     }
 
     @Test fun detailPlayTrailerOpensExactlyOneDialogAndEntryChangeRemovesTheFrame() = runComposeUiTest {
-        val f = Fixture()
+        // test perf (Mocha 2s): route changes cut; the page fade/rise and shared morphs are covered by WebSharedElementTest.
+        val f = Fixture(reduceMotion = true)
         val history = FakeHistory("/movie/1")
         try {
             root(f, history)

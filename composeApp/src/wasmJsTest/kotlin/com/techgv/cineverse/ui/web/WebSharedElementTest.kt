@@ -44,6 +44,22 @@ class WebSharedElementTest {
             DetailSettingsRead.Ready, context, DetailReadCompletion(context, result), DetailReadContent(context, detail)))
     }
 
+    @Test fun seedOfferIsUsedOnlyByTheNavigateToItsRouteAndOnlyOnce() {
+        val history = FakeHistory("/people")
+        val navigation = WebNavigation(history)
+        navigation.seeds.offer(WebRoute.Person(1), webPersonSeed("First", null))
+        navigation.navigate(WebRoute.Person(2)) // Another route: the offer is dropped, not reused later.
+        assertNull(navigation.entry.value.webPersonSeed())
+        navigation.navigate(WebRoute.Person(1))
+        assertNull(navigation.entry.value.webPersonSeed())
+        navigation.seeds.offer(WebRoute.Person(3), webPersonSeed("Third", "photo"))
+        navigation.navigate(WebRoute.Person(3))
+        assertEquals("Third", navigation.entry.value.webPersonSeed()?.name)
+        assertEquals("/person/3", history.url) // Never in the URL.
+        navigation.navigate(WebRoute.Person(4))
+        assertNull(navigation.entry.value.webPersonSeed())
+    }
+
     @Test fun posterKeyIsTheExactMediaIdentity() {
         assertEquals("poster:movie:7", webPosterSharedKey(title.ref))
         assertEquals("poster:movie:7", webPosterSharedKey(detail.ref))
@@ -148,6 +164,40 @@ class WebSharedElementTest {
         inDetail("Fixture film").assertDoesNotExist() // The seed title is replaced by the loaded header.
         onNodeWithContentDescription("Loading title…").assertDoesNotExist()
         assertEquals(later.id, onNodeWithTag("detail-poster").fetchSemanticsNode().id, "the hero poster remounted when the detail arrived")
+    }
+
+    /** People card portrait -> Person page portrait: seeded on the first frame (read still loading) and morphing. */
+    @Test fun peopleCardPortraitMorphsIntoTheSeededPersonPortrait() = runComposeUiTest {
+        val history = FakeHistory("/people")
+        val navigation = WebNavigation(history)
+        val peopleEntry = navigation.entry.value
+        var entry by mutableStateOf(peopleEntry)
+        val person = Hero.OfPerson(Person(42, "Fixture person", "fixture-photo", "Acting", listOf(title)))
+        val people = ProductBrowseUiState(BrowseSelection.People, SectionState.Content(PagedItems(listOf(person), 1, false)))
+        setThemedContent(ShellStyle.Web, AppearanceSettings(reduceMotion = false)) {
+            Box(Modifier.requiredSize(1024.dp, 1100.dp)) {
+                WebRouteTransition(entry) { target ->
+                    if (target === peopleEntry) WebBrowseContent(peopleEntry, people, {}, {}, {}, {}, {}, null,
+                        openSeeded = { route, seed -> navigation.navigate(route, seed = seed); entry = navigation.entry.value })
+                    else WebPersonContent(WebPersonEntry(42, 0, 0), WebPersonReadState(appSnapshot = 0), null, {}, {}, {}, { _, _ -> }, {},
+                        { _, _, _ -> }, target.webPersonSeed())
+                }
+            }
+        }
+        fun portrait() = onNodeWithContentDescription("Portrait of Fixture person")
+        onNodeWithTag("browse-person:42").assertExists()
+        mainClock.autoAdvance = false
+        onNodeWithTag("browse-person:42").performClick()
+        assertEquals("/person/42", history.url) // The seed never reaches the URL.
+        mainClock.advanceTimeByFrame()
+        portrait().assertExists() // First Person frame, the person read still loading.
+        onNode(hasText("Fixture person") and hasAnyAncestor(hasTestTag("web-person"))).assertExists()
+        mainClock.advanceTimeByFrame()
+        val early = portrait().fetchSemanticsNode().boundsInRoot
+        mainClock.advanceTimeByFrame()
+        mainClock.advanceTimeByFrame()
+        val later = portrait().fetchSemanticsNode().boundsInRoot
+        assertTrue(abs(early.top - later.top) > 0.5f || abs(early.width - later.width) > 0.5f, "portrait did not morph: early=$early later=$later")
     }
 
     @Test fun routeTransitionMountsEachHistoryEntryOnceAcrossHomeDetailBack() = runComposeUiTest {

@@ -256,6 +256,34 @@ class WebSeasonOwnerTest {
         }
     }
 
+    @Test fun rememberedSeasonsSeedNewSeasonRoutesAndOtherLanguagesAreDropped() = runTest {
+        val fake = WebSeasonFake()
+        val memory = WebSeasonMemory()
+        val first = fake.owner(backgroundScope, memory = memory)
+        runCurrent()
+        assertTrue(first.state.value.bodyReady)
+        first.close()
+        // The same season again: header and episodes are there before the new owner reads anything.
+        val again = fake.owner(backgroundScope, memory = memory)
+        assertEquals("Real show", again.state.value.retainedShow?.value?.title)
+        assertEquals(7, again.state.value.retainedSeason?.value?.seasonNumber)
+        // Another season of the show: header only, never another season's episodes.
+        val specials = fake.owner(backgroundScope, fake.entry(0), memory = memory)
+        assertEquals("Real show", specials.state.value.retainedShow?.value?.title)
+        assertNull(specials.state.value.retainedSeason)
+        again.close()
+        specials.close()
+        // Seeds loaded for another language are dropped once preferences are read.
+        fake.preferences.value = Settings(language = "hi-IN")
+        fake.showGate = CompletableDeferred()
+        val hindi = fake.owner(backgroundScope, memory = memory)
+        assertNotNull(hindi.state.value.retainedShow)
+        runCurrent()
+        assertNull(hindi.state.value.retainedShow)
+        assertNull(hindi.state.value.retainedSeason)
+        hindi.close()
+    }
+
     @Test fun seasonSelectionNavigatesRequiredRouteWithoutReusingHolderOrChangingSavedSelection() = runTest {
         val fake = WebSeasonFake()
         val entry = fake.entry()

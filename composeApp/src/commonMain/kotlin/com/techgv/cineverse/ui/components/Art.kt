@@ -18,7 +18,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.layout.ContentScale
+import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
+import coil3.memory.MemoryCache
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import com.techgv.cineverse.ui.design.Scrims.posterBottomScrim
@@ -49,8 +51,11 @@ fun PaletteArt(
     placeholderUrl: String? = null,
     fallback: @Composable BoxScope.() -> Unit = {},
 ) {
-    var loaded by remember(imageUrl) { mutableStateOf(false) }
     val context = LocalPlatformContext.current
+    // Already in memory (e.g. a card remounting after Back): no fallback (initials/title) flash over it on the first frames.
+    var loaded by remember(imageUrl) {
+        mutableStateOf(imageUrl != null && SingletonImageLoader.get(context).memoryCache?.get(MemoryCache.Key(imageUrl)) != null)
+    }
     Box(modifier.paletteArt(palette, style)) {
         if (imageUrl != null) {
             AsyncImage(
