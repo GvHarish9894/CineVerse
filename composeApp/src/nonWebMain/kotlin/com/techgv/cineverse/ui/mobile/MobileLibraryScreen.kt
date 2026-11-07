@@ -86,7 +86,7 @@ internal fun MobileLibraryContent(
                 horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item("header", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.statusBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SectionTitle("Library")
+                        MobilePageTitle("Library")
                         if (library != null) {
                             Text(if (library.signedIn) "TMDB account · ${library.accountName.orEmpty()}" else "Saved on this device · Guest",
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -107,7 +107,7 @@ internal fun MobileLibraryContent(
                         ErrorState("Library unavailable. Saved preferences or account data could not be read.",
                             onStorageRetry, Modifier.testTag("library-storage-retry"))
                     }
-                    library == null -> item("unknown", span = { GridItemSpan(maxLineSpan) }) { Text("Loading Library…") }
+                    library == null -> Unit
                     else -> {
                         MediaType.entries.forEach { media ->
                             val group = library.group(media)

@@ -13,7 +13,6 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.Text
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.ui.components.PlaceholderScreen
-import com.techgv.cineverse.ui.nav.Route
 import kotlinx.serialization.Serializable
 
 /** Phase-1 spikes, debug builds only (reached from Home). */
@@ -34,12 +33,6 @@ private fun SpikesMenuScreen(onOpen: (Any) -> Unit) {
     val first = remember { FocusRequester() }
     PlaceholderScreen("Spikes", "Phase-1 spikes (debug build only)") {
         Button(onClick = { onOpen(AuthSpike) }, modifier = Modifier.focusRequester(first)) { Text("a · Auth round-trip") }
-        Button(onClick = { onOpen(Route.Player("dQw4w9WgXcQ", "Never Gonna Give You Up", "Spike b · Trailer")) }) {
-            Text("b · Player")
-        }
-        Button(onClick = { onOpen(Route.Player("invalidKey0", "Broken video key", "Spike b · Error path")) }) {
-            Text("b · Player error path")
-        }
         Button(onClick = { onOpen(FocusSpike) }) { Text("c · Focus restore") }
     }
     LaunchedEffect(Unit) { first.requestFocus() }

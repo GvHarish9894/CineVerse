@@ -573,26 +573,13 @@ class MobileDetailRootTest {
         runOnIdle { assertTrue(f.guest.rows.value.isEmpty()) }
     }
 
-    @Test fun trailerRouteClosesRootRateAndOpensOutThroughThePlatformAdapter() = runComposeUiTest {
-        lateinit var f: MobileDetailRootFixture
+    @Test fun trailerOpensYouTubeThroughThePlatformAdapterAndStaysOnDetail() = runComposeUiTest {
         val external = RecordingMobileExternalActions()
-        setContent { MobileDetailRootUiFixture(external = external) { fixture, _ -> f = fixture } }
+        setContent { MobileDetailRootUiFixture(external = external) { _, _ -> } }
         onNodeWithContentDescription("Details for week-en-US 1").performClick()
         onNodeWithTag("mobile-detail").performScrollToNode(hasTestTag("detail-trailer"))
-        val trailer = onNodeWithTag("detail-trailer").fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
-        runOnIdle { f.graph.actions.openRate(title, null) }
-        onNodeWithTag("mobile-rate-sheet").assertExists()
-        runOnIdle { trailer() }
-        onNodeWithTag("mobile-rate-sheet").assertDoesNotExist()
-        onNodeWithTag("mobile-trailer").assertExists()
-        onNode(hasText("Root title 101 en-US") and hasAnyAncestor(hasTestTag("mobile-trailer"))).assertExists()
-        onNode(hasText("Root trailer") and hasAnyAncestor(hasTestTag("mobile-trailer"))).assertExists()
-        onNodeWithText("Open in YouTube").performClick()
-        onNodeWithText("Share").performClick()
-        runOnIdle { assertEquals(listOf("youtube:aB3_dE5-gH7", "share:https://www.youtube.com/watch?v=aB3_dE5-gH7"), external.calls) }
-        onNodeWithText("Back").performClick()
-        onNodeWithTag("mobile-trailer").assertDoesNotExist()
+        onNodeWithTag("detail-trailer").performClick()
+        runOnIdle { assertEquals(listOf("youtube:aB3_dE5-gH7"), external.calls) }
         onNodeWithTag("mobile-detail").assertExists()
-        onNodeWithTag("mobile-rate-sheet").assertDoesNotExist()
     }
 }

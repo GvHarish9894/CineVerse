@@ -19,7 +19,6 @@ datastore = "1.2.1"
 room = "2.8.5"
 # androidx.sqlite version Room 2.8.5 resolves; bundled driver for shared jvm/iOS Room (main since P5) and tests
 sqlite = "2.6.2"
-youtubePlayer = "13.0.0"
 palette = "1.0.0"
 zxing = "3.5.4"
 junit = "4.13.2"
@@ -68,7 +67,6 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
-androidyoutubeplayer-core = { group = "com.pierfrancescosoffritti.androidyoutubeplayer", name = "core", version.ref = "youtubePlayer" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }

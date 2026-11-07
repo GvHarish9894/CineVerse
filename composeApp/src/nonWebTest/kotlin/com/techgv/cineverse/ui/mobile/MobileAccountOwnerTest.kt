@@ -232,7 +232,7 @@ class MobileAccountOwnerTest {
         f.graph.close()
     }
 
-    @Test fun importPromptFollowsAuthoritativeIdentityDefersForTrailerAndToastsWhenImported() = runTest {
+    @Test fun importPromptFollowsAuthoritativeIdentityAndToastsWhenImported() = runTest {
         val f = MobileAccountFixture(backgroundScope)
         val messages = mutableListOf<String>()
         backgroundScope.launch { f.graph.account.messages.collect { messages += it } }
@@ -244,11 +244,6 @@ class MobileAccountOwnerTest {
         runCurrent()
         val stale = f.dialog()
         assertEquals(MobileAccountDialog.Import(ana, ImportPrompt.Ask("Ana", 1)), stale)
-        f.graph.setPlayerActive(true)
-        runCurrent()
-        assertNull(f.dialog(), "Import waits while the Trailer is current")
-        f.graph.setPlayerActive(false)
-        runCurrent()
         val bob = AuthSession(AccountObjectId("bob"), "Bob", 2)
         f.auth.emissions.emit(bob)
         runCurrent()

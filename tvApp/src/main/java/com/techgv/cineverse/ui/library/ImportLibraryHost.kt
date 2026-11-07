@@ -23,20 +23,17 @@ import kotlinx.coroutines.flow.map
 
 /**
  * §4.1 step 6 / §8.3: when an account is signed in (fresh or at launch) and it was never asked, and this TV
- * has guest titles, offer the import once; an unfinished "Import" is offered for resuming once per launch. Deferred while
- * [playerActive]: the dialog shows once the Player closes.
+ * has guest titles, offer the import once; an unfinished "Import" is offered for resuming once per launch.
  */
 @Composable
-fun ImportLibraryHost(repository: LibraryRepository, importer: LibraryImporter, playerActive: Boolean) {
+fun ImportLibraryHost(repository: LibraryRepository, importer: LibraryImporter) {
     val session by repository.session.collectAsStateWithLifecycle(initialValue = null)
     val toaster = LocalToaster.current
     val scope = rememberCoroutineScope()
     val controller = remember(importer, toaster, scope) { ImportLibraryController(importer, toaster, scope) }
     LaunchedEffect(controller, session) { controller.onAccount(session) }
-    SideEffect { controller.setPlayerActive(playerActive) }
     val state by controller.shown.collectAsState(initial = null)
-    // Checked here too: `shown` follows playerActive a frame late.
-    state?.takeUnless { playerActive }?.let {
+    state?.let {
         ImportLibraryDialog(
             state = it,
             onKeepSeparate = controller::keepSeparate,

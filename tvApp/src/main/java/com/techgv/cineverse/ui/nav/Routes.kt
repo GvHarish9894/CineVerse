@@ -38,6 +38,7 @@ sealed interface Route {
     ) : Route
     @Serializable data class Person(val id: Int) : Route
     @Serializable data class Season(val seriesId: Int, val seasonNumber: Int) : Route
+    /** A trailer request, not an in-app destination: AppNav hands it to the YouTube app. */
     @Serializable data class Player(val videoKey: String, val title: String, val kicker: String) : Route
 }
 

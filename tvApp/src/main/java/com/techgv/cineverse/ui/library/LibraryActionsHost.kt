@@ -28,21 +28,18 @@ import kotlinx.coroutines.flow.map
 
 /**
  * Provides [LocalLibraryActions] to [content]: writes run in [scope] (app-wide, so a write outlives the
- * screen), outcomes become toasts (§7.12), and [LibraryActions.openRate] shows the [RateDialog] — never over the
- * Player ([playerActive]: a rate request waits until it closes).
+ * screen), outcomes become toasts (§7.12), and [LibraryActions.openRate] shows the [RateDialog].
  */
 @Composable
-fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, playerActive: Boolean, content: @Composable () -> Unit) {
+fun LibraryActionsHost(repository: LibraryRepository, scope: CoroutineScope, content: @Composable () -> Unit) {
     val toaster = LocalToaster.current
     val uiScope = rememberCoroutineScope()
     val controller = remember(repository, scope, toaster, uiScope) { LibraryActionsController(repository, toaster, scope, uiScope) }
     LaunchedEffect(controller) { repository.session.collect(controller::onIdentity) }
-    SideEffect { controller.setPlayerActive(playerActive) }
     CompositionLocalProvider(LocalLibraryActions provides controller, content = content)
 
     val request by controller.shown.collectAsState(initial = null)
-    // Checked here too: `shown` follows playerActive a frame late.
-    request?.takeUnless { playerActive }?.let {
+    request?.let {
         RateDialog(
             titleName = it.title.title,
             initial = it.initial,

@@ -30,7 +30,6 @@ enum class MobileTab { Home, Explore, Search, Library, Profile }
                                                    val backdropPath: String? = null)
 @Serializable internal data class MobilePersonRoute(val id: Int, val name: String? = null, val profilePath: String? = null)
 @Serializable internal data class MobileSeasonRoute(val seriesId: Int, val number: Int)
-@Serializable internal data class MobileTrailerRoute(val key: String, val title: String, val kicker: String)
 @Serializable internal data class MobileBrowseRoute(val row: String, val trend: String = TrendingWindow.Week.name)
 
 internal fun MobileBrowseRoute.selection(): BrowseSelection? = try {
@@ -47,7 +46,7 @@ internal fun NavHostController.open(destination: MobileDestination) {
             // Switching seasons replaces the Season entry, so Back returns to the screen that opened it.
             if (currentDestination?.hasRoute<MobileSeasonRoute>() == true) popUpTo<MobileSeasonRoute> { inclusive = true }
         }
-        is MobileDestination.Trailer -> navigate(MobileTrailerRoute(destination.key, destination.title, destination.kicker))
+        is MobileDestination.Trailer -> Unit // MobileRoot hands trailers to YouTube; there is no in-app route.
         is MobileDestination.Browse -> navigate(MobileBrowseRoute(destination.row.name, destination.trend.name))
     }
 }

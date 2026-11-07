@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,7 +95,7 @@ private fun ProfileContent(
         LazyColumn(Modifier.fillMaxSize().testTag("mobile-profile"), state = scroll,
             contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            item("title") { Text("Profile", Modifier.statusBarsPadding(), style = displayStyle(34.sp)) }
+            item("title") { MobilePageTitle("Profile", Modifier.statusBarsPadding()) }
             item("identity") {
                 SettingsGroup {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -176,3 +177,9 @@ private fun ProfileToggle(title: String, description: String, toggle: Toggle, se
 
 // The bundled typefaces lack Indic glyphs; retain the readable Latin name and the actual code.
 internal fun profileLanguageLabel(code: String) = LANGUAGE_NAMES.getValue(code).substringAfterLast(" · ") + " · " + code
+
+/** Top-level page title shared by every bottom-bar tab, so they all match Profile's size. */
+@Composable
+internal fun MobilePageTitle(text: String, modifier: Modifier = Modifier) {
+    Text(text, modifier.semantics { heading() }, style = displayStyle(34.sp))
+}

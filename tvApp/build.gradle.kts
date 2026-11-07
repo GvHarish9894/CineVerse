@@ -84,7 +84,6 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
-    implementation(libs.androidyoutubeplayer.core)
     implementation(libs.zxing.core)
 
     testImplementation(libs.junit)

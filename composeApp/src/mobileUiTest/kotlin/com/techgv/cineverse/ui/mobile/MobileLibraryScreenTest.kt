@@ -101,7 +101,7 @@ class MobileLibraryScreenTest {
         setThemedContent {
             MobileLibraryContent(state.value, "", {}, {}, {}, { retries++ }, {}, {}, {}, {})
         }
-        onNodeWithText("Loading Library…").assertExists()
+        onNodeWithText("Loading Library…").assertDoesNotExist()
         onNodeWithText("Saved on this device · Guest").assertDoesNotExist()
         onNodeWithText("Explore movies").assertDoesNotExist()
         runOnIdle { state.value = state.value.copy(failed = true) }

@@ -115,12 +115,6 @@ class MobileApplication(
     /** The actual repositories, not the cached [settings] flow: Profile owns its own cold reads and edits. */
     internal fun profile(savedState: SavedStateHandle) = MobileProfileViewModel(this, settingsRepository, auth, savedState)
 
-    /** Trailer route: library actions and the import prompt both defer while it is current. */
-    fun setPlayerActive(active: Boolean) {
-        actions.setPlayerActive(active)
-        account.setPlayerActive(active)
-    }
-
     private fun invalidateDetailContext() {
         actions.closeRate()
         // GenerationCounter is a snapshot, so notify roots at the actual graph invalidation boundary.

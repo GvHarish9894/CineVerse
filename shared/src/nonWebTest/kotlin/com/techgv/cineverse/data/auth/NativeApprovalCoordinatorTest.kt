@@ -47,6 +47,8 @@ class NativeApprovalCoordinatorTest {
             events += "open"
             assertEquals(createdId, saved?.id)
             assertTrue(url.contains("request_token=token"))
+            assertTrue(url.endsWith("&language=${platformLanguageTag()}"))
+            assertTrue(platformLanguageTag().matches(Regex("[a-z]{2,3}(-[A-Z0-9]{2,3})?")), platformLanguageTag())
         }
         val flow = NativeApprovalCoordinator(FakeAuthRepository(), store, opener, { id ->
             events += "create"

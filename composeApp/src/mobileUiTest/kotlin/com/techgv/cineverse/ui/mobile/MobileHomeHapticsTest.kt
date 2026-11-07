@@ -20,26 +20,29 @@ class MobileHomeHapticsTest {
         onNodeWithContentDescription("Featured title 1 of 5").assertIsDisplayed()
         runOnIdle { assertEquals(emptyList(), ticks) }
 
-        onNodeWithTag("home-hero").performTouchInput { swipeLeft() }
+        onNodeWithTag("home-hero").performTouchInput { swipeOneCard() }
         onNodeWithContentDescription("Featured title 2 of 5").assertIsDisplayed()
         runOnIdle { assertEquals(listOf("Light"), ticks) }
 
         runOnIdle { current.value = Haptics.None }
         onNodeWithContentDescription("Featured title 2 of 5").assertIsDisplayed()
-        onNodeWithTag("home-hero").performTouchInput { swipeLeft() }
+        onNodeWithTag("home-hero").performTouchInput { swipeOneCard() }
         onNodeWithContentDescription("Featured title 3 of 5").assertIsDisplayed()
         runOnIdle { assertEquals(listOf("Light"), ticks, "Disabled feedback must not tick an obsolete service") }
 
         runOnIdle { current.value = service("Medium") }
         onNodeWithContentDescription("Featured title 3 of 5").assertIsDisplayed()
-        onNodeWithTag("home-hero").performTouchInput { swipeLeft() }
+        onNodeWithTag("home-hero").performTouchInput { swipeOneCard() }
         onNodeWithContentDescription("Featured title 4 of 5").assertIsDisplayed()
         runOnIdle { assertEquals(listOf("Light", "Medium"), ticks) }
 
         runOnIdle { current.value = service("Strong") }
         onNodeWithContentDescription("Featured title 4 of 5").assertIsDisplayed()
-        onNodeWithTag("home-hero").performTouchInput { swipeLeft() }
+        onNodeWithTag("home-hero").performTouchInput { swipeOneCard() }
         onNodeWithContentDescription("Featured title 5 of 5").assertIsDisplayed()
         runOnIdle { assertEquals(listOf("Light", "Medium", "Strong"), ticks) }
     }
+
+    // The carousel shows peeking cards, so a full-window swipe would cross several; swipe about one card's width.
+    private fun TouchInjectionScope.swipeOneCard() = swipeLeft(startX = centerX + width * 0.15f, endX = centerX - width * 0.15f)
 }

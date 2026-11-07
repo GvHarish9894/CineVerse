@@ -75,7 +75,8 @@ class NativeApprovalCoordinator(
         transitions.withLock {
             if (work == currentCoroutineContext()[kotlinx.coroutines.Job]) creating = false
         }
-        opener.open(attempt.code.approvalUrl,
+        // TMDB otherwise follows the browser/IP language (e.g. Hindi); show its page in the device language.
+        opener.open("${attempt.code.approvalUrl}&language=${platformLanguageTag()}",
             onCallback = { uri -> scope.launch { yield(); callbackSafely(uri) } },
             onCancel = { scope.launch { yield(); cancelIfPending(attempt.id) } },
         )
@@ -211,3 +212,6 @@ class NativeApprovalCoordinator(
         }
     }
 }
+
+/** Device UI language as `ll` or `ll-CC` (TMDB ignores script subtags). */
+internal expect fun platformLanguageTag(): String

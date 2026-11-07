@@ -111,7 +111,7 @@ internal fun MobileSearchContent(
         AmbientGlow(mobilePalette("search"))
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp)
             .padding(top = 24.dp, bottom = if (keyboardOpen) 0.dp else 100.dp)) {
-            SectionTitle("Search")
+            MobilePageTitle("Search")
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(editor, { editor = it; onQuery(it.text) }, Modifier.fillMaxWidth().testTag("search-input"),
                 label = { Text("Search movies, TV and people") }, singleLine = true,

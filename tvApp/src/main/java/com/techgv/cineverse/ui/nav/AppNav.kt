@@ -1,5 +1,9 @@
 package com.techgv.cineverse.ui.nav
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.SharedTransitionLayout
@@ -54,7 +58,6 @@ import com.techgv.cineverse.ui.library.LibraryActionsHost
 import com.techgv.cineverse.ui.library.LibraryScreen
 import com.techgv.cineverse.ui.login.LoginScreen
 import com.techgv.cineverse.ui.person.PersonScreen
-import com.techgv.cineverse.ui.player.PlayerScreen
 import com.techgv.cineverse.ui.season.SeasonScreen
 import com.techgv.cineverse.ui.spikes.spikeDestinations
 import com.techgv.cineverse.ui.splash.SplashScreen
@@ -117,11 +120,13 @@ fun AppNav(container: AppContainer) {
     val accountName = session?.displayName
     val toaster = remember { Toaster() }
     val railScreen = destination?.isRailScreen() == true
-    val visibleEntries by nav.visibleEntries.collectAsState()
-    // Includes a Player NavHost still shows while it transitions out: no modal, toast or clock over the video.
-    val onPlayer = destination?.hasRoute<Route.Player>() == true ||
-        visibleEntries.any { it.destination.hasRoute<Route.Player>() }
-    // Another destination became current (e.g. a delayed trailer opened the Player): the Exit dialog closes.
+    // Trailers play in the YouTube app; every other route navigates in-app.
+    val open: (Any) -> Unit = { route ->
+        if (route is Route.Player) {
+            if (activity?.openYouTube(route.videoKey) != true) toaster.show("Couldn't open YouTube")
+        } else nav.navigate(route)
+    }
+    // Another destination became current: the Exit dialog closes.
     val entryId = entry?.id
     LaunchedEffect(entryId) { if (entryId != null && entryId != exitDialogEntry) exitDialogEntry = null }
 
@@ -138,8 +143,7 @@ fun AppNav(container: AppContainer) {
                     .focusRestorer()
                     .focusGroup(),
             ) {
-                // §7.12: the Rate dialog waits while the Player is up.
-                LibraryActionsHost(container.libraryRepository, container.appScope, playerActive = onPlayer) {
+                LibraryActionsHost(container.libraryRepository, container.appScope) {
                     // Home card artwork ↔ Detail hero artwork (ui/components/SharedMedia.kt).
                     SharedTransitionLayout {
                         ProvideSharedTransition(this) {
@@ -148,10 +152,10 @@ fun AppNav(container: AppContainer) {
                                     SplashScreen(container) { signedIn -> nav.reset(if (signedIn) Route.Home else Route.Login) }
                                 }
                                 composable<Route.Home> {
-                                    ProvideSharedMediaVisibility(this) { HomeScreen(container, onOpen = { nav.navigate(it) }, backHandle = homeBack) }
+                                    ProvideSharedMediaVisibility(this) { HomeScreen(container, onOpen = open, backHandle = homeBack) }
                                 }
-                                composable<Route.Browse> { BrowseScreen(container, it.toRoute<Route.Browse>().kind, onOpen = { route -> nav.navigate(route) }) }
-                                composable<Route.Search> { SearchScreen(container, onOpen = { route -> nav.navigate(route) }) }
+                                composable<Route.Browse> { BrowseScreen(container, it.toRoute<Route.Browse>().kind, onOpen = open) }
+                                composable<Route.Search> { SearchScreen(container, onOpen = open) }
                                 composable<Route.Library> {
                                     LibraryScreen(
                                         container,
@@ -163,19 +167,18 @@ fun AppNav(container: AppContainer) {
                                 composable<Route.Settings> { SettingsScreen(onSignIn = { nav.navigate(Route.Login) }) }
                                 composable<Route.Login> { LoginScreen(onContinueAsGuest = leaveLogin, onSignedIn = leaveLogin, message = loginMessage) }
                                 composable<Route.Detail> {
-                                    ProvideSharedMediaVisibility(this) { DetailScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
+                                    ProvideSharedMediaVisibility(this) { DetailScreen(it.toRoute(), container, onNavigate = open) }
                                 }
-                                composable<Route.Person> { PersonScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
-                                composable<Route.Season> { SeasonScreen(it.toRoute(), container, onNavigate = { route -> nav.navigate(route) }) }
-                                composable<Route.Player> { PlayerScreen(it.toRoute(), onBack = { nav.popBackStack() }) }
+                                composable<Route.Person> { PersonScreen(it.toRoute(), container, onNavigate = open) }
+                                composable<Route.Season> { SeasonScreen(it.toRoute(), container, onNavigate = open) }
                                 spikeDestinations(nav, container)
                             }
                         }
                     }
                 }
             }
-            // §5 clock: every screen but Splash and Player (nothing drawn over the player).
-            if (destination != null && !destination.hasRoute<Route.Splash>() && !onPlayer) {
+            // §5 clock: every screen but Splash.
+            if (destination != null && !destination.hasRoute<Route.Splash>()) {
                 Clock(Modifier.align(Alignment.TopEnd).padding(top = 30.dp, end = 48.dp))
             }
             if (railScreen) {
@@ -192,9 +195,9 @@ fun AppNav(container: AppContainer) {
                     modifier = Modifier.onFocusChanged { railFocused = it.hasFocus },
                 )
             }
-            // §7.12 bottom area, never over the player: on Player a toast waits in the queue until it closes.
-            if (!onPlayer) ToastHost(toaster, Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp))
-            ImportLibraryHost(container.libraryRepository, container.libraryImporter, playerActive = onPlayer)
+            // §7.12 bottom area.
+            ToastHost(toaster, Modifier.align(Alignment.BottomCenter).padding(bottom = 44.dp))
+            ImportLibraryHost(container.libraryRepository, container.libraryImporter)
         }
     }
 
@@ -216,7 +219,7 @@ fun AppNav(container: AppContainer) {
         }
     }
 
-    if (exitDialogEntry != null && exitDialogEntry == entryId && !onPlayer) {
+    if (exitDialogEntry != null && exitDialogEntry == entryId) {
         ExitDialog(onStay = { exitDialogEntry = null }, onExit = { activity?.finish() })
     }
 }
@@ -233,3 +236,14 @@ private fun NavBackStackEntry.railItem(): RailItem? = when {
     destination.hasRoute<Route.Settings>() -> RailItem.Settings
     else -> null
 }
+
+/** The YouTube app first (Android TV's YouTube handles `vnd.youtube:`), then the watch page; false if nothing opens it. */
+private fun Activity.openYouTube(key: String): Boolean =
+    listOf("vnd.youtube:${Uri.encode(key)}", "https://www.youtube.com/watch?v=${Uri.encode(key)}").any { uri ->
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        }
+    }

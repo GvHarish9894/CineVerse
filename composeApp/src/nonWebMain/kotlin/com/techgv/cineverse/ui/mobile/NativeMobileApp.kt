@@ -1,5 +1,6 @@
 package com.techgv.cineverse.ui.mobile
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -65,6 +66,7 @@ fun NativeMobileApp(graph: MobileApplication, external: MobileExternalActions) {
 internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, external: MobileExternalActions) {
     val home = model.home
     val toasts = LocalToasts.current
+    val scope = rememberCoroutineScope()
     var selected by rememberSaveable(stateSaver = Saver<MobileTab, Int>(
         save = { it.ordinal }, restore = { MobileTab.entries[it] },
     )) { mutableStateOf(MobileTab.Home) }
@@ -129,6 +131,11 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
         controller.popBackStack()
     }
     val navigator = MobileNavigator { destination ->
+        // Trailers play in the YouTube app (or browser); the current screen stays as it is.
+        if (destination is MobileDestination.Trailer) {
+            scope.launch { if (!external.openYouTube(destination.key)) toasts.show(ToastMessage("Couldn't open YouTube.")) }
+            return@MobileNavigator
+        }
         detailBinding.leave()
         catalogBinding.leave()
         home.setActive(false)
@@ -200,9 +207,6 @@ internal fun MobileRoot(graph: MobileApplication, model: MobileHomeViewModel, ex
                 } }
                 composable<MobileSeasonRoute> { route ->
                     MobileSeasonRouteEntry(graph, route, catalogBinding, navigator, ::back)
-                }
-                composable<MobileTrailerRoute> { route ->
-                    MobileTrailerScreen(route.toRoute<MobileTrailerRoute>(), external, ::back)
                 }
                 composable<MobileBrowseRoute> { route -> MobileSharedRoute(this) {
                     val selection = route.toRoute<MobileBrowseRoute>().selection()

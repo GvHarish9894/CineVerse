@@ -95,7 +95,7 @@ internal fun MobileExploreContent(
                 item("header", span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.statusBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (onBack != null) PillButton("Back", onBack, variant = ButtonVariant.Ghost)
-                        SectionTitle("Explore")
+                        MobilePageTitle("Explore")
                         Text(when (val selection = state.selection) {
                             is BrowseSelection.Movies -> "Movies · ${selection.list.label()}"
                             is BrowseSelection.Tv -> "TV shows · ${selection.list.label()}"

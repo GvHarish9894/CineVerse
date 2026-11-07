@@ -200,8 +200,6 @@ class MobileAccountOwner internal constructor(
     /** Close/back/Later: stops work without a durable answer. */
     fun laterImport(rendered: MobileAccountDialog.Import) = importAction(rendered, { true }, once = false) { imports.later() }
 
-    internal fun setPlayerActive(active: Boolean) = imports.setPlayerActive(active)
-
     private inline fun importAction(
         rendered: MobileAccountDialog.Import,
         allowed: (ImportPrompt) -> Boolean,

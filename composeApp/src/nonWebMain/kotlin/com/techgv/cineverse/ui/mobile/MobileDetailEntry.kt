@@ -44,7 +44,7 @@ internal class MobileDetailRootBinding(private val graph: MobileApplication) {
         it.invalid || it.settingsFailed || it.libraryFailed || it.identityFailed
     } == true
 
-    private fun rateAllowed() = visible && entryVisible() && current?.destination?.hasRoute<MobileTrailerRoute>() == false &&
+    private fun rateAllowed() = visible && entryVisible() && current != null &&
         graph.settings.value != null && !graph.settingsFailed.value && graph.identity.value != null &&
         !graph.identityFailed.value && !graph.storageFailed.value && !detailReadsFailed()
 
@@ -76,8 +76,7 @@ internal class MobileDetailRootBinding(private val graph: MobileApplication) {
             revoke(token)
             if (operation != token) return
         }
-        graph.setPlayerActive(entry?.destination?.hasRoute<MobileTrailerRoute>() == true)
-        if (operation == token) reconcile(token)
+        reconcile(token)
     }
 
     fun clearCurrent(entry: NavBackStackEntry?) { if (current === entry) leave() }
@@ -187,7 +186,6 @@ internal class MobileDetailRootBinding(private val graph: MobileApplication) {
         val token = ++operation
         current = null
         revoke(token)
-        if (operation == token) graph.setPlayerActive(false)
     }
 }
 

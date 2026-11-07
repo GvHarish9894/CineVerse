@@ -1,6 +1,7 @@
 package com.techgv.cineverse.ui.mobile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,11 +19,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.techgv.cineverse.data.tmdb.TrendingWindow
@@ -34,6 +37,7 @@ import com.techgv.cineverse.ui.haptics.HapticKind
 import com.techgv.cineverse.ui.haptics.LocalHaptics
 import com.techgv.cineverse.ui.theme.displayStyle
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlin.math.absoluteValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -128,7 +132,7 @@ internal fun MobileHomeScreen(
         }
         GlassTopBar(
             solid = rememberTopBarSolid(scroll, 420.dp),
-            navigation = { LogoMark(size = 30.dp); Text("CineVerse", style = displayStyle(20.sp)) },
+            navigation = { LogoMark(size = 30.dp); MobilePageTitle("CineVerse") },
             actions = {
                 RoundIconButton(CvIcons.Search, "Search", onSearch)
                 RoundIconButton(CvIcons.User, "Profile", onProfile)
@@ -149,38 +153,46 @@ private fun HomeHero(graph: MobileApplication, home: HomeStateHolder, state: Hom
             first = false
         }
     }
-    Column {
-        HorizontalPager(pager, modifier = Modifier.testTag("home-hero"), key = { titles[it].ref.key }) { page ->
+    // Peeking poster cards under the top bar; the screen's AmbientGlow already follows the selected title's palette.
+    Column(Modifier.statusBarsPadding().padding(top = 64.dp)) {
+      BoxWithConstraints {
+        // Card width capped so tablets/landscape show a centred card with neighbours, not a screen-tall poster.
+        val cardWidth = minOf(maxWidth - 72.dp, 320.dp)
+        HorizontalPager(pager, modifier = Modifier.testTag("home-hero"), contentPadding = PaddingValues(horizontal = (maxWidth - cardWidth) / 2),
+            pageSpacing = 12.dp, key = { titles[it].ref.key }) { page ->
             val title = titles[page]
             val palette = mobilePalette(title.ref.key)
             val identity by graph.identity.collectAsState()
             val library by remember(title.ref) { graph.actions.state(title.ref) }.collectAsState(LibraryState.Unknown)
-            Box(Modifier.fillMaxWidth().heightIn(min = 610.dp)) {
-                PaletteArt(imageUrl(graph.catalog.imageBaseUrl(), "w1280", title.backdropPath), palette, ArtStyle.Backdrop,
+            Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)
+                .graphicsLayer {
+                    val away = pager.getOffsetDistanceInPages(page).absoluteValue.coerceAtMost(1f)
+                    scaleX = 1f - 0.08f * away; scaleY = scaleX; alpha = 1f - 0.45f * away
+                }
+                .clip(RoundedCornerShape(28.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(28.dp))) {
+                PaletteArt(imageUrl(graph.catalog.imageBaseUrl(), "w780", title.posterPath), palette, ArtStyle.Poster,
                     Modifier.matchParentSize(), bottomScrim = true)
-                Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 76.dp, bottom = 18.dp, start = 20.dp, end = 20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PaletteArt(imageUrl(graph.catalog.imageBaseUrl(), "w342", title.posterPath), palette, ArtStyle.Poster,
-                        Modifier.size(156.dp, 234.dp).clip(RoundedCornerShape(18.dp))) {
-                        Text(title.title, Modifier.align(Alignment.BottomCenter).padding(12.dp), style = displayStyle(20.sp))
-                    }
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 18.dp, vertical = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         title.genreIds.mapNotNull(state.genres::get).take(2).forEach { MetaChip(it) }
                     }
-                    Text(title.title, style = displayStyle(32.sp), textAlign = TextAlign.Center)
-                    Text(titleMeta(title), textAlign = TextAlign.Center)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(title.title, style = displayStyle(28.sp), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(titleMeta(title), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         PillButton(if (state.trailerLoading == title.ref) "Loading…" else "Trailer",
                             { home.playTrailer(title) }, icon = CvIcons.Play, enabled = state.trailerLoading == null)
-                        PillButton(if (!library.known || identity == null) "Watchlist unknown" else if (library.watchlist) "Saved" else "Watchlist",
+                        RoundIconButton(if (library.watchlist) CvIcons.Check else CvIcons.Plus,
+                            if (library.watchlist) "Remove ${title.title} from watchlist" else "Add ${title.title} to watchlist",
                             { if (graph.identity.value != null) graph.actions.toggleWatchlist(title) },
-                            variant = ButtonVariant.Glass, icon = if (library.watchlist) CvIcons.Check else CvIcons.Plus,
                             enabled = identity != null && library.known && LibraryKind.WATCHLIST !in library.pending)
                         RoundIconButton(CvIcons.Info, "Details for ${title.title}", { navigator.open(title.detailDestination()) })
                     }
                 }
             }
         }
+      }
         Row(Modifier.fillMaxWidth().padding(top = 12.dp).semantics { contentDescription = "Featured title ${pager.currentPage + 1} of ${titles.size}" },
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
             repeat(titles.size) { index ->
