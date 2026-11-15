@@ -44,23 +44,26 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.data.tmdb.formatDate
-import com.techgv.cineverse.data.tmdb.today
 import com.techgv.cineverse.data.tmdb.formatRuntime
+import com.techgv.cineverse.data.tmdb.today
 import com.techgv.cineverse.domain.Detail
 import com.techgv.cineverse.domain.Episode
 import com.techgv.cineverse.domain.Season
+import com.techgv.cineverse.presentation.SectionState
+import com.techgv.cineverse.ui.components.ActionButton
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.DetailCardSurface
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
-import com.techgv.cineverse.ui.components.ActionButton
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.LocalToaster
+import com.techgv.cineverse.ui.components.PERSON_SIZE
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.Section
-import com.techgv.cineverse.presentation.SectionState
+import com.techgv.cineverse.ui.components.cardLabelHeight
+import com.techgv.cineverse.ui.components.cardRowHeight
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
@@ -368,7 +371,12 @@ private fun EpisodePanel(episode: Episode, restorer: FocusRestorer, imageBase: S
         )
         if (episode.guestStars.isNotEmpty()) {
             Text("Guest stars", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            LazyRow(state = guestsState, horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
+            LazyRow(
+                state = guestsState,
+                modifier = Modifier.cardRowHeight(PERSON_SIZE, cardLabelHeight(), GUEST_ROW_PADDING, GUEST_ROW_PADDING),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(vertical = GUEST_ROW_PADDING),
+            ) {
                 itemsIndexed(episode.guestStars, key = { index, _ -> guestKeys[index] }) { index, guest ->
                     PersonCard(
                         guest.name, guest.role, guest.profilePath, seed = guestKeys[index],
@@ -389,3 +397,6 @@ private fun EpisodePanel(episode: Episode, restorer: FocusRestorer, imageBase: S
         )
     }
 }
+
+/** Vertical padding of the guest-star row (room for a focused card's growth). */
+private val GUEST_ROW_PADDING = 8.dp

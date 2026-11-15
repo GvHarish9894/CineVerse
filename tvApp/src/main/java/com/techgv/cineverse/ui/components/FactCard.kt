@@ -20,7 +20,7 @@ import com.techgv.cineverse.domain.Fact
 fun FactCard(fact: Fact, modifier: Modifier = Modifier) {
     DetailCardSurface(
         onClick = {},
-        modifier = modifier.size(204.dp, 100.dp).semantics { contentDescription = "${fact.label}: ${fact.value}" },
+        modifier = modifier.size(204.dp, FACT_CARD_HEIGHT).semantics { contentDescription = "${fact.label}: ${fact.value}" },
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.Center) {
             Text(
@@ -39,3 +39,5 @@ fun FactCard(fact: Fact, modifier: Modifier = Modifier) {
         }
     }
 }
+
+val FACT_CARD_HEIGHT = 100.dp

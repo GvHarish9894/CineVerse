@@ -24,13 +24,22 @@ import com.techgv.cineverse.ui.feedback.LocalFeedback
 /** Pagination placeholder: a row of non-focusable poster-sized tiles that pulse (static under reduce motion). */
 @Composable
 fun PosterRowSkeleton(count: Int, modifier: Modifier = Modifier) {
-    val pulse by rememberInfiniteTransition(label = "posterSkeleton").animateFloat(
-        0.5f, 1f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "posterSkeletonAlpha",
-    )
-    val alpha = if (LocalFeedback.current.reduceMotion) 0.75f else pulse
+    val alpha = skeletonAlpha()
     Row(modifier.semantics { contentDescription = "Loading more" }, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         repeat(count) {
-            Box(Modifier.size(POSTER_WIDTH, POSTER_HEIGHT).alpha(alpha).clip(CardShape).background(Color.White.copy(alpha = 0.08f)))
+            Box(Modifier.size(POSTER_WIDTH, POSTER_HEIGHT).alpha(alpha).clip(CardShape).background(SkeletonColor))
         }
     }
+}
+
+/** Fill of every skeleton block. */
+val SkeletonColor = Color.White.copy(alpha = 0.08f)
+
+/** Skeleton pulse: alpha 0.5 ↔ 1 every 800 ms; a steady 0.75 under Reduce motion. */
+@Composable
+fun skeletonAlpha(): Float {
+    val pulse by rememberInfiniteTransition(label = "skeleton").animateFloat(
+        0.5f, 1f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "skeletonAlpha",
+    )
+    return if (LocalFeedback.current.reduceMotion) 0.75f else pulse
 }

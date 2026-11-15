@@ -23,7 +23,7 @@ import com.techgv.cineverse.domain.PersonCredit
 /** §6 CreditCard 308×110 (step 324): poster, year or "—", title, role sub-line. [modifier] goes on the focusable. */
 @Composable
 fun CreditCard(credit: PersonCredit, posterUrl: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    DetailCardSurface(onClick = onClick, modifier = modifier.size(308.dp, 110.dp)) {
+    DetailCardSurface(onClick = onClick, modifier = modifier.size(308.dp, CREDIT_CARD_HEIGHT)) {
         Row(Modifier.fillMaxSize().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             DetailCardArt(posterUrl, credit.title, Modifier.fillMaxHeight().width(60.dp).clip(RoundedCornerShape(8.dp)))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -48,3 +48,5 @@ fun CreditCard(credit: PersonCredit, posterUrl: String?, onClick: () -> Unit, mo
         }
     }
 }
+
+val CREDIT_CARD_HEIGHT = 110.dp

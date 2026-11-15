@@ -34,6 +34,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -63,10 +64,14 @@ import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.HeroBackdrop
 import com.techgv.cineverse.ui.components.HeroInfo
+import com.techgv.cineverse.ui.components.HeroInfoSkeleton
 import com.techgv.cineverse.ui.components.ImageSize
+import com.techgv.cineverse.ui.components.LANDSCAPE_HEIGHT
 import com.techgv.cineverse.ui.components.LandscapeCard
 import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.presentation.PagedItems
+import com.techgv.cineverse.ui.components.PERSON_SIZE
+import com.techgv.cineverse.ui.components.POSTER_HEIGHT
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.KeepInView
 import com.techgv.cineverse.ui.components.PinToStart
@@ -76,6 +81,8 @@ import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.UiColors
 import com.techgv.cineverse.ui.components.bleedStart
+import com.techgv.cineverse.ui.components.cardLabelHeight
+import com.techgv.cineverse.ui.components.cardRowHeight
 import com.techgv.cineverse.ui.components.homeCardSharedKey
 import com.techgv.cineverse.ui.components.rememberSharedMedia
 import com.techgv.cineverse.ui.components.parseTmdbDate
@@ -191,8 +198,12 @@ fun HomeScreen(
         AmbientBackdrop(artUrl, seed)
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(70.dp))
+            val compactHero = listFocused && !buttonsFocused
             if (hero != null) {
-                HeroText(hero, state, compact = listFocused && !buttonsFocused, Modifier.padding(start = CONTENT_INSET))
+                HeroText(hero, state, compact = compactHero, Modifier.padding(start = CONTENT_INSET))
+            } else if (state.rows[HomeRow.Trending] is SectionState.Loading) {
+                // Same size as the hero it stands in for, so the rows don't move when the first hero arrives.
+                HeroInfoSkeleton(compact = compactHero, Modifier.padding(start = CONTENT_INSET))
             }
             Spacer(Modifier.height(8.dp))
             // Vertical pin: the focused card's row title (42 dp) stays visible above it.
@@ -418,14 +429,16 @@ private fun HomeRowSection(
     val scope = rememberCoroutineScope()
     Column(Modifier.padding(top = 8.dp)) {
         RowTitle(title, Modifier.padding(start = CONTENT_INSET))
-        Section(state, onRetry, Modifier.padding(start = CONTENT_INSET)) { paged ->
+        // One height for loading / error / cards, and however focus moves: the rows below never shift.
+        val rowHeight = Modifier.cardRowHeight(row.card.height, cardLabelHeight(), ROW_PADDING_TOP, ROW_PADDING_BOTTOM)
+        Section(state, onRetry, Modifier.padding(start = CONTENT_INSET).then(rowHeight)) { paged ->
             // Rows stay still while focus moves between visible cards; they scroll only at the edges.
             KeepInView(inset = CONTENT_INSET) {
                 LazyRow(
                     state = listState,
                     // Section pads its messages; the row bleeds back to the content edge so a scaled card is not clipped.
                     modifier = with(restorer) { Modifier.restoreRowFocus(focusRow, scope) }.bleedStart(CONTENT_INSET),
-                    contentPadding = PaddingValues(start = CONTENT_INSET, end = CONTENT_INSET, top = 14.dp, bottom = 12.dp),
+                    contentPadding = PaddingValues(start = CONTENT_INSET, end = CONTENT_INSET, top = ROW_PADDING_TOP, bottom = ROW_PADDING_BOTTOM),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
@@ -439,6 +452,17 @@ private fun HomeRowSection(
         }
     }
 }
+
+private val ROW_PADDING_TOP = 14.dp
+private val ROW_PADDING_BOTTOM = 12.dp
+
+/** Unfocused height of a row's cards (above their [CardLabel]). */
+private val HomeCard.height: Dp
+    get() = when (this) {
+        HomeCard.Poster -> POSTER_HEIGHT
+        HomeCard.Landscape -> LANDSCAPE_HEIGHT
+        HomeCard.Person -> PERSON_SIZE
+    }
 
 @Composable
 private fun HomeCard(item: Hero, card: HomeCard, genres: Map<Int, String>, onClick: () -> Unit, modifier: Modifier, shared: Boolean) {

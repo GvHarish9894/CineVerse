@@ -29,13 +29,16 @@ fun scoreColor(percent: Int): Color = when {
     else -> Color(0xFFDB2360)
 }
 
+/** Diameter of [ScoreRing]; layouts that may or may not show a ring reserve this height. */
+val ScoreRingSize = 48.dp
+
 /** 48 dp user-score ring; renders nothing when [voteCount] is 0 (§6). */
 @Composable
 fun ScoreRing(voteAverage: Double, voteCount: Int, modifier: Modifier = Modifier) {
     if (voteCount == 0) return
     val percent = scorePercent(voteAverage)
     val color = scoreColor(percent)
-    Box(modifier.size(48.dp).semantics { contentDescription = "User score $percent percent" }, contentAlignment = Alignment.Center) {
+    Box(modifier.size(ScoreRingSize).semantics { contentDescription = "User score $percent percent" }, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 4.dp.toPx()
             drawCircle(Color(0xFF0B0A16))

@@ -44,7 +44,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
-import kotlinx.coroutines.flow.flowOf
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.data.tmdb.formatRuntime
 import com.techgv.cineverse.domain.Detail
@@ -56,33 +55,42 @@ import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.domain.Review
 import com.techgv.cineverse.domain.Video
+import com.techgv.cineverse.presentation.DetailUiState
+import com.techgv.cineverse.presentation.SectionState
+import com.techgv.cineverse.presentation.canToggle
+import com.techgv.cineverse.presentation.episodesSeason
+import com.techgv.cineverse.presentation.trailerOf
 import com.techgv.cineverse.ui.components.ActionButton
 import com.techgv.cineverse.ui.components.ActionButtonStyle
+import com.techgv.cineverse.ui.components.DetailCardArt
+import com.techgv.cineverse.ui.components.FACT_CARD_HEIGHT
 import com.techgv.cineverse.ui.components.FactCard
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
+import com.techgv.cineverse.ui.components.LANDSCAPE_HEIGHT
 import com.techgv.cineverse.ui.components.LandscapeCard
+import com.techgv.cineverse.ui.components.PERSON_SIZE
+import com.techgv.cineverse.ui.components.POSTER_HEIGHT
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.PosterCard
+import com.techgv.cineverse.ui.components.REVIEW_CARD_HEIGHT
 import com.techgv.cineverse.ui.components.ReviewCard
-import com.techgv.cineverse.ui.components.ScoreRing
+import com.techgv.cineverse.ui.components.SEASON_CARD_HEIGHT
 import com.techgv.cineverse.ui.components.SavedFocus
+import com.techgv.cineverse.ui.components.ScoreRing
 import com.techgv.cineverse.ui.components.SeasonCard
 import com.techgv.cineverse.ui.components.Section
-import com.techgv.cineverse.presentation.SectionState
-import com.techgv.cineverse.ui.components.DetailCardArt
+import com.techgv.cineverse.ui.components.cardLabelHeight
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.rememberSharedMedia
+import com.techgv.cineverse.ui.components.seasonLabelHeight
 import com.techgv.cineverse.ui.components.sharedBackdropKey
 import com.techgv.cineverse.ui.components.sharedPosterKey
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.nav.Route
-import com.techgv.cineverse.presentation.DetailUiState
-import com.techgv.cineverse.presentation.trailerOf
-import com.techgv.cineverse.presentation.canToggle
-import com.techgv.cineverse.presentation.episodesSeason
+import kotlinx.coroutines.flow.flowOf
 
 private const val PANEL = "main"
 
@@ -241,7 +249,7 @@ private fun DetailBody(
             if (detail != null) for (row in rows.drop(1)) {
                 item(key = row.key) {
                     when (row.key) {
-                        "seasons" -> DetailRow("Seasons", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "seasons" -> DetailRow("Seasons", restorer, focusRow(row.key), rowStates.getValue(row.key), SEASON_CARD_HEIGHT, seasonLabelHeight()) {
                             itemsIndexed(detail.seasons, key = { _, s -> s.seasonNumber }) { index, season ->
                                 SeasonCard(
                                     season, tmdbImageUrl(imageBase, "w342", season.posterPath),
@@ -250,7 +258,7 @@ private fun DetailBody(
                                 )
                             }
                         }
-                        "cast" -> DetailRow("Top billed cast", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "cast" -> DetailRow("Top billed cast", restorer, focusRow(row.key), rowStates.getValue(row.key), PERSON_SIZE, cardLabelHeight()) {
                             val people = detail.cast + crew
                             itemsIndexed(people, key = { index, _ -> row.itemKeys[index] }) { index, person ->
                                 PersonCard(
@@ -260,7 +268,7 @@ private fun DetailBody(
                                 )
                             }
                         }
-                        "videos" -> DetailRow("Videos", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "videos" -> DetailRow("Videos", restorer, focusRow(row.key), rowStates.getValue(row.key), LANDSCAPE_HEIGHT, cardLabelHeight()) {
                             itemsIndexed(detail.videos, key = { _, v -> v.key }) { index, video ->
                                 LandscapeCard(
                                     video.name, video.type, imagePath = null, seed = video.key,
@@ -270,7 +278,7 @@ private fun DetailBody(
                                 )
                             }
                         }
-                        "recommendations" -> DetailRow("Recommendations", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "recommendations" -> DetailRow("Recommendations", restorer, focusRow(row.key), rowStates.getValue(row.key), POSTER_HEIGHT, cardLabelHeight()) {
                             itemsIndexed(detail.recommendations, key = { index, _ -> row.itemKeys[index] }) { index, title ->
                                 PosterCard(
                                     title,
@@ -279,7 +287,7 @@ private fun DetailBody(
                                 )
                             }
                         }
-                        "reviews" -> DetailRow("Reviews", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "reviews" -> DetailRow("Reviews", restorer, focusRow(row.key), rowStates.getValue(row.key), REVIEW_CARD_HEIGHT) {
                             itemsIndexed(detail.reviews, key = { _, r -> r.id }) { index, review ->
                                 ReviewCard(
                                     review, avatarUrl(review),
@@ -288,7 +296,7 @@ private fun DetailBody(
                                 )
                             }
                         }
-                        "facts" -> DetailRow("Details", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "facts" -> DetailRow("Details", restorer, focusRow(row.key), rowStates.getValue(row.key), FACT_CARD_HEIGHT) {
                             itemsIndexed(detail.facts, key = { _, f -> f.label }) { index, fact ->
                                 FactCard(fact, modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, fact.label, index) })
                             }

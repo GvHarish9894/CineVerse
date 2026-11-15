@@ -1,9 +1,9 @@
 package com.techgv.cineverse.ui.detail
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,14 +32,18 @@ import androidx.tv.material3.Text
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.PinToStart
+import com.techgv.cineverse.ui.components.cardRowHeight
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 internal val SCREEN_INSET = 48.dp
 
 /** Where a focused row's cards land below the viewport top: leaves its title visible. */
 internal val ROW_TOP_INSET = 80.dp
+
+/** Vertical padding of a [DetailRow]'s cards. */
+private val ROW_PADDING = 16.dp
 
 /** Title + subtitle lines under a poster / person / season card. */
 private val CARD_LABELS_HEIGHT = 56.dp
@@ -65,6 +69,9 @@ internal fun DetailRow(
     restorer: FocusRestorer,
     focusRow: FocusRow,
     state: LazyListState,
+    /** Unfocused height of the row's cards and of the labels under them: the row is pinned to [cardRowHeightOf]. */
+    cardHeight: Dp,
+    labels: Dp = 0.dp,
     spacing: Int = 16,
     content: LazyListScope.() -> Unit,
 ) {
@@ -79,8 +86,9 @@ internal fun DetailRow(
         PinToStart(SCREEN_INSET) {
             LazyRow(
                 state = state,
-                modifier = with(restorer) { Modifier.restoreRowFocus(focusRow, scope) },
-                contentPadding = PaddingValues(horizontal = SCREEN_INSET, vertical = 16.dp),
+                modifier = with(restorer) { Modifier.restoreRowFocus(focusRow, scope) }
+                    .cardRowHeight(cardHeight, labels, ROW_PADDING, ROW_PADDING),
+                contentPadding = PaddingValues(horizontal = SCREEN_INSET, vertical = ROW_PADDING),
                 horizontalArrangement = Arrangement.spacedBy(spacing.dp),
                 content = content,
             )
