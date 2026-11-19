@@ -52,6 +52,7 @@ import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.detail.DetailChip
 import com.techgv.cineverse.ui.detail.DetailRow
+import com.techgv.cineverse.ui.detail.PageSkeleton
 import com.techgv.cineverse.ui.detail.ROW_TOP_INSET
 import com.techgv.cineverse.ui.detail.RevealVertically
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
@@ -87,6 +88,7 @@ internal fun PersonContent(
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (person) {
             is SectionState.Content -> PersonBody(person.value, bioExpanded, memory, imageBase, onToggleBio, onNavigate)
+            SectionState.Loading -> PageSkeleton()
             else -> Section(person, onRetry = onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
         }
     }

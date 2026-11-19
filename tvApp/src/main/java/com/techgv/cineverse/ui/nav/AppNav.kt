@@ -237,13 +237,14 @@ private fun NavBackStackEntry.railItem(): RailItem? = when {
     else -> null
 }
 
-/** The YouTube app first (Android TV's YouTube handles `vnd.youtube:`), then the watch page; false if nothing opens it. */
+/**
+ * Opens the watch URL, which the YouTube TV app handles (else a browser); false if nothing opens it.
+ * Not `vnd.youtube:` — YouTube TV accepts it but only shows its home screen without playing.
+ */
 private fun Activity.openYouTube(key: String): Boolean =
-    listOf("vnd.youtube:${Uri.encode(key)}", "https://www.youtube.com/watch?v=${Uri.encode(key)}").any { uri ->
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
-            true
-        } catch (_: ActivityNotFoundException) {
-            false
-        }
+    try {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${Uri.encode(key)}")))
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
     }

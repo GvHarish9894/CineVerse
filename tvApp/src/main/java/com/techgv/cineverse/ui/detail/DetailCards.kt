@@ -23,7 +23,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.relocation.BringIntoViewModifierNode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -117,8 +121,21 @@ internal fun RevealVertically(topInset: Dp, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
 }
 
-/** Focus entering the hero (outer item 0) shows all of it; the TV pivot alone would cut the title off. */
+/**
+ * Focus entering the hero (outer item 0) shows all of it; the TV pivot alone would cut the title off.
+ * The focused button's own bring-into-view is swallowed: it would cancel this scroll and stop with the hero half shown.
+ */
 internal fun Modifier.revealHeroOnFocus(outer: LazyListState, scope: CoroutineScope, reduceMotion: Boolean): Modifier =
     onFocusChanged { if (it.hasFocus) scope.launch { if (reduceMotion) outer.scrollToItem(0) else outer.animateScrollToItem(0) } }
+        .then(SwallowBringIntoView)
+
+private data object SwallowBringIntoView : ModifierNodeElement<SwallowBringIntoViewNode>() {
+    override fun create() = SwallowBringIntoViewNode()
+    override fun update(node: SwallowBringIntoViewNode) = Unit
+}
+
+private class SwallowBringIntoViewNode : Modifier.Node(), BringIntoViewModifierNode {
+    override suspend fun bringIntoView(childCoordinates: LayoutCoordinates, boundsProvider: () -> Rect?) = Unit
+}
 
 internal fun oneDecimal(value: Double): String = String.format(Locale.US, "%.1f", value)

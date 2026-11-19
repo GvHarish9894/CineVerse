@@ -1,5 +1,6 @@
 package com.techgv.cineverse.ui.components
 
+import android.os.Build
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -10,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 
@@ -32,8 +34,15 @@ fun AmbientBackdrop(imageUrl: String?, seed: String, modifier: Modifier = Modifi
         label = "ambientBackdrop",
     ) { (url, tint) ->
         Box(Modifier.fillMaxSize()) {
-            if (url != null) {
-                AsyncImage(url, contentDescription = null, modifier = Modifier.fillMaxSize().blur(80.dp).alpha(0.16f))
+            // blur() is a no-op below Android 12: the art would show sharp (a ghost of the hero), so only the tint remains there.
+            if (url != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                AsyncImage(
+                    url,
+                    contentDescription = null,
+                    // Crop, not the default Fit: Fit letterboxes 16:9 art into top/bottom bands.
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().blur(80.dp).alpha(0.16f),
+                )
             }
             Box(
                 Modifier.fillMaxSize().background(

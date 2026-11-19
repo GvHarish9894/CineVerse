@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -16,19 +17,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 
-/** Pagination placeholder: a row of non-focusable poster-sized tiles that pulse (static under reduce motion). */
+/**
+ * Loading placeholder: a row of non-focusable card-sized tiles that pulse (static under reduce motion);
+ * poster-sized unless [width] / [height] / [shape] give another card's.
+ */
 @Composable
-fun PosterRowSkeleton(count: Int, modifier: Modifier = Modifier) {
+fun PosterRowSkeleton(
+    count: Int,
+    modifier: Modifier = Modifier,
+    width: Dp = POSTER_WIDTH,
+    height: Dp = POSTER_HEIGHT,
+    shape: Shape = CardShape,
+    label: String = "Loading more",
+) {
     val alpha = skeletonAlpha()
-    Row(modifier.semantics { contentDescription = "Loading more" }, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Row(modifier.semantics { contentDescription = label }, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         repeat(count) {
-            Box(Modifier.size(POSTER_WIDTH, POSTER_HEIGHT).alpha(alpha).clip(CardShape).background(SkeletonColor))
+            Box(Modifier.size(width, height).alpha(alpha).clip(shape).background(SkeletonColor))
         }
+    }
+}
+
+/** First-page placeholder of a poster grid: [rows] rows of [columns] tiles. */
+@Composable
+fun GridSkeleton(columns: Int, modifier: Modifier = Modifier, rows: Int = 2) {
+    Column(modifier.semantics { contentDescription = "Loading" }, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        repeat(rows) { PosterRowSkeleton(columns, label = "Loading") }
     }
 }
 

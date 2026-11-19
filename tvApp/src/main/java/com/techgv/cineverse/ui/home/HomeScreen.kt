@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -67,11 +68,13 @@ import com.techgv.cineverse.ui.components.HeroInfo
 import com.techgv.cineverse.ui.components.HeroInfoSkeleton
 import com.techgv.cineverse.ui.components.ImageSize
 import com.techgv.cineverse.ui.components.LANDSCAPE_HEIGHT
+import com.techgv.cineverse.ui.components.LANDSCAPE_WIDTH
 import com.techgv.cineverse.ui.components.LandscapeCard
 import com.techgv.cineverse.ui.components.LocalToaster
 import com.techgv.cineverse.presentation.PagedItems
 import com.techgv.cineverse.ui.components.PERSON_SIZE
 import com.techgv.cineverse.ui.components.POSTER_HEIGHT
+import com.techgv.cineverse.ui.components.PosterRowSkeleton
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.KeepInView
 import com.techgv.cineverse.ui.components.PinToStart
@@ -431,7 +434,7 @@ private fun HomeRowSection(
         RowTitle(title, Modifier.padding(start = CONTENT_INSET))
         // One height for loading / error / cards, and however focus moves: the rows below never shift.
         val rowHeight = Modifier.cardRowHeight(row.card.height, cardLabelHeight(), ROW_PADDING_TOP, ROW_PADDING_BOTTOM)
-        Section(state, onRetry, Modifier.padding(start = CONTENT_INSET).then(rowHeight)) { paged ->
+        Section(state, onRetry, Modifier.padding(start = CONTENT_INSET).then(rowHeight), loading = { HomeRowSkeleton(row.card) }) { paged ->
             // Rows stay still while focus moves between visible cards; they scroll only at the edges.
             KeepInView(inset = CONTENT_INSET) {
                 LazyRow(
@@ -455,6 +458,17 @@ private fun HomeRowSection(
 
 private val ROW_PADDING_TOP = 14.dp
 private val ROW_PADDING_BOTTOM = 12.dp
+
+/** A row's first load: tiles of its card kind, top-aligned like the cards. */
+@Composable
+private fun HomeRowSkeleton(card: HomeCard) {
+    val modifier = Modifier.padding(top = ROW_PADDING_TOP)
+    when (card) {
+        HomeCard.Poster -> PosterRowSkeleton(8, modifier, label = "Loading")
+        HomeCard.Landscape -> PosterRowSkeleton(5, modifier, LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT, label = "Loading")
+        HomeCard.Person -> PosterRowSkeleton(8, modifier, PERSON_SIZE, PERSON_SIZE, CircleShape, label = "Loading")
+    }
+}
 
 /** Unfocused height of a row's cards (above their [CardLabel]). */
 private val HomeCard.height: Dp

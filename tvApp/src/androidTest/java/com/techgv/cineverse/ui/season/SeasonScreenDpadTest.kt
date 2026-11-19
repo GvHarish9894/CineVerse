@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -30,7 +31,7 @@ import com.techgv.cineverse.data.tmdb.toSeason
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.longText
-import com.techgv.cineverse.ui.components.readFocusedScrollableTextByDpad
+import com.techgv.cineverse.ui.components.focusedScrollableText
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -70,21 +71,31 @@ class SeasonScreenDpadTest {
         compose.onNodeWithText("E2 · Second", substring = true).assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
         compose.waitForIdle()
 
-        // Panel: full overview, focus inside on Close; LEFT cannot leave it.
+        // Panel: full overview, no Close button; focus starts on the overview and LEFT cannot leave the panel.
         compose.onAllNodesWithText("Full overview", substring = true).assertCountEquals(2) // card excerpt + panel
-        compose.onNodeWithText("Close").assertIsFocused().performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.onNodeWithText("Close").assertDoesNotExist()
+        compose.onNode(focusedScrollableText).performKeyInput { pressKey(Key.DirectionLeft) }
         compose.waitForIdle()
-        compose.onNodeWithText("Close").assertIsFocused()
+        compose.onNode(focusedScrollableText).assertExists()
 
-        // The long overview is read by D-pad alone: UP into it, DOWN page by page, then back on Close.
-        compose.onNodeWithText("Close").performKeyInput { pressKey(Key.DirectionUp) }
+        // The long overview is read by D-pad alone: DOWN page by page to its end; focus stays in the panel.
+        var pages = 0
+        while (true) {
+            val range = compose.onNode(focusedScrollableText).fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+            if (range.value() >= range.maxValue()) break
+            compose.onNode(focusedScrollableText).performKeyInput { pressKey(Key.DirectionDown) }
+            compose.waitForIdle()
+            pages++
+            assertTrue("DOWN never reached the end", pages < 200)
+        }
+        assertTrue("several pages", pages >= 2)
+        compose.onNode(focusedScrollableText).performKeyInput { pressKey(Key.DirectionDown) }
         compose.waitForIdle()
-        assertTrue("several pages", compose.readFocusedScrollableTextByDpad() >= 2)
-        compose.onNodeWithText("Close").assertIsFocused()
+        compose.onNode(focusedScrollableText).assertExists()
 
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitForIdle()
-        compose.onNodeWithText("Close").assertDoesNotExist()
+        compose.onAllNodesWithText("Full overview", substring = true).assertCountEquals(1)
         compose.onNodeWithText("E2 · Second", substring = true).assertIsFocused().performKeyInput { pressKey(Key.DirectionLeft) }
         compose.waitForIdle()
         compose.onNodeWithText("Season 1").assertIsFocused()

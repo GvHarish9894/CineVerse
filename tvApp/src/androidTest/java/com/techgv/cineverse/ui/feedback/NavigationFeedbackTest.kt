@@ -91,7 +91,7 @@ class NavigationFeedbackTest {
         compose.waitUntil(5_000) { compose.onAllNodes(isFocused() and hasText("Stay")).fetchSemanticsNodes().isNotEmpty() }
 
         compose.onNodeWithText("Stay").performKeyInput { pressKey(Key.DirectionRight) }
-        compose.onNodeWithText("Exit app").assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.onNodeWithText("Exit").assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }
         compose.waitForIdle()
 
         assertEquals(listOf("move ${FocusDirection.Right}", "confirm"), events)

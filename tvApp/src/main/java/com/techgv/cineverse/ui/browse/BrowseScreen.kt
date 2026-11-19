@@ -34,6 +34,7 @@ import com.techgv.cineverse.ui.components.Chip
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.ImageSize
+import com.techgv.cineverse.ui.components.GridSkeleton
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.UiColors
@@ -119,7 +120,7 @@ fun BrowseScreen(container: AppContainer, kind: BrowseKind, onOpen: (Route) -> U
                     )
                 }
             }
-            Section(state.grid, vm::retry, Modifier.weight(1f).padding(start = CONTENT_INSET, top = 8.dp)) { paged ->
+            Section(state.grid, vm::retry, Modifier.weight(1f).padding(start = CONTENT_INSET, top = 8.dp), loading = { GridSkeleton(COLUMNS, Modifier.padding(top = 18.dp)) }) { paged ->
                 HeroGrid(
                     paged = paged,
                     columns = COLUMNS,
