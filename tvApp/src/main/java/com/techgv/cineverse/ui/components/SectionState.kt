@@ -25,18 +25,19 @@ val SectionErrorKind.message: String
         SectionErrorKind.Generic -> "Something went wrong."
     }
 
-/** Loading / error with a focusable "Try again" / empty / content for one section. */
+/** Loading skeleton (never text) / error with a focusable "Try again" / empty / content for one section. */
 @Composable
 fun <T> Section(
     state: SectionState<T>,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    loading: @Composable () -> Unit = { PosterRowSkeleton(count = 8, label = "Loading") },
     empty: @Composable () -> Unit = { SectionMessage("Nothing here yet") },
     content: @Composable (T) -> Unit,
 ) {
     Box(modifier.fillMaxWidth().heightIn(min = 120.dp), contentAlignment = Alignment.CenterStart) {
         when (state) {
-            SectionState.Loading -> SectionMessage("Loading…")
+            SectionState.Loading -> loading()
             SectionState.Empty -> empty()
             is SectionState.Content -> content(state.value)
             is SectionState.Error -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

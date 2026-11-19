@@ -1,9 +1,9 @@
 package com.techgv.cineverse.ui.detail
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +23,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.relocation.BringIntoViewModifierNode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -32,14 +36,18 @@ import androidx.tv.material3.Text
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.PinToStart
+import com.techgv.cineverse.ui.components.cardRowHeight
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 internal val SCREEN_INSET = 48.dp
 
 /** Where a focused row's cards land below the viewport top: leaves its title visible. */
 internal val ROW_TOP_INSET = 80.dp
+
+/** Vertical padding of a [DetailRow]'s cards. */
+private val ROW_PADDING = 16.dp
 
 /** Title + subtitle lines under a poster / person / season card. */
 private val CARD_LABELS_HEIGHT = 56.dp
@@ -65,6 +73,9 @@ internal fun DetailRow(
     restorer: FocusRestorer,
     focusRow: FocusRow,
     state: LazyListState,
+    /** Unfocused height of the row's cards and of the labels under them: the row is pinned to [cardRowHeightOf]. */
+    cardHeight: Dp,
+    labels: Dp = 0.dp,
     spacing: Int = 16,
     content: LazyListScope.() -> Unit,
 ) {
@@ -79,8 +90,9 @@ internal fun DetailRow(
         PinToStart(SCREEN_INSET) {
             LazyRow(
                 state = state,
-                modifier = with(restorer) { Modifier.restoreRowFocus(focusRow, scope) },
-                contentPadding = PaddingValues(horizontal = SCREEN_INSET, vertical = 16.dp),
+                modifier = with(restorer) { Modifier.restoreRowFocus(focusRow, scope) }
+                    .cardRowHeight(cardHeight, labels, ROW_PADDING, ROW_PADDING),
+                contentPadding = PaddingValues(horizontal = SCREEN_INSET, vertical = ROW_PADDING),
                 horizontalArrangement = Arrangement.spacedBy(spacing.dp),
                 content = content,
             )
@@ -109,8 +121,21 @@ internal fun RevealVertically(topInset: Dp, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
 }
 
-/** Focus entering the hero (outer item 0) shows all of it; the TV pivot alone would cut the title off. */
+/**
+ * Focus entering the hero (outer item 0) shows all of it; the TV pivot alone would cut the title off.
+ * The focused button's own bring-into-view is swallowed: it would cancel this scroll and stop with the hero half shown.
+ */
 internal fun Modifier.revealHeroOnFocus(outer: LazyListState, scope: CoroutineScope, reduceMotion: Boolean): Modifier =
     onFocusChanged { if (it.hasFocus) scope.launch { if (reduceMotion) outer.scrollToItem(0) else outer.animateScrollToItem(0) } }
+        .then(SwallowBringIntoView)
+
+private data object SwallowBringIntoView : ModifierNodeElement<SwallowBringIntoViewNode>() {
+    override fun create() = SwallowBringIntoViewNode()
+    override fun update(node: SwallowBringIntoViewNode) = Unit
+}
+
+private class SwallowBringIntoViewNode : Modifier.Node(), BringIntoViewModifierNode {
+    override suspend fun bringIntoView(childCoordinates: LayoutCoordinates, boundsProvider: () -> Rect?) = Unit
+}
 
 internal fun oneDecimal(value: Double): String = String.format(Locale.US, "%.1f", value)

@@ -94,3 +94,15 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+// Debug installs land uncompiled ("run-from-apk") on low-end TVs, so every class is verified at launch: ~11 s to the
+// first frame on a 32-bit Mi TV. `quicken` (~7 s once per install) brings it to ~3 s. adb honours ANDROID_SERIAL.
+// shortcut: compiles on the one connected device only (ignored with several), and Android Studio's Run button
+// does not run installDebug; with several devices or from Studio, run the same adb command by hand.
+val dexoptDebug = tasks.register<Exec>("dexoptDebug") {
+    description = "AOT-verifies the installed debug APK so it starts fast on slow TVs."
+    executable = androidComponents.sdkComponents.adb.get().asFile.absolutePath
+    args("shell", "cmd", "package", "compile", "-m", "quicken", "-f", "com.techgv.cineverse")
+    isIgnoreExitValue = true
+}
+tasks.matching { it.name == "installDebug" }.configureEach { finalizedBy(dexoptDebug) }

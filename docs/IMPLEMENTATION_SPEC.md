@@ -437,7 +437,7 @@ view.initialize(object : AbstractYouTubePlayerListener() {
 - Controls disabled until `onReady`; seek clamped to `[0, duration]`; `ENDED` shows "Play again".
 - `onError`: `VIDEO_NOT_FOUND`, `VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER`, `INVALID_PARAMETER_IN_REQUEST`,
   `HTML_5_PLAYER`, `REQUEST_MISSING_HTTP_REFERER`, `UNKNOWN` → inline message "This trailer can't be
-  played here" with buttons **Open in YouTube** (`Intent(ACTION_VIEW, "vnd.youtube:$key")`, catch
+  played here" with buttons **Open in YouTube** (`Intent(ACTION_VIEW, "https://www.youtube.com/watch?v=$key")` — YouTube TV ignores the video in `vnd.youtube:` and only opens its home screen; catch
   `ActivityNotFoundException`) and **Back**. Never alter the library's origin/referer handling.
 - Lifecycle: `lifecycle.addObserver(view)` (13.0.0 reacts at `ON_STOP`, not `ON_PAUSE`); call `pause()`
   explicitly in `ON_PAUSE`. `ON_RESUME` → `startIfNeeded()`: `loadVideo` once if not yet loaded (covers
@@ -457,7 +457,7 @@ Phase-1 spike: play / pause / seek / BACK / error path on the TV emulator and on
   submits; buttons Submit / Remove (if rated) / Cancel; BACK cancels without writing. Word label ≤3 Poor,
   ≤5 Meh, ≤7 Good, ≤8.5 Great, else Masterpiece. After submit: refresh `account_states`; if the title left
   the watchlist (TMDB account preference, D6) the toast says so.
-- **Exit**: Stay / Exit app → `finish()`.
+- **Exit**: Stay / Exit → `finish()`.
 - **Import library** (§8.3).
 
 ### 7.12 Toasts

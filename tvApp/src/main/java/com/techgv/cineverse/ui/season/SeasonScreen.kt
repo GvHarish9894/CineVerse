@@ -2,6 +2,7 @@ package com.techgv.cineverse.ui.season
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,13 +30,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
@@ -44,25 +49,31 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.data.tmdb.formatDate
-import com.techgv.cineverse.data.tmdb.today
 import com.techgv.cineverse.data.tmdb.formatRuntime
+import com.techgv.cineverse.data.tmdb.today
 import com.techgv.cineverse.domain.Detail
 import com.techgv.cineverse.domain.Episode
 import com.techgv.cineverse.domain.Season
+import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.DetailCardSurface
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
-import com.techgv.cineverse.ui.components.ActionButton
 import com.techgv.cineverse.ui.components.FocusRow
 import com.techgv.cineverse.ui.components.LocalToaster
+import com.techgv.cineverse.ui.components.PERSON_SIZE
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.SavedFocus
 import com.techgv.cineverse.ui.components.ScrollableText
 import com.techgv.cineverse.ui.components.Section
-import com.techgv.cineverse.presentation.SectionState
+import com.techgv.cineverse.ui.components.cardLabelHeight
+import com.techgv.cineverse.ui.components.cardRowHeight
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
+import com.techgv.cineverse.ui.components.SkeletonColor
+import com.techgv.cineverse.ui.components.UiColors
+import com.techgv.cineverse.ui.components.skeletonAlpha
+import com.techgv.cineverse.ui.detail.PageSkeleton
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
 import com.techgv.cineverse.ui.detail.oneDecimal
 import com.techgv.cineverse.ui.nav.Route
@@ -73,7 +84,7 @@ private const val SEASONS = "seasons"
 private const val SEASON_LIST = "list"
 private const val EPISODES = "episodes"
 private const val PANEL = "episodePanel"
-private const val PANEL_ACTIONS = "actions"
+private const val PANEL_OVERVIEW = "overview"
 private const val PANEL_GUESTS = "guests"
 
 private fun seasonKey(n: Int) = "season:$n"
@@ -115,6 +126,7 @@ fun SeasonContent(state: SeasonUiState, focusMemory: FocusMemory, imageBase: Str
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val show = state.show) {
             is SectionState.Content -> SeasonBody(show.value, state, focusMemory, imageBase, actions)
+            SectionState.Loading -> PageSkeleton()
             else -> Section(show, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
         }
         val toaster = LocalToaster.current
@@ -189,7 +201,7 @@ private fun SeasonBody(show: Detail, state: SeasonUiState, memory: FocusMemory, 
             }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 if (selected != null) {
-                    Section(state.episodes, onRetry = actions.onRetryEpisodes, empty = { Text("No episodes yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }) {
+                    Section(state.episodes, onRetry = actions.onRetryEpisodes, loading = { EpisodeListSkeleton() }, empty = { Text("No episodes yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }) {
                         val season = episodes ?: return@Section
                         LazyColumn(
                             state = episodesState,
@@ -212,10 +224,7 @@ private fun SeasonBody(show: Detail, state: SeasonUiState, memory: FocusMemory, 
                 val open = state.openEpisode
                 val openEpisode = episodes?.episodes?.firstOrNull { it.episodeNumber == open }
                 if (openEpisode != null) {
-                    EpisodePanel(openEpisode, restorer, imageBase, actions) {
-                        actions.onCloseEpisode()
-                        refocusEpisode = openEpisode.episodeNumber
-                    }
+                    EpisodePanel(openEpisode, restorer, imageBase, actions)
                 }
             }
         }
@@ -328,47 +337,66 @@ private fun FinaleBadge() {
 }
 
 /**
- * §7.6 inline episode panel over the episodes list: full overview and guest stars. Focus is trapped
- * inside; Close (or BACK, handled by the caller) returns focus to the episode.
+ * §7.6 inline episode panel over the episodes list: a header (still, "Season n · Episode m", title, meta), the full
+ * overview and guest stars; no Close button or hint (BACK is the TV's close). Focus is trapped inside and starts
+ * on the overview, which DOWN pages through and then leaves for the guest stars. BACK (handled by the caller)
+ * returns focus to the episode.
  */
 @Composable
-private fun EpisodePanel(episode: Episode, restorer: FocusRestorer, imageBase: String, actions: SeasonActions, onClose: () -> Unit) {
+private fun EpisodePanel(episode: Episode, restorer: FocusRestorer, imageBase: String, actions: SeasonActions) {
     val guestKeys = episode.guestStars.map { "person:${it.personId}" }
     val guestsState = remember(episode.episodeNumber) { LazyListState() }
+    val panelShape = RoundedCornerShape(20.dp)
     Column(
         Modifier.fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+            .background(PANEL_SURFACE, panelShape)
+            .border(1.dp, Color.White.copy(alpha = 0.08f), panelShape)
             .focusProperties { onExit = { cancelFocusChange() } }
             .focusGroup()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 28.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "E${episode.episodeNumber} · ${episode.name}",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f, fill = false),
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            DetailCardArt(
+                tmdbImageUrl(imageBase, "w300", episode.stillPath), "E${episode.episodeNumber}",
+                Modifier.size(208.dp, 117.dp).clip(RoundedCornerShape(12.dp)),
             )
-            if (episode.isFinale) FinaleBadge()
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    (if (episode.seasonNumber == 0) "Specials" else "Season ${episode.seasonNumber}") + " · Episode ${episode.episodeNumber}",
+                    color = UiColors.TextDim,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        episode.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = UiColors.Text,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (episode.isFinale) FinaleBadge()
+                }
+                Text(episodeMeta(episode, today()).joinToString("  ·  "), color = UiColors.TextDim, fontSize = 15.sp, maxLines = 1)
+            }
         }
-        Text(
-            episodeMeta(episode, today()).joinToString("   "),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        // Takes the room left by the rest; UP from Close enters it, DOWN pages through it back to Close.
+        // Takes the room left by the rest; always present, so the panel always has a focus target.
         ScrollableText(
-            episode.overview.ifBlank { "No overview available" }, MaterialTheme.typography.bodyLarge, MaterialTheme.colorScheme.onSurface,
-            Modifier.weight(1f, fill = false),
-        )
-        ActionButton(
-            "Close", "✕", onClose,
-            modifier = with(restorer) { Modifier.rememberFocus(PANEL, PANEL_ACTIONS, "close", 0) },
+            episode.overview.ifBlank { "No overview available" }, MaterialTheme.typography.bodyLarge, UiColors.Text,
+            with(restorer) { Modifier.rememberFocus(PANEL, PANEL_OVERVIEW, "overview", 0) }.weight(1f, fill = false),
         )
         if (episode.guestStars.isNotEmpty()) {
-            Text("Guest stars", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            LazyRow(state = guestsState, horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
+            Text("Guest stars", color = UiColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            LazyRow(
+                state = guestsState,
+                modifier = Modifier.cardRowHeight(PERSON_SIZE, cardLabelHeight(), GUEST_ROW_PADDING, GUEST_ROW_PADDING),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(vertical = GUEST_ROW_PADDING),
+            ) {
                 itemsIndexed(episode.guestStars, key = { index, _ -> guestKeys[index] }) { index, guest ->
                     PersonCard(
                         guest.name, guest.role, guest.profilePath, seed = guestKeys[index],
@@ -379,13 +407,30 @@ private fun EpisodePanel(episode: Episode, restorer: FocusRestorer, imageBase: S
             }
         }
     }
-    // Opening (or returning from a guest star's Person page): the remembered panel item, else Close.
+    // Opening (or returning from a guest star's Person page): the remembered panel item, else the overview.
     LaunchedEffect(episode.episodeNumber) {
         restorer.restore(
             listOf(
-                FocusRow(PANEL, PANEL_ACTIONS, listOf("close")),
+                FocusRow(PANEL, PANEL_OVERVIEW, listOf("overview")),
                 FocusRow(PANEL, PANEL_GUESTS, guestKeys, guestsState),
             ),
         )
+    }
+}
+
+private val PANEL_SURFACE = Color(0xFF15131F)
+
+/** Vertical padding of the guest-star row (room for a focused card's growth). */
+private val GUEST_ROW_PADDING = 8.dp
+
+/** The episode list's first load: episode-card-sized blocks. */
+@Composable
+private fun EpisodeListSkeleton() {
+    val alpha = skeletonAlpha()
+    Column(
+        Modifier.fillMaxSize().padding(top = 8.dp, start = 8.dp, end = 8.dp).semantics { contentDescription = "Loading" },
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        repeat(4) { Box(Modifier.fillMaxWidth().height(132.dp).alpha(alpha).clip(RoundedCornerShape(16.dp)).background(SkeletonColor)) }
     }
 }

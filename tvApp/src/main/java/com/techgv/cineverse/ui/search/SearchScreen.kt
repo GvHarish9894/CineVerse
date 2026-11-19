@@ -59,6 +59,7 @@ import com.techgv.cineverse.ui.components.ImageSize
 import com.techgv.cineverse.ui.components.KEYBOARD_ROWS
 import com.techgv.cineverse.ui.components.KeyboardKey
 import com.techgv.cineverse.ui.components.OnScreenKeyboard
+import com.techgv.cineverse.ui.components.GridSkeleton
 import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.presentation.SectionState
 import com.techgv.cineverse.ui.components.UiColors
@@ -178,6 +179,7 @@ fun SearchScreen(
                     state.results,
                     vm::retry,
                     Modifier.weight(1f),
+                    loading = { GridSkeleton(COLUMNS, Modifier.padding(top = 16.dp)) },
                     empty = { Text(NO_RESULTS, color = UiColors.TextDim, fontSize = 16.sp, modifier = Modifier.width(460.dp)) },
                 ) { paged ->
                     HeroGrid(

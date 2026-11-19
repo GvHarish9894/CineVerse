@@ -18,11 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
@@ -119,32 +121,44 @@ private fun Tag(text: String, modifier: Modifier, background: Color = Color(0xB8
     )
 }
 
-/** Title + sub-line under a card; brighter while the card is focused. */
+/**
+ * Title + sub-line under a card; brighter while the card is focused. Always [cardLabelHeight] tall: an empty
+ * subtitle still takes its line, so cards with and without one line up and rows keep one height.
+ */
 @Composable
 fun CardLabel(title: String, subtitle: String, focused: Boolean, modifier: Modifier = Modifier, centered: Boolean = false) {
     val align = if (centered) TextAlign.Center else null
     val width = if (centered) Modifier.fillMaxWidth() else Modifier
-    Column(modifier.padding(top = 12.dp)) {
+    Column(modifier.padding(top = LABEL_TOP_GAP)) {
         Text(
             title,
             color = if (focused) Color.White else UiColors.TextDim,
             fontSize = 13.5.sp,
+            lineHeight = LABEL_TITLE_LINE,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = align,
             modifier = width,
         )
-        if (subtitle.isNotEmpty()) {
-            Text(
-                subtitle,
-                color = UiColors.TextFaint,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = align,
-                modifier = Modifier.padding(top = 3.dp).then(width),
-            )
-        }
+        Text(
+            subtitle,
+            color = UiColors.TextFaint,
+            fontSize = 12.sp,
+            lineHeight = LABEL_SUBTITLE_LINE,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = align,
+            modifier = Modifier.padding(top = LABEL_LINE_GAP).then(width),
+        )
     }
 }
+
+/** Height of [CardLabel] under a card (its two lines in dp, following font scale). */
+@Composable
+fun cardLabelHeight(): Dp = with(LocalDensity.current) { LABEL_TOP_GAP + LABEL_TITLE_LINE.toDp() + LABEL_LINE_GAP + LABEL_SUBTITLE_LINE.toDp() }
+
+private val LABEL_TOP_GAP = 12.dp
+private val LABEL_LINE_GAP = 3.dp
+private val LABEL_TITLE_LINE = 17.sp
+private val LABEL_SUBTITLE_LINE = 15.sp

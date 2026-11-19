@@ -33,22 +33,26 @@ import androidx.tv.material3.Text
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.data.tmdb.formatDate
 import com.techgv.cineverse.domain.PersonDetail
+import com.techgv.cineverse.presentation.SectionState
+import com.techgv.cineverse.ui.components.ActionButton
+import com.techgv.cineverse.ui.components.ActionButtonStyle
+import com.techgv.cineverse.ui.components.ActionIcon
+import com.techgv.cineverse.ui.components.CREDIT_CARD_HEIGHT
 import com.techgv.cineverse.ui.components.CreditCard
 import com.techgv.cineverse.ui.components.DetailCardArt
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
-import com.techgv.cineverse.ui.components.ActionButton
-import com.techgv.cineverse.ui.components.ActionButtonStyle
-import com.techgv.cineverse.ui.components.ActionIcon
 import com.techgv.cineverse.ui.components.FocusRow
+import com.techgv.cineverse.ui.components.POSTER_HEIGHT
 import com.techgv.cineverse.ui.components.PosterCard
-import com.techgv.cineverse.ui.components.Section
 import com.techgv.cineverse.ui.components.ScrollableText
-import com.techgv.cineverse.presentation.SectionState
+import com.techgv.cineverse.ui.components.Section
+import com.techgv.cineverse.ui.components.cardLabelHeight
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.detail.DetailChip
 import com.techgv.cineverse.ui.detail.DetailRow
+import com.techgv.cineverse.ui.detail.PageSkeleton
 import com.techgv.cineverse.ui.detail.ROW_TOP_INSET
 import com.techgv.cineverse.ui.detail.RevealVertically
 import com.techgv.cineverse.ui.detail.SCREEN_INSET
@@ -84,6 +88,7 @@ internal fun PersonContent(
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (person) {
             is SectionState.Content -> PersonBody(person.value, bioExpanded, memory, imageBase, onToggleBio, onNavigate)
+            SectionState.Loading -> PageSkeleton()
             else -> Section(person, onRetry = onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
         }
     }
@@ -179,7 +184,7 @@ private fun PersonBody(
             }
             item(key = KNOWN_FOR) {
                 if (person.knownFor.isNotEmpty()) {
-                    DetailRow("Known for", restorer, focusRows[1], knownForState) {
+                    DetailRow("Known for", restorer, focusRows[1], knownForState, POSTER_HEIGHT, cardLabelHeight()) {
                         itemsIndexed(person.knownFor, key = { index, _ -> knownForKeys[index] }) { index, title ->
                             PosterCard(
                                 title,
@@ -192,7 +197,7 @@ private fun PersonBody(
             }
             item(key = CREDITS) {
                 if (person.credits.isNotEmpty()) {
-                    DetailRow(person.creditsTitle, restorer, focusRows[2], creditsState) {
+                    DetailRow(person.creditsTitle, restorer, focusRows[2], creditsState, CREDIT_CARD_HEIGHT) {
                         itemsIndexed(person.credits, key = { index, _ -> creditKeys[index] }) { index, credit ->
                             CreditCard(
                                 credit, tmdbImageUrl(imageBase, "w342", credit.posterPath),

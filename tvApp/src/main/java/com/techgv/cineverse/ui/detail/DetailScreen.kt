@@ -32,6 +32,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +47,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
-import kotlinx.coroutines.flow.flowOf
 import com.techgv.cineverse.AppContainer
 import com.techgv.cineverse.data.tmdb.formatRuntime
 import com.techgv.cineverse.domain.Detail
@@ -56,33 +58,44 @@ import com.techgv.cineverse.domain.MediaRef
 import com.techgv.cineverse.domain.MediaType
 import com.techgv.cineverse.domain.Review
 import com.techgv.cineverse.domain.Video
+import com.techgv.cineverse.presentation.DetailUiState
+import com.techgv.cineverse.presentation.SectionState
+import com.techgv.cineverse.presentation.canToggle
+import com.techgv.cineverse.presentation.episodesSeason
+import com.techgv.cineverse.presentation.trailerOf
 import com.techgv.cineverse.ui.components.ActionButton
 import com.techgv.cineverse.ui.components.ActionButtonStyle
+import com.techgv.cineverse.ui.components.DetailCardArt
+import com.techgv.cineverse.ui.components.FACT_CARD_HEIGHT
 import com.techgv.cineverse.ui.components.FactCard
 import com.techgv.cineverse.ui.components.FocusMemory
 import com.techgv.cineverse.ui.components.FocusRestorer
 import com.techgv.cineverse.ui.components.FocusRow
+import com.techgv.cineverse.ui.components.LANDSCAPE_HEIGHT
 import com.techgv.cineverse.ui.components.LandscapeCard
+import com.techgv.cineverse.ui.components.PERSON_SIZE
+import com.techgv.cineverse.ui.components.POSTER_HEIGHT
 import com.techgv.cineverse.ui.components.PersonCard
 import com.techgv.cineverse.ui.components.PosterCard
+import com.techgv.cineverse.ui.components.PosterRowSkeleton
+import com.techgv.cineverse.ui.components.REVIEW_CARD_HEIGHT
 import com.techgv.cineverse.ui.components.ReviewCard
-import com.techgv.cineverse.ui.components.ScoreRing
+import com.techgv.cineverse.ui.components.SEASON_CARD_HEIGHT
 import com.techgv.cineverse.ui.components.SavedFocus
+import com.techgv.cineverse.ui.components.ScoreRing
 import com.techgv.cineverse.ui.components.SeasonCard
+import com.techgv.cineverse.ui.components.SkeletonColor
 import com.techgv.cineverse.ui.components.Section
-import com.techgv.cineverse.presentation.SectionState
-import com.techgv.cineverse.ui.components.DetailCardArt
+import com.techgv.cineverse.ui.components.cardLabelHeight
 import com.techgv.cineverse.ui.components.rememberSavedLazyListState
 import com.techgv.cineverse.ui.components.rememberSharedMedia
+import com.techgv.cineverse.ui.components.skeletonAlpha
 import com.techgv.cineverse.ui.components.sharedBackdropKey
 import com.techgv.cineverse.ui.components.sharedPosterKey
 import com.techgv.cineverse.ui.components.tmdbImageUrl
 import com.techgv.cineverse.ui.feedback.LocalFeedback
 import com.techgv.cineverse.ui.nav.Route
-import com.techgv.cineverse.presentation.DetailUiState
-import com.techgv.cineverse.presentation.trailerOf
-import com.techgv.cineverse.presentation.canToggle
-import com.techgv.cineverse.presentation.episodesSeason
+import kotlinx.coroutines.flow.flowOf
 
 private const val PANEL = "main"
 
@@ -132,7 +145,11 @@ fun DetailContent(
         val detail = (state.detail as? SectionState.Content)?.value
         // One call site for seed and loaded detail: the hero artwork (shared-element target) is not remounted.
         when (val art = heroArt(detail, seed)) {
-            null -> Section(state.detail, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
+            null -> if (state.detail == SectionState.Loading) {
+                PageSkeleton()
+            } else {
+                Section(state.detail, onRetry = actions.onRetry, modifier = Modifier.padding(SCREEN_INSET)) {}
+            }
             else -> DetailBody(detail, art, state.detail, libraryState, focusMemory, imageBase, actions)
         }
     }
@@ -224,6 +241,8 @@ private fun DetailBody(
     // Review reading panel (saved like the Season episode panel); closing it returns focus to its card.
     var openReview by rememberSaveable { mutableStateOf<String?>(null) }
     var refocusReview by remember { mutableStateOf<String?>(null) }
+    // The recommendation that opened the next Detail: only its poster is tagged, so it flies into (and back from) that hero.
+    var openedRecommendation by rememberSaveable { mutableStateOf<String?>(null) }
     fun closeReview() {
         refocusReview = openReview
         openReview = null
@@ -238,10 +257,11 @@ private fun DetailBody(
                     else HeroPending(art, pending, actions.onRetry)
                 }
             }
+            if (detail == null && pending == SectionState.Loading) item(key = "skeleton") { DetailRowSkeleton() }
             if (detail != null) for (row in rows.drop(1)) {
                 item(key = row.key) {
                     when (row.key) {
-                        "seasons" -> DetailRow("Seasons", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "seasons" -> DetailRow("Seasons", restorer, focusRow(row.key), rowStates.getValue(row.key), SEASON_CARD_HEIGHT, cardLabelHeight()) {
                             itemsIndexed(detail.seasons, key = { _, s -> s.seasonNumber }) { index, season ->
                                 SeasonCard(
                                     season, tmdbImageUrl(imageBase, "w342", season.posterPath),
@@ -250,7 +270,7 @@ private fun DetailBody(
                                 )
                             }
                         }
-                        "cast" -> DetailRow("Top billed cast", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "cast" -> DetailRow("Top billed cast", restorer, focusRow(row.key), rowStates.getValue(row.key), PERSON_SIZE, cardLabelHeight()) {
                             val people = detail.cast + crew
                             itemsIndexed(people, key = { index, _ -> row.itemKeys[index] }) { index, person ->
                                 PersonCard(
@@ -260,7 +280,7 @@ private fun DetailBody(
                                 )
                             }
                         }
-                        "videos" -> DetailRow("Videos", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "videos" -> DetailRow("Videos", restorer, focusRow(row.key), rowStates.getValue(row.key), LANDSCAPE_HEIGHT, cardLabelHeight()) {
                             itemsIndexed(detail.videos, key = { _, v -> v.key }) { index, video ->
                                 LandscapeCard(
                                     video.name, video.type, imagePath = null, seed = video.key,
@@ -270,16 +290,21 @@ private fun DetailBody(
                                 )
                             }
                         }
-                        "recommendations" -> DetailRow("Recommendations", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "recommendations" -> DetailRow("Recommendations", restorer, focusRow(row.key), rowStates.getValue(row.key), POSTER_HEIGHT, cardLabelHeight()) {
                             itemsIndexed(detail.recommendations, key = { index, _ -> row.itemKeys[index] }) { index, title ->
                                 PosterCard(
                                     title,
-                                    onClick = { actions.onNavigate(Route.Detail(title.ref.mediaType, title.ref.id)) },
+                                    onClick = {
+                                        openedRecommendation = title.ref.key
+                                        // Seeded like a Home card, so the next Detail's hero is the shared-element target at once.
+                                        actions.onNavigate(Route.Detail(title.ref.mediaType, title.ref.id, title.posterPath, title.backdropPath, title.title))
+                                    },
                                     modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, row.itemKeys[index], index) },
+                                    imageModifier = if (openedRecommendation == title.ref.key) rememberSharedMedia(sharedPosterKey(title.ref)) else Modifier,
                                 )
                             }
                         }
-                        "reviews" -> DetailRow("Reviews", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "reviews" -> DetailRow("Reviews", restorer, focusRow(row.key), rowStates.getValue(row.key), REVIEW_CARD_HEIGHT) {
                             itemsIndexed(detail.reviews, key = { _, r -> r.id }) { index, review ->
                                 ReviewCard(
                                     review, avatarUrl(review),
@@ -288,7 +313,7 @@ private fun DetailBody(
                                 )
                             }
                         }
-                        "facts" -> DetailRow("Details", restorer, focusRow(row.key), rowStates.getValue(row.key)) {
+                        "facts" -> DetailRow("Details", restorer, focusRow(row.key), rowStates.getValue(row.key), FACT_CARD_HEIGHT) {
                             itemsIndexed(detail.facts, key = { _, f -> f.label }) { index, fact ->
                                 FactCard(fact, modifier = with(restorer) { Modifier.rememberFocus(PANEL, row.key, fact.label, index) })
                             }
@@ -363,7 +388,51 @@ private fun HeroHeading(ref: MediaRef, title: String, network: String?) {
 @Composable
 private fun HeroPending(art: HeroArt, pending: SectionState<Detail>, onRetry: () -> Unit) {
     HeroHeading(art.ref, art.title, network = null)
-    Section(pending, onRetry) {}
+    if (pending == SectionState.Loading) DetailInfoSkeleton() else Section(pending, onRetry) {}
+}
+
+private fun Modifier.skeleton(alpha: Float, shape: Shape = RoundedCornerShape(6.dp)) = alpha(alpha).clip(shape).background(SkeletonColor)
+
+/** A Detail / Person / Season page while it first loads: art, heading, info and a row, as pulsing blocks in the hero's places. */
+@Composable
+internal fun PageSkeleton() {
+    val alpha = skeletonAlpha()
+    Column(Modifier.semantics { contentDescription = "Loading" }) {
+        Row(Modifier.fillMaxWidth().padding(start = SCREEN_INSET, end = SCREEN_INSET, top = 40.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            Box(Modifier.size(240.dp, 360.dp).skeleton(alpha, RoundedCornerShape(16.dp)))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(120.dp, 16.dp).skeleton(alpha))
+                Box(Modifier.size(440.dp, 56.dp).skeleton(alpha, RoundedCornerShape(10.dp)))
+                DetailInfoSkeleton()
+            }
+        }
+        DetailRowSkeleton()
+    }
+}
+
+/** The hero below its heading while loading: chips, overview lines and the action buttons. */
+@Composable
+private fun DetailInfoSkeleton() {
+    val alpha = skeletonAlpha()
+    Column(Modifier.semantics { contentDescription = "Loading" }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(3) { Box(Modifier.size(90.dp, 44.dp).skeleton(alpha, RoundedCornerShape(22.dp))) }
+        }
+        repeat(3) { line -> Box(Modifier.size(if (line == 2) 420.dp else 600.dp, 16.dp).skeleton(alpha)) }
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            repeat(4) { Box(Modifier.size(150.dp, 56.dp).skeleton(alpha, RoundedCornerShape(28.dp))) }
+        }
+    }
+}
+
+/** A titled row of poster blocks below the hero while loading. */
+@Composable
+private fun DetailRowSkeleton() {
+    Column(Modifier.padding(start = SCREEN_INSET, top = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Box(Modifier.size(220.dp, 24.dp).skeleton(skeletonAlpha()))
+        PosterRowSkeleton(count = 8)
+    }
 }
 
 @Composable

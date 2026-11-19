@@ -21,7 +21,7 @@ import java.util.Locale
 /** §6 ReviewCard 368×180 (step 384): avatar, author, ★ rating (none when unrated), plain-text excerpt; OK opens the full text. */
 @Composable
 fun ReviewCard(review: Review, avatarUrl: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    DetailCardSurface(onClick = onClick, modifier = modifier.size(368.dp, 180.dp)) {
+    DetailCardSurface(onClick = onClick, modifier = modifier.size(368.dp, REVIEW_CARD_HEIGHT)) {
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 DetailCardArt(avatarUrl, review.author, Modifier.size(36.dp).clip(CircleShape), initials = true)
@@ -47,3 +47,5 @@ fun ReviewCard(review: Review, avatarUrl: String?, onClick: () -> Unit, modifier
         }
     }
 }
+
+val REVIEW_CARD_HEIGHT = 180.dp

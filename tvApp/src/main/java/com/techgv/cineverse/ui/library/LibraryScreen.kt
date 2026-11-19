@@ -168,7 +168,7 @@ fun LibraryContent(
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
-                        is LibraryGridItem.Loading -> Message("Loading…")
+                        is LibraryGridItem.Loading -> PosterRowSkeleton(COLUMNS, label = "Loading")
                         is LibraryGridItem.Error ->
                             ErrorBlock(item.kind.message, item.kind.retryable, { onRetry(item.media) }, rememberBody("retry:${item.media}").then(topUp))
                         is LibraryGridItem.RefreshError -> ErrorBlock(
